@@ -6,3 +6,14 @@
 //
 // [P1] Routes: Onboarding ↔️ Dashboard
 
+import SwiftUI
+
+struct RootView: View {
+    var body: some View {
+        ContentUnavailableView("ParentGuide", systemImage: "house.fill")
+    }
+}
+
+#Preview {
+    RootView()
+}
