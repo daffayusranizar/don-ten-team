@@ -1,16 +1,11 @@
-//
-//  ScreenRecordingWhisperTranscriber.swift
-//  iamge-detection
-//
-
 import Foundation
 @preconcurrency import WhisperKit
 
-enum WhisperTranscriberError: LocalizedError {
+public enum WhisperTranscriberError: LocalizedError {
     case loadFailed(String)
     case transcriptionFailed(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .loadFailed(let message):
             return "Failed to load Whisper model: \(message)"
@@ -20,23 +15,23 @@ enum WhisperTranscriberError: LocalizedError {
     }
 }
 
-/// On-device Whisper base transcription via WhisperKit. Loads off the main thread.
-final class ScreenRecordingWhisperTranscriber {
-    static let sharedModelName = "base"
-
+/// On-device Whisper base transcription via WhisperKit. 
+/// Converted to an actor for safe background thread execution.
+public actor ScreenRecordingWhisperTranscriber {
+    private let sharedModelName = "base"
     private let whisperKit: WhisperKit
 
-    init() async throws {
+    public init() async throws {
         do {
             whisperKit = try await WhisperKit(
-                WhisperKitConfig(model: Self.sharedModelName)
+                WhisperKitConfig(model: sharedModelName)
             )
         } catch {
             throw WhisperTranscriberError.loadFailed(error.localizedDescription)
         }
     }
 
-    func transcribe(wavURL: URL) async throws -> String {
+    public func transcribe(wavURL: URL) async throws -> String {
         let path = wavURL.path
         guard FileManager.default.fileExists(atPath: path) else {
             return ""

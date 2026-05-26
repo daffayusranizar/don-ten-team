@@ -1,8 +1,3 @@
-//
-//  ImagePreprocessor.swift
-//  iamge-detection
-//
-
 import CoreImage
 import CoreVideo
 import UIKit
@@ -16,19 +11,20 @@ enum ImagePreprocessor {
     private static let modelInputSize = 256
     private static let screenshotAspectThreshold: CGFloat = 1.6
     static let screenshotBottomCropFraction: CGFloat = 0.50
+    // Using a nonisolated CIContext so it can be safely called from any actor
     private static let renderContext = CIContext(options: [.useSoftwareRenderer: false])
 
-    static func modelInputBuffers(from image: UIImage, size: Int = modelInputSize) -> [CVPixelBuffer]? {
+    nonisolated(unsafe) static func modelInputBuffers(from image: UIImage, size: Int = modelInputSize) -> [CVPixelBuffer]? {
         guard let ciImage = CIImage(image: image) else { return nil }
         let oriented = ciImage.oriented(forExifOrientation: image.imageOrientation.exifOrientation)
         return modelInputBuffers(from: oriented, size: size)
     }
 
-    static func modelInputBuffers(from source: CVPixelBuffer, size: Int = modelInputSize) -> [CVPixelBuffer]? {
+    nonisolated(unsafe) static func modelInputBuffers(from source: CVPixelBuffer, size: Int = modelInputSize) -> [CVPixelBuffer]? {
         modelInputBuffers(from: CIImage(cvPixelBuffer: source), size: size)
     }
 
-    static func modelInputPreviews(from source: CVPixelBuffer, size: Int = modelInputSize) -> ModelInputPreviews {
+    nonisolated(unsafe) static func modelInputPreviews(from source: CVPixelBuffer, size: Int = modelInputSize) -> ModelInputPreviews {
         let buffers = modelInputBuffers(from: source, size: size) ?? []
         let images = buffers.compactMap { uiImage(from: $0) }
 
@@ -39,7 +35,7 @@ enum ImagePreprocessor {
         return ModelInputPreviews(fullFrame: images.first, bottomCrop: nil)
     }
 
-    static func uiImage(from pixelBuffer: CVPixelBuffer) -> UIImage? {
+    nonisolated(unsafe) static func uiImage(from pixelBuffer: CVPixelBuffer) -> UIImage? {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         guard let cgImage = renderContext.createCGImage(ciImage, from: ciImage.extent) else {
             return nil
@@ -48,7 +44,7 @@ enum ImagePreprocessor {
     }
 
     /// Left-bottom overlay zone for TikTok/Reels handle OCR at native resolution.
-    static func overlayCrop(from source: CVPixelBuffer) -> CVPixelBuffer? {
+    nonisolated(unsafe) static func overlayCrop(from source: CVPixelBuffer) -> CVPixelBuffer? {
         let ciImage = CIImage(cvPixelBuffer: source)
         let cropped = overlayCrop(from: ciImage)
         let extent = cropped.extent.integral
@@ -60,7 +56,7 @@ enum ImagePreprocessor {
         )
     }
 
-    static func overlayCrop(from image: CIImage) -> CIImage {
+    nonisolated(unsafe) static func overlayCrop(from image: CIImage) -> CIImage {
         let extent = image.extent.integral
         guard extent.width > 0, extent.height > 0 else { return image }
 

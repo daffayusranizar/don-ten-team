@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8FDA4F172FC5E0BA001AF248 /* WhisperKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		8F5E2D272FC04CB700A62CBC /* team-10-c3.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "team-10-c3.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +38,7 @@
 			isa = PBXGroup;
 			children = (
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
+				8FDA4F162FC5E0B0001AF248 /* Frameworks */,
 				8F5E2D282FC04CB700A62CBC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +49,13 @@
 				8F5E2D272FC04CB700A62CBC /* team-10-c3.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8FDA4F162FC5E0B0001AF248 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +78,7 @@
 			);
 			name = "team-10-c3";
 			packageProductDependencies = (
+				8FDA4F172FC5E0BA001AF248 /* WhisperKit */,
 			);
 			productName = "team-10-c3";
 			productReference = 8F5E2D272FC04CB700A62CBC /* team-10-c3.app */;
@@ -94,6 +108,9 @@
 			);
 			mainGroup = 8F5E2D1E2FC04CB700A62CBC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8F5E2D282FC04CB700A62CBC /* Products */;
 			projectDirPath = "";
@@ -249,8 +266,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -263,8 +282,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "daffa.team-10-c3";
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -280,8 +300,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -294,8 +316,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "daffa.team-10-c3";
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -316,7 +339,7 @@
 				8F5E2D312FC04CB800A62CBC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		8F5E2D322FC04CB800A62CBC /* Build configuration list for PBXNativeTarget "team-10-c3" */ = {
 			isa = XCConfigurationList;
@@ -325,9 +348,28 @@
 				8F5E2D342FC04CB800A62CBC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8FDA4F172FC5E0BA001AF248 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
 }
