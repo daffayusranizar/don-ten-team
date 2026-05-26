@@ -1,3 +1,6 @@
+## Project Structure
+
+```text
 ParentGuide/
 │
 ├── App/                    Entry point, routing, and dependency setup
@@ -36,3 +39,4 @@ Extensions/
 ├── DeviceActivityMonitor/  Fires when a screen time limit is reached             [P2]
 ├── DeviceActivityReport/   Shows usage data inside iOS Screen Time settings      [P2]
 └── ShieldConfiguration/    Custom "time's up" screen shown to the child          [P2]
+```
