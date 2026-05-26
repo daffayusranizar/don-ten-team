@@ -1,14 +1,15 @@
 //
-//  team_10_c3App.swift
+//  ParentGuideApp.swift
 //  team-10-c3
 //
-//  Created by Daffa Yuranizar Arrifi on 22/05/26.
+//  Created by Huy Tran on 26/05/26.
 //
+//  [P1] @main entry, SwiftData container
 
 import SwiftUI
 
 @main
-struct team_10_c3App: App {
+struct ParentGuideApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
