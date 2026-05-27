@@ -10,9 +10,12 @@ import SwiftUI
 
 @main
 struct ParentGuideApp: App {
+    private let container = AppContainer()
+
     var body: some Scene {
         WindowGroup {
-            
+            RootView()
+                .environment(\.featureFlags, container.featureFlags)
         }
     }
 }

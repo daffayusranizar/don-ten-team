@@ -6,3 +6,17 @@
 //
 // [P1] Builds all actors/services at launch
 
+import Foundation
+
+@MainActor
+final class AppContainer {
+    let featureFlags: FeatureFlagService
+
+    init(featureFlags: FeatureFlagService) {
+        self.featureFlags = featureFlags
+    }
+
+    convenience init() {
+        self.init(featureFlags: FeatureFlagService())
+    }
+}
