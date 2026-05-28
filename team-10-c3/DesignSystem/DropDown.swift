@@ -143,7 +143,7 @@ struct PrimaryDropdown: View {
         .buttonStyle(.plain)
 
         // Dropdown Options
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topLeading) {
             if isExpanded {
                 VStack(spacing: size.optionSpacing) {
                     // each profile listing
@@ -209,6 +209,7 @@ struct PrimaryDropdown: View {
 
                 // places menu below the button
                 .padding(.top, size.dropdownOffset)
+                .zIndex(999)
             }
         }
         .fontWeight(.medium)
