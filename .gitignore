@@ -64,3 +64,6 @@ fastlane/test_output
 
 team-10-c3/ztest-video/
 team-10-c3/Resources/clip-model/
+
+# Per-developer signing overrides (see Config/Signing.local.xcconfig.example)
+Config/Signing.local.xcconfig

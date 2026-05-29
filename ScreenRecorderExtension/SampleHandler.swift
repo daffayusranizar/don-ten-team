@@ -3,8 +3,10 @@ import AVFoundation
 
 class SampleHandler: RPBroadcastSampleHandler {
     
-    // Must match BroadcastConstants.appGroupID and all *.entitlements files.
-    private let appGroupIdentifier = "group.abui.don-ten-team.shared"
+    private var appGroupIdentifier: String {
+        Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String
+            ?? "group.abui.don-ten-team.shared"
+    }
     
     private var assetWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?

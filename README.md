@@ -2,6 +2,53 @@
 
 ParentGuide is a native iOS SwiftUI app that helps parents manage child screen time — starting sessions, monitoring usage, setting rules, and getting parenting guidance. The codebase follows MVVM with dependency injection via `AppContainer`, on-device persistence via SwiftData, and a typed local feature flag system for toggling work-in-progress features.
 
+**Requirements:** Xcode 26.5+, iOS 26+ simulator or device.
+
+## Building with your own Apple account
+
+Each teammate can build with their **own** signing identity. Shared defaults live in `Config/Signing.xcconfig`; personal overrides go in a gitignored local file.
+
+### First-time setup
+
+1. Clone the repo and open `team-10-c3.xcodeproj`
+2. Copy the signing template:
+   ```bash
+   cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
+   ```
+3. Edit `Config/Signing.local.xcconfig`:
+   ```xcconfig
+   APP_BUNDLE_ID_PREFIX = yourname
+   DEVELOPMENT_TEAM = XXXXXXXXXX
+   ```
+   Find your **Team ID** in Xcode → Settings → Accounts → your team → Team ID.
+4. Register an **App Group** at [developer.apple.com](https://developer.apple.com) → Identifiers → App Groups:
+   - Identifier: `group.yourname.don-ten-team.shared` (derived from your prefix)
+5. In Xcode, for all three targets (`team-10-c3`, `ScreenRecorderExtension`, `ScreenRecorderExtensionSetupUI`):
+   - **Signing & Capabilities** → enable **Automatically manage signing**
+   - Confirm **Team** matches your local config
+   - Add the App Group capability if Xcode prompts you
+6. Select scheme **`team-10-c3`** and an **iPhone 17** simulator → **⌘B**
+
+### Family Controls (optional)
+
+The main app includes a Family Controls entitlement. If Apple has **not** approved it for your team, add this to `Config/Signing.local.xcconfig`:
+
+```xcconfig
+MAIN_APP_ENTITLEMENTS = team-10-c3/team-10-c3.dev.entitlements
+```
+
+Screen recording and most UI work still run without Family Controls.
+
+### What gets customized per person
+
+| Setting | Example (Abui) | Example (teammate) |
+|---|---|---|
+| Team ID | `35SGY39Y8Z` | their Team ID |
+| Main bundle ID | `abui.don-ten-team` | `daffa.don-ten-team` |
+| App Group | `group.abui.don-ten-team.shared` | `group.daffa.don-ten-team.shared` |
+
+Do **not** commit `Config/Signing.local.xcconfig`.
+
 ## Contents
 
 - [Project Structure](#project-structure)

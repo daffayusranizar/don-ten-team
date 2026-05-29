@@ -1,0 +1,13 @@
+// Per-developer overrides — copy this file to Signing.local.xcconfig (same folder).
+//   cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
+//
+// Signing.local.xcconfig is gitignored. Edit it with your Apple Developer details.
+
+APP_BUNDLE_ID_PREFIX = yourname
+DEVELOPMENT_TEAM = XXXXXXXXXX
+
+// Register this App Group at developer.apple.com → Identifiers → App Groups.
+// APP_GROUP_IDENTIFIER is derived automatically from APP_BUNDLE_ID_PREFIX.
+
+// If Apple has not approved Family Controls for your team, uncomment:
+// MAIN_APP_ENTITLEMENTS = team-10-c3/team-10-c3.dev.entitlements

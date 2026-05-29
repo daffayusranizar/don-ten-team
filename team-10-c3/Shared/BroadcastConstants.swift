@@ -6,7 +6,7 @@
 import Foundation
 
 enum BroadcastConstants {
-    static let appGroupID = "group.abui.don-ten-team.shared"
+    static var appGroupID: String { SigningConfig.appGroupID }
     static let recordingsFolderName = "Recordings"
 
     /// Frames written to the saved MP4 during broadcast (1 frame per second).
@@ -29,7 +29,7 @@ enum BroadcastConstants {
     )
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
-    static let fallbackExtensionBundleID = "abui.don-ten-team.ScreenRecorderExtension"
+    static var fallbackExtensionBundleID: String { SigningConfig.screenRecorderExtensionBundleID }
 
     /// Bundle ID of the embedded Broadcast Upload Extension inside the app.
     static var extensionBundleID: String {
