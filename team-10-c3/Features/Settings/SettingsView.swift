@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @State var weeklyReminder: Bool = false
     @State var weeklyCheckIn: Bool = false
+    @State var showApprovedApps: Bool = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -76,7 +77,7 @@ struct SettingsView: View {
                 // approved apps
                 HStack {
                     Button {
-  
+                        showApprovedApps = true
                     } label: {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
@@ -136,51 +137,12 @@ struct SettingsView: View {
                     .font(.system(size: 20, weight: .semibold))
                 
                 // weekly suggestion reminder
-                HStack {
-                    Button {
-  
-                    } label: {
-                        HStack {
-                            Image(systemName: "bell.circle.fill")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.textPrimary)
-                            Text("Weekly Suggestion Reminder")
-                                .font(Font.system(size: 12, weight: .regular))
+                notification(icon: "bell.circle.fill", title: "Weekly Suggestion Reminder", isOn: $weeklyReminder)
 
-                            Spacer()
-
-                            Toggle("", isOn: $weeklyReminder)
-                        }
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                
                 Divider()
                 
                 // weekly check-in
-                HStack {
-                    Button {
-  
-                    } label: {
-                        HStack {
-                            Image(systemName: "calendar.circle.fill")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.textPrimary)
-                            Text("Weekly Check-In")
-
-                            Spacer()
-
-                            Toggle("", isOn: $weeklyCheckIn)
-                        }
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+                notification(icon: "calendar.circle.fill", title: "Weekly Check-In", isOn: $weeklyCheckIn)
             }
             .padding()
             .background(
@@ -230,7 +192,26 @@ struct SettingsView: View {
         .padding(.horizontal, 30)
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
+        .navigationDestination(isPresented: $showApprovedApps) {
+            ApprovedAppsView()
+        }
     }
+}
+
+private func notification (icon: String, title: String, isOn: Binding<Bool>) -> some View {
+    HStack {
+        Image(systemName: icon)
+            .font(.system(size: 25, weight: .semibold))
+            .foregroundStyle(.textPrimary)
+        Text(title)
+
+        Spacer()
+
+        Toggle("", isOn: isOn)
+    }
+    .padding(.vertical, 5)
+    .frame(maxWidth: .infinity)
+    .contentShape(Rectangle())
 }
 
 #Preview {
