@@ -12,6 +12,8 @@ import Charts
 func nothing() -> Void {}
 
 struct DashboardView: View {
+    @State var showSettings: Bool = false
+    
     // - temp
     @State var exampleName: String = "Raka Fadhilah"
     @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
@@ -200,8 +202,9 @@ struct DashboardView: View {
                     }
                     .padding(.top, 30)
                 }
+                .padding(.horizontal, 30)
+                .padding(.vertical)
                 .foregroundStyle(.textPrimary)
-                .padding(.horizontal)
 
                 // tool bar
                 HStack {
@@ -211,7 +214,7 @@ struct DashboardView: View {
                     )
 
                     Button {
-
+                        showSettings = true
                     } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20, weight: .semibold))
@@ -223,13 +226,19 @@ struct DashboardView: View {
                     }
                 }
                 .foregroundStyle(.textPrimary)
-                .padding(.horizontal)
+                .padding(.horizontal, 30)
+                .padding(.vertical)
                 .zIndex(1000)
             }
+        }
+        .navigationDestination(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 }
 
 #Preview {
-    DashboardView()
+    NavigationStack {
+        DashboardView()
+    }
 }
