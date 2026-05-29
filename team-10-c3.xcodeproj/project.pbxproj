@@ -6,14 +6,93 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8FDA4F172FC5E0BA001AF248 /* WhisperKit */; };
+		8FDA50002FC93173001AF248 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
+		8FDA500A2FC93173001AF248 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
+		8FDA500B2FC93173001AF248 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FB02FC930A2001AF248 /* UIKit.framework */; };
+		8FDA50122FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8FDA50152FC93173001AF248 /* ScreenRecorderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8FDA50102FC93173001AF248 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8FDA50082FC93173001AF248;
+			remoteInfo = ScreenRecorderExtensionSetupUI;
+		};
+		8FDA50132FC93173001AF248 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8FDA4FFE2FC93173001AF248;
+			remoteInfo = ScreenRecorderExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8FDA4FC42FC930A2001AF248 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8FDA50152FC93173001AF248 /* ScreenRecorderExtension.appex in Embed Foundation Extensions */,
+				8FDA50122FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		8F5E2D272FC04CB700A62CBC /* team-10-c3.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "team-10-c3.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
+		8FDA4FB02FC930A2001AF248 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
+		8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenRecorderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenRecorderExtensionSetupUI.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8FDA50162FC93173001AF248 /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */;
+		};
+		8FDA501A2FC93173001AF248 /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8F5E2D292FC04CB700A62CBC /* team-10-c3 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "team-10-c3";
+			sourceTree = "<group>";
+		};
+		8FDA50012FC93173001AF248 /* ScreenRecorderExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8FDA50162FC93173001AF248 /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */,
+			);
+			path = ScreenRecorderExtension;
+			sourceTree = "<group>";
+		};
+		8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8FDA501A2FC93173001AF248 /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */,
+			);
+			path = ScreenRecorderExtensionSetupUI;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +102,24 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDA4FFC2FC93173001AF248 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FDA50002FC93173001AF248 /* ReplayKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDA50062FC93173001AF248 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FDA500A2FC93173001AF248 /* ReplayKit.framework in Frameworks */,
+				8FDA500B2FC93173001AF248 /* UIKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +130,9 @@
 			isa = PBXGroup;
 			children = (
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
+				8FDA50012FC93173001AF248 /* ScreenRecorderExtension */,
+				8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
+				8FDA4F162FC5E0B0001AF248 /* Frameworks */,
 				8F5E2D282FC04CB700A62CBC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +141,20 @@
 			isa = PBXGroup;
 			children = (
 				8F5E2D272FC04CB700A62CBC /* team-10-c3.app */,
+				8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */,
+				8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8FDA4F162FC5E0B0001AF248 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */,
+				8FDA4FB02FC930A2001AF248 /* UIKit.framework */,
+				8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,20 +167,68 @@
 				8F5E2D232FC04CB700A62CBC /* Sources */,
 				8F5E2D242FC04CB700A62CBC /* Frameworks */,
 				8F5E2D252FC04CB700A62CBC /* Resources */,
+				8FDA4FC42FC930A2001AF248 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8FDA50112FC93173001AF248 /* PBXTargetDependency */,
+				8FDA50142FC93173001AF248 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
 			);
 			name = "team-10-c3";
 			packageProductDependencies = (
+				8FDA4F172FC5E0BA001AF248 /* WhisperKit */,
 			);
 			productName = "team-10-c3";
 			productReference = 8F5E2D272FC04CB700A62CBC /* team-10-c3.app */;
 			productType = "com.apple.product-type.application";
+		};
+		8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FDA50172FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */;
+			buildPhases = (
+				8FDA4FFB2FC93173001AF248 /* Sources */,
+				8FDA4FFC2FC93173001AF248 /* Frameworks */,
+				8FDA4FFD2FC93173001AF248 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8FDA50012FC93173001AF248 /* ScreenRecorderExtension */,
+			);
+			name = ScreenRecorderExtension;
+			packageProductDependencies = (
+			);
+			productName = ScreenRecorderExtension;
+			productReference = 8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FDA501B2FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */;
+			buildPhases = (
+				8FDA50052FC93173001AF248 /* Sources */,
+				8FDA50062FC93173001AF248 /* Frameworks */,
+				8FDA50072FC93173001AF248 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
+			);
+			name = ScreenRecorderExtensionSetupUI;
+			packageProductDependencies = (
+			);
+			productName = ScreenRecorderExtensionSetupUI;
+			productReference = 8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -83,6 +243,12 @@
 					8F5E2D262FC04CB700A62CBC = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					8FDA4FFE2FC93173001AF248 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					8FDA50082FC93173001AF248 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = 8F5E2D222FC04CB700A62CBC /* Build configuration list for PBXProject "team-10-c3" */;
@@ -94,18 +260,37 @@
 			);
 			mainGroup = 8F5E2D1E2FC04CB700A62CBC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8F5E2D282FC04CB700A62CBC /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				8F5E2D262FC04CB700A62CBC /* team-10-c3 */,
+				8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */,
+				8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		8F5E2D252FC04CB700A62CBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDA4FFD2FC93173001AF248 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDA50072FC93173001AF248 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +307,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8FDA4FFB2FC93173001AF248 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDA50052FC93173001AF248 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8FDA50112FC93173001AF248 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */;
+			targetProxy = 8FDA50102FC93173001AF248 /* PBXContainerItemProxy */;
+		};
+		8FDA50142FC93173001AF248 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */;
+			targetProxy = 8FDA50132FC93173001AF248 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		8F5E2D302FC04CB800A62CBC /* Debug */ = {
@@ -249,6 +461,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "team-10-c3/team-10-c3.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y98965H9SG;
@@ -265,8 +479,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "daffa.team-10-c3";
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -282,6 +497,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "team-10-c3/team-10-c3.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y98965H9SG;
@@ -298,11 +515,132 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "daffa.team-10-c3";
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8FDA50182FC93173001AF248 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ScreenRecorderExtension/ScreenRecorderExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla.ScreenRecorderExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8FDA50192FC93173001AF248 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ScreenRecorderExtension/ScreenRecorderExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla.ScreenRecorderExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8FDA501C2FC93173001AF248 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ScreenRecorderExtensionSetupUI/ScreenRecorderExtensionSetupUI.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtensionSetupUI;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla.ScreenRecorderExtensionSetupUI;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8FDA501D2FC93173001AF248 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ScreenRecorderExtensionSetupUI/ScreenRecorderExtensionSetupUI.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MGF2PFTBQT;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtensionSetupUI;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = daffa.blablabla.ScreenRecorderExtensionSetupUI;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -320,7 +658,7 @@
 				8F5E2D312FC04CB800A62CBC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		8F5E2D322FC04CB800A62CBC /* Build configuration list for PBXNativeTarget "team-10-c3" */ = {
 			isa = XCConfigurationList;
@@ -329,9 +667,46 @@
 				8F5E2D342FC04CB800A62CBC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
+		};
+		8FDA50172FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FDA50182FC93173001AF248 /* Debug */,
+				8FDA50192FC93173001AF248 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8FDA501B2FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FDA501C2FC93173001AF248 /* Debug */,
+				8FDA501D2FC93173001AF248 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8FDA4F172FC5E0BA001AF248 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8FDA4EAB2FC58D9A001AF248 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
 }
