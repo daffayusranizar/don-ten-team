@@ -1,6 +1,12 @@
 import Foundation
 @preconcurrency import WhisperKit
 
+public struct SegmentedTranscript: Sendable {
+    public let start: TimeInterval
+    public let end: TimeInterval
+    public let text: String
+}
+
 public enum WhisperTranscriberError: LocalizedError {
     case loadFailed(String)
     case transcriptionFailed(String)
@@ -43,6 +49,28 @@ public actor ScreenRecordingWhisperTranscriber {
                 .compactMap(\.text)
                 .joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            throw WhisperTranscriberError.transcriptionFailed(error.localizedDescription)
+        }
+    }
+
+    public func transcribeFull(wavURL: URL) async throws -> [SegmentedTranscript] {
+        let path = wavURL.path
+        guard FileManager.default.fileExists(atPath: path) else {
+            return []
+        }
+
+        do {
+            let results = try await whisperKit.transcribe(audioPath: path)
+            return results.flatMap { result in
+                result.segments.map { segment in
+                    SegmentedTranscript(
+                        start: TimeInterval(segment.start),
+                        end: TimeInterval(segment.end),
+                        text: segment.text
+                    )
+                }
+            }
         } catch {
             throw WhisperTranscriberError.transcriptionFailed(error.localizedDescription)
         }

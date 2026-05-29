@@ -37,11 +37,28 @@ public enum SummarizerError: LocalizedError {
 
 /// A thread-safe actor that chunks up timeline data and feeds it into the iOS 26 on-device Language Model
 public actor LLMSummarizer {
-    private let instructions = """
-        You summarize screen recordings of short-form social video (TikTok, YouTube Shorts, Instagram Reels).
-        Use only the provided segment notes. Do not invent usernames, brands, or topics that are not supported by the input.
-        Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
-        """
+    private func instructions(for child: Child?) -> String {
+        if let child = child {
+            return """
+                You are a parental monitoring assistant analyzing a screen recording session for a \(child.currentAge)-year-old named \(child.name).
+                Summarize the activity clearly and objectively for a parent.
+                Use the child's name (\(child.name)) and correct pronouns (\(child.gender.pronounSubject)/\(child.gender.pronounObject)) in the summary to make it personalized.
+                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
+                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
+                Use only the provided segment notes and session insights. Do not invent details.
+                Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
+                """
+        } else {
+            return """
+                You are a parental monitoring assistant analyzing a child's screen recording session.
+                Summarize the activity clearly and objectively for a parent. 
+                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
+                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
+                Use only the provided segment notes and session insights. Do not invent details.
+                Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
+                """
+        }
+    }
 
     public init() {}
 
@@ -67,7 +84,8 @@ public actor LLMSummarizer {
 
     public func summarizeRecording(
         timeline: [FrameClassificationSummary],
-        overallCategory: String?
+        overallCategory: String?,
+        child: Child? = nil
     ) async throws -> String {
         guard #available(iOS 26, *) else {
             throw SummarizerError.requiresIOS26
@@ -75,6 +93,8 @@ public actor LLMSummarizer {
         guard availability() == .available else {
             throw SummarizerError.modelUnavailable(availability().statusMessage ?? "Model unavailable.")
         }
+
+        let statsString = computeSessionStatistics(from: timeline)
 
         let segmentLines = buildSegmentLines(from: timeline)
         guard !segmentLines.isEmpty else {
@@ -88,7 +108,9 @@ public actor LLMSummarizer {
             let summary = try await summarizeChunk(
                 chunk,
                 overallCategory: overallCategory,
-                isFinalPass: chunks.count == 1
+                statsString: statsString,
+                isFinalPass: chunks.count == 1,
+                child: child
             )
             if !summary.isEmpty {
                 chunkSummaries.append(summary)
@@ -104,24 +126,28 @@ public actor LLMSummarizer {
         }
 
         let mergePrompt = """
-        Combine these partial summaries of one screen recording into one cohesive 2-4 sentence overview.
+        \(statsString)
+        Combine these partial summaries of one screen recording into one cohesive 2-4 sentence overview. Incorporate key statistics like duration and percentages from the stats above.
         Partial summaries:
         \(chunkSummaries.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
         """
-        return try await respond(prompt: mergePrompt)
+        return try await respond(prompt: mergePrompt, child: child)
     }
 
     @available(iOS 26, *)
     private func summarizeChunk(
         _ lines: [String],
         overallCategory: String?,
-        isFinalPass: Bool
+        statsString: String,
+        isFinalPass: Bool,
+        child: Child?
     ) async throws -> String {
         let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
+        let statsLine = isFinalPass ? "\n\(statsString)\n" : ""
         let prompt: String
         if isFinalPass {
             prompt = """
-            \(categoryLine)Summarize what the user watched in this screen recording based on these time-stamped segment notes:
+            \(categoryLine)\(statsLine)Summarize what the user watched in this screen recording based on these time-stamped segment notes and statistics. Make sure to naturally mention the duration, percentages, and creators:
 
             \(lines.joined(separator: "\n"))
             """
@@ -132,14 +158,69 @@ public actor LLMSummarizer {
             \(lines.joined(separator: "\n"))
             """
         }
-        return try await respond(prompt: prompt)
+        return try await respond(prompt: prompt, child: child)
     }
 
     @available(iOS 26, *)
-    private func respond(prompt: String) async throws -> String {
-        let session = LanguageModelSession(instructions: instructions)
+    private func respond(prompt: String, child: Child?) async throws -> String {
+        let session = LanguageModelSession(instructions: instructions(for: child))
         let response = try await session.respond(to: prompt)
         return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func computeSessionStatistics(from timeline: [FrameClassificationSummary]) -> String {
+        let totalItems = Double(timeline.count)
+        guard totalItems > 0 else { return "" }
+        
+        let interval: Double
+        if timeline.count > 1 {
+            interval = timeline[1].timestamp - timeline[0].timestamp
+        } else {
+            interval = 3.0 // default fallback
+        }
+        
+        let totalDurationSeconds = totalItems * interval
+        let minutes = Int(totalDurationSeconds) / 60
+        let seconds = Int(totalDurationSeconds) % 60
+        let durationString = String(format: "%d:%02d", minutes, seconds)
+        
+        var categoryCounts: [String: Int] = [:]
+        var creatorCounts: [String: Int] = [:]
+        
+        for item in timeline {
+            categoryCounts[item.label, default: 0] += 1
+            if let creator = item.creatorHandle {
+                creatorCounts[creator, default: 0] += 1
+            }
+        }
+        
+        var statsString = "Session Statistics:\n"
+        statsString += "- Total estimated duration: \(durationString)\n"
+        
+        let sortedCategories = categoryCounts.sorted { $0.value > $1.value }
+        statsString += "- Content categories watched:\n"
+        for (category, count) in sortedCategories {
+            let percentage = (Double(count) / totalItems) * 100
+            let duration = Double(count) * interval
+            let mins = Int(duration) / 60
+            let secs = Int(duration) % 60
+            let timeStr = mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
+            statsString += "  * \(category): \(String(format: "%.0f", percentage))% (\(timeStr))\n"
+        }
+        
+        if !creatorCounts.isEmpty {
+            let sortedCreators = creatorCounts.sorted { $0.value > $1.value }
+            statsString += "- Creators watched:\n"
+            for (creator, count) in sortedCreators {
+                let duration = Double(count) * interval
+                let mins = Int(duration) / 60
+                let secs = Int(duration) % 60
+                let timeStr = mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
+                statsString += "  * \(creator): \(timeStr)\n"
+            }
+        }
+        
+        return statsString
     }
 
     private func buildSegmentLines(from timeline: [FrameClassificationSummary]) -> [String] {
@@ -160,7 +241,6 @@ public actor LLMSummarizer {
             return "\(timestamp) — \(parts.joined(separator: "; "))"
         }
     }
-
     private func chunkLines(_ lines: [String], maxCharacters: Int) -> [[String]] {
         guard !lines.isEmpty else { return [] }
 

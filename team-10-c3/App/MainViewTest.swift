@@ -158,7 +158,7 @@ struct MainViewTest: View {
     // MARK: - Pipeline Runner
 
     private func runPipeline() {
-        guard let bundleURL = Bundle.main.url(forResource: "video_test_record_attemp_2", withExtension: "MP4") else {
+        guard let bundleURL = Bundle.main.url(forResource: "video_test_record_attemp_3", withExtension: "MP4") else {
             errorMessage = "video_test.mp4 not found in bundle!"
             return
         }

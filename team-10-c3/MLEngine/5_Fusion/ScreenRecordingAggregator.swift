@@ -138,7 +138,8 @@ public actor ScreenRecordingAggregator {
             videoMatchedPrompt: String?,
             audioMatchedPrompt: String?,
             contentSummary: String?,
-            creatorHandle: String?
+            creatorHandle: String?,
+            isDuplicate: Bool
         )],
         fps: Float,
         intervalSeconds: Int = 3
@@ -181,10 +182,13 @@ public actor ScreenRecordingAggregator {
             let matching = bucket.filter { $0.label == winningLabel }
             let averageProbability = matching.map(\.probability).reduce(0, +) / Float(matching.count)
             
+            // Apply confidence threshold: If we aren't highly confident, label it as a transition.
+            let finalLabel = averageProbability >= 0.55 ? winningLabel : "Unknown or Transitioning"
+            
             return FrameClassificationSummary(
                 id: bucketStart,
                 timestamp: TimeInterval(bucketStart),
-                label: winningLabel,
+                label: finalLabel,
                 matchedPrompt: matching.first?.matchedPrompt,
                 videoMatchedPrompt: matching.first?.videoMatchedPrompt ?? bucket.first?.videoMatchedPrompt,
                 audioMatchedPrompt: matching.first?.audioMatchedPrompt ?? bucket.first?.audioMatchedPrompt,

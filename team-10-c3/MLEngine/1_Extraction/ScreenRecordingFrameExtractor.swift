@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreMedia
 import CoreVideo
+import VideoToolbox
 
 public struct ScreenRecordingMetadata: Sendable {
     public let fps: Float
@@ -18,11 +19,13 @@ public struct ScreenRecordingFrame: Sendable {
     public let index: Int
     public let timestamp: TimeInterval
     public let pixelBuffer: CVPixelBuffer
+    public let isDuplicateOfPrevious: Bool
     
-    public init(index: Int, timestamp: TimeInterval, pixelBuffer: CVPixelBuffer) {
+    public init(index: Int, timestamp: TimeInterval, pixelBuffer: CVPixelBuffer, isDuplicateOfPrevious: Bool = false) {
         self.index = index
         self.timestamp = timestamp
         self.pixelBuffer = pixelBuffer
+        self.isDuplicateOfPrevious = isDuplicateOfPrevious
     }
 }
 
@@ -99,6 +102,8 @@ public actor ScreenRecordingFrameExtractor {
         }
 
         var index = 0
+        var previousBuffer: CVPixelBuffer?
+        
         while reader.status == .reading {
             guard let sampleBuffer = output.copyNextSampleBuffer(),
                   let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -109,11 +114,17 @@ public actor ScreenRecordingFrameExtractor {
             
             // We only yield the frame if it matches our 3-second interval rule
             if shouldClassify(at: timestamp) {
+                let resizedBuffer = downscale(pixelBuffer: pixelBuffer)
+                
+                let isDup = previousBuffer != nil ? isDuplicate(bufferA: previousBuffer!, bufferB: resizedBuffer) : false
+                previousBuffer = resizedBuffer
+                
                 try await body(
                     ScreenRecordingFrame(
                         index: index,
                         timestamp: timestamp,
-                        pixelBuffer: pixelBuffer
+                        pixelBuffer: resizedBuffer,
+                        isDuplicateOfPrevious: isDup
                     )
                 )
             }
@@ -126,5 +137,85 @@ public actor ScreenRecordingFrameExtractor {
 
         guard index > 0 else { throw ExtractionError.noFrames }
         return index
+    }
+    
+    private func downscale(pixelBuffer: CVPixelBuffer) -> CVPixelBuffer {
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        
+        // If it's already small enough (e.g. 720p or less), don't resize it
+        if width <= 720 { return pixelBuffer }
+        
+        let scale: Double = 720.0 / Double(width)
+        let targetWidth = 720
+        let targetHeight = Int(Double(height) * scale)
+        
+        var unmanagedSession: VTPixelTransferSession?
+        VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &unmanagedSession)
+        guard let session = unmanagedSession else { return pixelBuffer }
+        
+        var outputBuffer: CVPixelBuffer?
+        let attrs = [
+            kCVPixelBufferCGImageCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true
+        ] as CFDictionary
+        
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, CVPixelBufferGetPixelFormatType(pixelBuffer), attrs, &outputBuffer)
+        
+        guard status == kCVReturnSuccess, let outBuffer = outputBuffer else { return pixelBuffer }
+        VTPixelTransferSessionTransferImage(session, from: pixelBuffer, to: outBuffer)
+        
+        return outBuffer
+    }
+    
+    private func isDuplicate(bufferA: CVPixelBuffer, bufferB: CVPixelBuffer) -> Bool {
+        guard CVPixelBufferGetWidth(bufferA) == CVPixelBufferGetWidth(bufferB),
+              CVPixelBufferGetHeight(bufferA) == CVPixelBufferGetHeight(bufferB) else {
+            return false
+        }
+        
+        CVPixelBufferLockBaseAddress(bufferA, .readOnly)
+        CVPixelBufferLockBaseAddress(bufferB, .readOnly)
+        defer {
+            CVPixelBufferUnlockBaseAddress(bufferA, .readOnly)
+            CVPixelBufferUnlockBaseAddress(bufferB, .readOnly)
+        }
+        
+        guard let baseA = CVPixelBufferGetBaseAddress(bufferA)?.assumingMemoryBound(to: UInt8.self),
+              let baseB = CVPixelBufferGetBaseAddress(bufferB)?.assumingMemoryBound(to: UInt8.self) else {
+            return false
+        }
+        
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(bufferA)
+        let height = CVPixelBufferGetHeight(bufferA)
+        let width = CVPixelBufferGetWidth(bufferA)
+        
+        var diffSum: Int = 0
+        var samples = 0
+        
+        // Sample roughly 100 pixels across the screen
+        let stepY = max(1, height / 10)
+        let stepX = max(1, width / 10)
+        
+        for y in stride(from: 0, to: height, by: stepY) {
+            for x in stride(from: 0, to: width, by: stepX) {
+                let offset = y * bytesPerRow + x * 4
+                let bA = Int(baseA[offset])
+                let gA = Int(baseA[offset + 1])
+                let rA = Int(baseA[offset + 2])
+                
+                let bB = Int(baseB[offset])
+                let gB = Int(baseB[offset + 1])
+                let rB = Int(baseB[offset + 2])
+                
+                let diff = abs(bA - bB) + abs(gA - gB) + abs(rA - rB)
+                diffSum += diff
+                samples += 1
+            }
+        }
+        
+        let avgDiff = samples > 0 ? (diffSum / samples) : 0
+        // If average absolute difference across RGB channels is small, it's effectively identical
+        return avgDiff < 15
     }
 }

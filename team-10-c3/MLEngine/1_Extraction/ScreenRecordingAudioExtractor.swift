@@ -37,6 +37,38 @@ public actor ScreenRecordingAudioExtractor {
         return !tracks.isEmpty
     }
 
+    public func exportFullAudio(from videoURL: URL) async throws -> URL? {
+        let asset = AVURLAsset(url: videoURL)
+        guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
+            return nil
+        }
+        
+        let duration = try await asset.load(.duration)
+        let durationSeconds = CMTimeGetSeconds(duration)
+        guard durationSeconds.isFinite, durationSeconds > 0 else {
+            throw ExtractionError.unreadableAudio
+        }
+        
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("screen-recording-audio", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        
+        let outputURL = tempDirectory.appendingPathComponent("full_audio.wav")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        
+        let exported = try exportWAVSegment(
+            asset: asset,
+            track: track,
+            start: 0,
+            duration: durationSeconds,
+            outputURL: outputURL
+        )
+        
+        return exported ? outputURL : nil
+    }
+
     public func exportClassificationWindows(from videoURL: URL) async throws -> [ScreenRecordingAudioSegment] {
         let asset = AVURLAsset(url: videoURL)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
