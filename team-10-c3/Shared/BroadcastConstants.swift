@@ -6,7 +6,7 @@
 import Foundation
 
 enum BroadcastConstants {
-    static let appGroupID = "group.com.abui.iamge-detection.shared"
+    static let appGroupID = "group.abui.don-ten-team.shared"
     static let recordingsFolderName = "Recordings"
 
     /// Frames written to the saved MP4 during broadcast (1 frame per second).
@@ -29,7 +29,7 @@ enum BroadcastConstants {
     )
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
-    static let fallbackExtensionBundleID = "com.abui.iamge-detection.BroadcastUploadExtension"
+    static let fallbackExtensionBundleID = "abui.don-ten-team.ScreenRecorderExtension"
 
     /// Bundle ID of the embedded Broadcast Upload Extension inside the app.
     static var extensionBundleID: String {
@@ -48,7 +48,7 @@ enum BroadcastConstants {
         return contents
             .filter { $0.pathExtension == "appex" }
             .compactMap { Bundle(url: $0)?.bundleIdentifier }
-            .first { $0.localizedCaseInsensitiveContains("BroadcastUploadExtension") }
+            .first { $0.localizedCaseInsensitiveContains("ScreenRecorderExtension") }
     }
 
     static var isExtensionEmbedded: Bool {

@@ -3,8 +3,8 @@ import AVFoundation
 
 class SampleHandler: RPBroadcastSampleHandler {
     
-    // IMPORTANT: Update this to exactly match the App Group you created in Xcode
-    private let appGroupIdentifier = "group.com.team10.c3"
+    // Must match BroadcastConstants.appGroupID and all *.entitlements files.
+    private let appGroupIdentifier = "group.abui.don-ten-team.shared"
     
     private var assetWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?

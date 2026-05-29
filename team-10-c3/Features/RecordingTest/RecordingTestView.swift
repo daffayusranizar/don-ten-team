@@ -66,7 +66,7 @@ struct BroadcastPicker: UIViewRepresentable {
         
         // IMPORTANT: Set this to the Bundle Identifier of your Broadcast Upload Extension
         // If this is wrong, the picker will show a list of all apps instead of auto-selecting ours.
-        picker.preferredExtension = "daffa.blablabla.ScreenRecorderExtension" 
+        picker.preferredExtension = BroadcastConstants.extensionBundleID
         
         picker.showsMicrophoneButton = true
         return picker
