@@ -116,6 +116,85 @@ struct PrimaryTextField: View {
     }
 }
 
+// MARK: Primary Date Input
+struct PrimaryDateField: View {
+    @Binding var date: Date?
+
+    var placeholder: String
+    var size: TextFieldSize = .medium
+    var systemImage: String? = nil
+
+    private var formattedDate: String {
+        guard let date else { return placeholder }
+
+        return date.formatted(
+            .dateTime
+                .day()
+                .month(.abbreviated)
+                .year()
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: size.contentSpacing) {
+
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: size.iconSize))
+                    .foregroundStyle(.textPrimary)
+            }
+
+            ZStack(alignment: .leading) {
+
+                // placeholder / formatted text
+                Text(formattedDate)
+                    .font(size.font)
+                    .foregroundStyle(
+                        date == nil
+                        ? .textDisabled
+                        : .textPrimary
+                    )
+
+                // actual picker
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { date ?? Date() },
+                        set: { date = $0 }
+                    ),
+                    displayedComponents: [.date]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .colorMultiply(.clear)
+                
+                if date != nil {
+                    HStack {
+                        Spacer()
+                        
+                        Button {
+                            date = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: size.iconSize))
+                                .foregroundStyle(.textPrimary)
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, size.horizontalPadding)
+        .padding(.vertical, size.verticalPadding)
+        .frame(minHeight: size.minHeight)
+        .background(
+            Capsule()
+                .fill(.uiSurface)
+        )
+    }
+}
+
 // MARK: Secondary Textfield
 struct SecondaryTextField: View {
     @Binding var text: String
@@ -164,6 +243,7 @@ struct SecondaryTextField: View {
     @Previewable @State var example1 = ""
     @Previewable @State var example2 = ""
     @Previewable @State var example3 = ""
+    @Previewable @State var example4: Date? = nil
     
     ZStack {
         Color.black
@@ -176,6 +256,12 @@ struct SecondaryTextField: View {
                 size: .large,
                 systemImage: "person.crop.circle.fill"
             )
+            PrimaryDateField(
+                date: $example4,
+                placeholder: "Insert Birthdate...",
+                size: .large,
+                systemImage: "person.crop.circle.fill"
+            )
             
             PrimaryTextField(
                 text: $example2,
@@ -183,10 +269,22 @@ struct SecondaryTextField: View {
                 size: .medium,
                 systemImage: "person.crop.circle.fill"
             )
+            PrimaryDateField(
+                date: $example4,
+                placeholder: "Insert Birthdate...",
+                size: .medium,
+                systemImage: "person.crop.circle.fill"
+            )
             
             PrimaryTextField(
                 text: $example3,
                 placeholder: "Type name...",
+                size: .small,
+                systemImage: "person.crop.circle.fill"
+            )
+            PrimaryDateField(
+                date: $example4,
+                placeholder: "Insert Birthdate...",
                 size: .small,
                 systemImage: "person.crop.circle.fill"
             )

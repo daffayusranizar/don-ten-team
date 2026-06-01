@@ -55,6 +55,42 @@ enum ButtonSize {
         }
     }
 }
+// MARK: - Toggle Button
+struct NotificationToggle: View {
+    let icon: String?
+    let title: String
+    @Binding var isOn: Bool
+
+    init(
+        icon: String? = nil,
+        title: String,
+        isOn: Binding<Bool>
+    ) {
+        self.icon = icon
+        self.title = title
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        HStack {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 25, weight: .semibold))
+            }
+
+            Text(title)
+
+            Spacer()
+
+            Toggle("", isOn: $isOn)
+                .tint(.textPrimary)
+        }
+        .foregroundStyle(.textPrimary)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+}
 
 // MARK: - PrimaryButton
 
@@ -62,17 +98,21 @@ struct PrimaryButton: View {
     let title: String
     var size: ButtonSize = .medium
     var systemImage: String? = nil
+    var isDisabled: Bool = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             buttonLabel(font: size.primaryFont)
+                .frame(maxWidth: .infinity) // not sure if should remove
                 .padding(.horizontal, size.horizontalPadding)
                 .padding(.vertical, size.verticalPadding)
                 .background(Color("primaryMediumBlue"))
                 .clipShape(Capsule())
                 .foregroundStyle(.white)
+                .opacity(isDisabled ? 0.5 : 1)
         }
+        .disabled(isDisabled)
         .buttonStyle(PressableButtonStyle())
     }
 
@@ -135,7 +175,10 @@ private struct PressableButtonStyle: ButtonStyle {
 // MARK: - Preview
 
 #Preview("Primary") {
+    @Previewable @State var testBool: Bool = false
+    
     VStack(spacing: 16) {
+        NotificationToggle(title: "Test", isOn: $testBool)
         PrimaryButton(title: "Get Started", size: .large) {}
         PrimaryButton(title: "Continue", size: .medium, systemImage: "arrow.right") {}
         PrimaryButton(title: "Try This Game", size: .small) {}

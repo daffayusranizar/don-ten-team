@@ -101,6 +101,7 @@ enum DropdownSize {
 // MARK: Primary Textfield
 struct PrimaryDropdown: View {
     @State private var isExpanded = false
+    @State private var showAddChild: Bool = false
     @Binding var selectedOption: String // temp type, replace with model
     var size: DropdownSize = .medium
     
@@ -182,6 +183,7 @@ struct PrimaryDropdown: View {
                         withAnimation(.snappy) {
                             isExpanded = false
                         }
+                        showAddChild = true
                     } label: {
                         HStack(spacing: size.contentSpacing) {
                             Image(systemName: "plus")
@@ -215,6 +217,9 @@ struct PrimaryDropdown: View {
         .fontWeight(.medium)
         .frame(minHeight: size.minHeight)
         .zIndex(isExpanded ? 100 : 0)
+        .navigationDestination(isPresented: $showAddChild) {
+            ProfileFormView()
+        }
     }
 }
 
@@ -446,27 +451,29 @@ struct TertiaryDropdown: View {
     @Previewable @State var exampleName: String = "Raka Fadhilah"
     @Previewable @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
     
-    ZStack {
-        VStack(spacing: 20) {
-            PrimaryDropdown(
-                selectedOption: $exampleName,
-                size: .large,
-                tempOptions: $exampleOptions
-            )
-            
-            PrimaryDropdown(
-                selectedOption: $exampleName,
-                size: .medium,
-                tempOptions: $exampleOptions
-            )
-            
-            PrimaryDropdown(
-                selectedOption: $exampleName,
-                size: .small,
-                tempOptions: $exampleOptions
-            )
+    NavigationStack {
+        ZStack {
+            VStack(spacing: 20) {
+                PrimaryDropdown(
+                    selectedOption: $exampleName,
+                    size: .large,
+                    tempOptions: $exampleOptions
+                )
+                
+                PrimaryDropdown(
+                    selectedOption: $exampleName,
+                    size: .medium,
+                    tempOptions: $exampleOptions
+                )
+                
+                PrimaryDropdown(
+                    selectedOption: $exampleName,
+                    size: .small,
+                    tempOptions: $exampleOptions
+                )
+            }
+            .padding()
         }
-        .padding()
     }
 }
 

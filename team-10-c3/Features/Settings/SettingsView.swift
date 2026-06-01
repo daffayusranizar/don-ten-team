@@ -11,6 +11,8 @@ struct SettingsView: View {
     @State var weeklyReminder: Bool = false
     @State var weeklyCheckIn: Bool = false
     @State var showApprovedApps: Bool = false
+    @State var showParentsAccess: Bool = false
+    @State var showAboutPage: Bool = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -69,59 +71,20 @@ struct SettingsView: View {
             }
             
             // screen time settings
-            // ! can maybe make this as component
             VStack(alignment: .leading) {
                 Text("Screen Time")
                     .font(.system(size: 20, weight: .semibold))
                 
                 // approved apps
-                HStack {
-                    Button {
-                        showApprovedApps = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.textPrimary)
-                            Text("Approved Apps")
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(.textPrimary)
-                        }
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                NavLink(icon: "checkmark.circle.fill", title: "Approved Apps", changePage: $showApprovedApps) {
+                    ApprovedAppsView()
                 }
                 
                 Divider()
                 
                 // parents access
-                HStack {
-                    Button {
-  
-                    } label: {
-                        HStack {
-                            Image(systemName: "lock.circle.fill")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.textPrimary)
-                            Text("Parents Access")
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(.textPrimary)
-                        }
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                NavLink(icon: "lock.circle.fill", title: "Parents Access", changePage: $showParentsAccess) {
+                    ParentsAccessView()
                 }
             }
             .padding()
@@ -137,12 +100,12 @@ struct SettingsView: View {
                     .font(.system(size: 20, weight: .semibold))
                 
                 // weekly suggestion reminder
-                notification(icon: "bell.circle.fill", title: "Weekly Suggestion Reminder", isOn: $weeklyReminder)
+                NotificationToggle(icon: "bell.circle.fill", title: "Weekly Suggestion Reminder", isOn: $weeklyReminder)
 
                 Divider()
                 
                 // weekly check-in
-                notification(icon: "calendar.circle.fill", title: "Weekly Check-In", isOn: $weeklyCheckIn)
+                NotificationToggle(icon: "calendar.circle.fill", title: "Weekly Check-In", isOn: $weeklyCheckIn)
             }
             .padding()
             .background(
@@ -157,27 +120,8 @@ struct SettingsView: View {
                     .font(.system(size: 20, weight: .semibold))
                 
                 // about
-                HStack {
-                    Button {
-  
-                    } label: {
-                        HStack {
-                            Image(systemName: "i.circle.fill")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.textPrimary)
-                            Text("About")
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(.textPrimary)
-                        }
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                NavLink(icon: "i.circle.fill", title: "About", changePage: $showAboutPage) {
+                    AboutView()
                 }
             }
             .padding()
@@ -192,26 +136,7 @@ struct SettingsView: View {
         .padding(.horizontal, 30)
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
-        .navigationDestination(isPresented: $showApprovedApps) {
-            ApprovedAppsView()
-        }
     }
-}
-
-private func notification (icon: String, title: String, isOn: Binding<Bool>) -> some View {
-    HStack {
-        Image(systemName: icon)
-            .font(.system(size: 25, weight: .semibold))
-            .foregroundStyle(.textPrimary)
-        Text(title)
-
-        Spacer()
-
-        Toggle("", isOn: isOn)
-    }
-    .padding(.vertical, 5)
-    .frame(maxWidth: .infinity)
-    .contentShape(Rectangle())
 }
 
 #Preview {

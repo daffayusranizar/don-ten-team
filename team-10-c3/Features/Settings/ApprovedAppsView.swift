@@ -48,15 +48,15 @@ struct ApprovedAppsView: View {
                 Text("Entertainment")
                     .font(.system(size: 20, weight: .semibold))
                 
-                notification(title: "YouTube", isOn: $youtubeAllowed)
+                NotificationToggle(icon: "bell.circle.fill", title: "YouTube", isOn: $youtubeAllowed)
                 
                 Divider()
                 
-                notification(title: "TikTok", isOn: $tiktokAllowed)
+                NotificationToggle(icon: "bell.circle.fill", title: "TikTok", isOn: $tiktokAllowed)
                 
                 Divider()
                 
-                notification(title: "Instagram", isOn: $instagramAllowed)
+                NotificationToggle(icon: "bell.circle.fill", title: "Instagram", isOn: $instagramAllowed)
             }
             .padding()
             .background(
@@ -69,15 +69,15 @@ struct ApprovedAppsView: View {
                 Text("Games")
                     .font(.system(size: 20, weight: .semibold))
                 
-                notification(title: "Mobile Legends", isOn: $mobileLegendsAllowed)
+                NotificationToggle(icon: "bell.circle.fill", title: "Mobile Legends", isOn: $mobileLegendsAllowed)
+            
+                Divider()
+                
+                NotificationToggle(icon: "bell.circle.fill", title: "Candy Crush", isOn: $candyCrushAllowed)
                 
                 Divider()
                 
-                notification(title: "Candy Crush", isOn: $candyCrushAllowed)
-                
-                Divider()
-                
-                notification(title: "PUBG Mobile", isOn: $pubgAllowed)
+                NotificationToggle(icon: "bell.circle.fill", title: "PUBG Mobile", isOn: $pubgAllowed)
             }
             .padding()
             .background(
@@ -85,6 +85,8 @@ struct ApprovedAppsView: View {
                     .fill(.primarySoftPurple)
                     .opacity(0.2)
             )
+            
+            Spacer()
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -92,22 +94,6 @@ struct ApprovedAppsView: View {
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
     }
-}
-
-private func notification (title: String, isOn: Binding<Bool>) -> some View {
-    HStack {
-        Image(systemName: "calendar.circle.fill")
-            .font(.system(size: 25, weight: .semibold))
-            .foregroundStyle(.textPrimary)
-        Text(title)
-
-        Spacer()
-
-        Toggle("", isOn: isOn)
-    }
-    .padding(.vertical, 5)
-    .frame(maxWidth: .infinity)
-    .contentShape(Rectangle())
 }
 
 #Preview {
