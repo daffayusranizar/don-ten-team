@@ -40,7 +40,7 @@ struct DashboardView: View {
                         .frame(height: 70)
 
                     if inSession {
-                        inSessionView(paused: $paused, addingTime: $addingTime, timeAmount: $timeAmount)
+                        inSessionView(paused: $paused, addingTime: $addingTime)
                     } else {
                         previousSessionView()
                     }
@@ -222,7 +222,7 @@ func mostUsedApps() -> some View {
 
 // MARK: In Session View
 @ViewBuilder
-func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount: Binding<Date>) -> some View {
+func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>) -> some View {
     VStack(alignment: .leading, spacing: 15) {
         Text("Current Session")
             .font(Font.system(size: 24, weight: .semibold))
@@ -284,7 +284,7 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
         }
         .frame(maxWidth: .infinity)
         .sheet(isPresented: addingTime) {
-            addTimeView(addingTime: addingTime, timeAmount: timeAmount)
+            addTimeView(addingTime: addingTime)
             .presentationDetents([
                 .fraction(0.5),
                 .large
@@ -338,7 +338,7 @@ func previousSessionView() -> some View {
 }
 
 // MARK: Additional Time Sheet View
-func addTimeView (addingTime: Binding<Bool>, timeAmount: Binding<Date>) -> some View {
+func addTimeView (addingTime: Binding<Bool>) -> some View {
     @State var hours = 0
     @State var minutes = 25 // defaults to 25 minutes for adding
     @State var seconds = 0
