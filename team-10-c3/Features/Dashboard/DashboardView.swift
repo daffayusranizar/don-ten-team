@@ -12,12 +12,8 @@ import Charts
 func nothing() -> Void {}
 
 struct DashboardView: View {
+    @Environment(\.profileViewModel) private var profileViewModel
     @State var showSettings: Bool = false
-    
-    // - temp
-    @State var exampleName: String = "Raka Fadhilah"
-    @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
-    
     struct SessionData: Identifiable {
         let id = UUID()
         let type: String
@@ -34,6 +30,8 @@ struct DashboardView: View {
     // - temp
     
     var body: some View {
+        @Bindable var profileViewModel = profileViewModel
+
         ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .top) {
 
@@ -138,7 +136,7 @@ struct DashboardView: View {
 
                                 VStack {
                                     HStack {
-                                        Image("Instagram")
+                                        ImageAsset.instagram.image
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 30, height: 30)
@@ -154,7 +152,7 @@ struct DashboardView: View {
                                     }
 
                                     HStack {
-                                        Image("TikTok")
+                                        ImageAsset.tiktok.image
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 30, height: 30)
@@ -170,7 +168,7 @@ struct DashboardView: View {
                                     }
 
                                     HStack {
-                                        Image("YouTube")
+                                        ImageAsset.youtube.image
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 30, height: 30)
@@ -209,8 +207,7 @@ struct DashboardView: View {
                 // tool bar
                 HStack {
                     PrimaryDropdown(
-                        selectedOption: $exampleName,
-                        tempOptions: $exampleOptions
+                        selectedChild: $profileViewModel.selectedChild
                     )
 
                     Button {

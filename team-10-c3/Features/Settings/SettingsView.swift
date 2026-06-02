@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State var weeklyCheckIn: Bool = false
     @State var showApprovedApps: Bool = false
     @State var showParentsAccess: Bool = false
+    @State var showManageChildren: Bool = false
     @State var showAboutPage: Bool = false
     @Environment(\.dismiss) private var dismiss
     
@@ -52,15 +53,10 @@ struct SettingsView: View {
             }
             
             // profile avatar
-            ZStack {
-                Circle()
-                    .fill(.decorativeLavender)
-                    .opacity(0.3)
-                
-                Text("Avatar")
-                    .font(.system(size: 20, weight: .bold))
-            }
-            .frame(height: 150)
+            ImageAsset.parentProfileAvatar.image
+                .resizable()
+                .scaledToFit()
+                .frame(height: 150)
             
             // profile details
             VStack {
@@ -70,6 +66,22 @@ struct SettingsView: View {
                     .font(.system(size: 20, weight: .medium))
             }
             
+            // family settings
+            VStack(alignment: .leading) {
+                Text("Family")
+                    .font(.system(size: 20, weight: .semibold))
+
+                NavLink(icon: "person.2.circle.fill", title: "Manage Children", changePage: $showManageChildren) {
+                    ProfileListView()
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 15)
+                    .fill(.primarySoftPurple)
+                    .opacity(0.2)
+            )
+
             // screen time settings
             VStack(alignment: .leading) {
                 Text("Screen Time")

@@ -7,6 +7,7 @@
 //  [P1] @main entry, SwiftData container
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ParentGuideApp: App {
@@ -16,6 +17,9 @@ struct ParentGuideApp: App {
         WindowGroup {
             RootView()
                 .environment(\.featureFlags, container.featureFlags)
+                .environment(\.childRepository, container.childRepository)
+                .environment(\.profileViewModel, container.profileViewModel)
         }
+        .modelContainer(container.modelContainer)
     }
 }
