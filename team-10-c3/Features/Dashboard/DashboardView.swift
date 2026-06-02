@@ -24,7 +24,8 @@ struct DashboardView: View {
     
     // session control variables
     @State var paused: Bool = false
-    @State var addingTime: Bool = false
+    @State var addingTime: Bool = true
+    @State var timeAmount: Date = Date() // temp
     
     // - temp
     @State var exampleName: String = "Raka Fadhilah"
@@ -49,7 +50,7 @@ struct DashboardView: View {
 
                     // MARK: session status
                     if inSession {
-                        inSessionView(paused: $paused)
+                        inSessionView(paused: $paused, addingTime: $addingTime, timeAmount: $timeAmount)
                     } else {
                         previousSessionView()
                     }
@@ -234,7 +235,7 @@ func mostUsedApps () -> some View {
 
 // MARK: In Session View
 @ViewBuilder
-func inSessionView (paused: Binding<Bool>) -> some View {
+func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount: Binding<Date>) -> some View {
     VStack(alignment: .leading, spacing: 15) {
         Text("Current Session")
             .font(Font.system(size: 24, weight: .semibold))
@@ -287,7 +288,7 @@ func inSessionView (paused: Binding<Bool>) -> some View {
         }
         
         Button {
-            
+            addingTime.wrappedValue = true
         } label: {
             Text("Add More Time")
                 .padding()
@@ -300,6 +301,14 @@ func inSessionView (paused: Binding<Bool>) -> some View {
                 )
         }
         .frame(maxWidth: .infinity)
+        .sheet(isPresented: addingTime) {
+            addTimeView(addingTime: addingTime, timeAmount: timeAmount)
+            .presentationDetents([
+                .fraction(0.5),
+                .large
+            ])
+        }
+        .foregroundStyle(.textPrimary)
     }
     .padding(.horizontal, 30)
     .padding(.vertical, 25)
@@ -344,6 +353,70 @@ func previousSessionView () -> some View {
         RoundedRectangle(cornerRadius: 25)
     )
     .padding(.top, 30)
+}
+
+// MARK: Additional Time Sheet View
+func addTimeView (addingTime: Binding<Bool>, timeAmount: Binding<Date>) -> some View {
+    @State var hours = 0
+    @State var minutes = 25 // defaults to 25 minutes for adding
+    @State var seconds = 0
+    
+    // total time added as seconds
+    var totalSeconds: Int {
+        hours * 3600 + minutes * 60 + seconds
+    }
+    
+    return VStack(alignment: .center) {
+        // top bar
+        ZStack {
+            HStack {
+                Button {
+                    addingTime.wrappedValue = false
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .padding(20)
+                }
+                .glassEffect(in: Circle())
+                
+                Spacer()
+            }
+            
+            Text("Add Additional Time")
+                .font(.system(size: 20, weight: .semibold))
+        }
+        
+        // time adder
+        HStack {
+            Picker("Hours", selection: $hours) {
+                ForEach(0..<24) { hour in
+                    Text("\(hour) h").tag(hour)
+                }
+            }
+
+            Picker("Minutes", selection: $minutes) {
+                ForEach(0..<60) { minute in
+                    Text("\(minute) m").tag(minute)
+                }
+            }
+
+            Picker("Seconds", selection: $seconds) {
+                ForEach(0..<60) { second in
+                    Text("\(second) s").tag(second)
+                }
+            }
+        }
+        .pickerStyle(.wheel)
+        
+        PrimaryButton(
+            title: "Add Time",
+            size: .large,
+            action: {
+                addingTime.wrappedValue = false
+            } // temporary
+        )
+        .padding(.top, 20)
+    }
+    .padding()
 }
 
 #Preview {
