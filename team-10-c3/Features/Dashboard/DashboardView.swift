@@ -11,19 +11,24 @@ import Charts
 
 func nothing() -> Void {}
 
+struct SessionData: Identifiable {
+    let id = UUID()
+    let type: String
+    let duration: Int
+    let color: Color
+}
+
 struct DashboardView: View {
     @State var showSettings: Bool = false
+    @State var inSession: Bool = true
+    
+    // session control variables
+    @State var paused: Bool = false
+    @State var addingTime: Bool = false
     
     // - temp
     @State var exampleName: String = "Raka Fadhilah"
     @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
-    
-    struct SessionData: Identifiable {
-        let id = UUID()
-        let type: String
-        let duration: Int
-        let color: Color
-    }
     
     let sessions: [SessionData] = [
         SessionData(type: "YouTube", duration: 90, color: .decorativeSkyBlue),
@@ -42,171 +47,20 @@ struct DashboardView: View {
                     Color.clear
                         .frame(height: 70)
 
-                    // status thing?
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("Latest Screen Time")
-                            .font(Font.system(size: 24, weight: .semibold))
-
-                        Text("Total")
-
-                        Text("3H 4M")
-                            .font(Font.system(size: 40, weight: .semibold))
-
-                        VStack(alignment: .leading) {
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .foregroundStyle(.white)
-
-                                Capsule()
-                                    .frame(width: 230)
-                                    .foregroundStyle(.primaryTeal)
-                            }
-                            .frame(height: 12)
-                            Text("75% of the session")
-                        }
+                    // MARK: session status
+                    if inSession {
+                        inSessionView(paused: $paused)
+                    } else {
+                        previousSessionView()
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 25)
-                    .foregroundStyle(.white)
-                    .background(.primaryMediumBlue)
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: 25)
-                    )
-                    .padding(.top, 30)
 
-                    // latest summary
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text("Latest Summary")
-                                .font(.system(size: 22, weight: .semibold))
-                            Spacer()
-                        }
-
-                        VStack(alignment: .center, spacing: 15) {
-                            Text("Yesterday's Session")
-                                .font(.system(size: 18, weight: .semibold))
-
-                            // bar chart session breakdown
-                            Chart(sessions) { session in
-                                BarMark(
-                                    x: .value("Type", session.type),
-                                    y: .value("Duration", session.duration)
-                                )
-                                .foregroundStyle(session.color)
-                                .clipShape(
-                                    UnevenRoundedRectangle(
-                                        topLeadingRadius: 15,
-                                        bottomLeadingRadius: 0,
-                                        bottomTrailingRadius: 0,
-                                        topTrailingRadius: 15
-                                    )
-                                )
-                            }
-                            .chartXAxis {
-                                AxisMarks { _ in
-                                    AxisValueLabel()
-                                    AxisTick()
-                                }
-                            }
-                            .chartYAxis {
-                                AxisMarks(position: .leading) { value in
-                                    AxisValueLabel {
-                                        if let number = value.as(Double.self) {
-                                            Text("\(Int(number))min")
-                                        }
-                                    }
-                                    AxisTick()
-                                }
-                            }
-                            .chartPlotStyle { plotArea in
-                                plotArea
-                                    .border(.clear)
-                            }
-                            .padding()
-                            .background(.uiBackground)
-                            .clipShape(
-                                RoundedRectangle(cornerRadius: 15)
-                            )
-
-                            // most used apps list
-                            VStack {
-                                HStack {
-                                    Text("Most Used Apps")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Spacer()
-                                }
-
-                                VStack {
-                                    HStack {
-                                        Image("Instagram")
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 30, height: 30)
-                                            .cornerRadius(10)
-
-                                        Text("Instagram")
-                                            .font(.system(size: 14, weight: .regular))
-
-                                        Spacer()
-
-                                        Text("2 Hours 30 Minutes")
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-
-                                    HStack {
-                                        Image("TikTok")
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 30, height: 30)
-                                            .cornerRadius(10)
-
-                                        Text("TikTok")
-                                            .font(.system(size: 14, weight: .regular))
-
-                                        Spacer()
-
-                                        Text("50 Minutes")
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-
-                                    HStack {
-                                        Image("YouTube")
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 30, height: 30)
-                                            .cornerRadius(10)
-
-                                        Text("YouTube")
-                                            .font(.system(size: 14, weight: .regular))
-
-                                        Spacer()
-
-                                        Text("20 Minutes")
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-                                }
-                            }
-                            .padding()
-                            .background(.uiBackground)
-                            .clipShape(
-                                RoundedRectangle(cornerRadius: 15)
-                            )
-
-                        }
-                        .padding(.horizontal, 15)
-                        .padding(.vertical, 30)
-                        .background(.decorativeSkyBlue.opacity(0.13))
-                        .clipShape(
-                            RoundedRectangle(cornerRadius: 15)
-                        )
-                    }
-                    .padding(.top, 30)
+                    latestSummary(sessions: sessions)
                 }
                 .padding(.horizontal, 30)
                 .padding(.vertical)
                 .foregroundStyle(.textPrimary)
 
-                // tool bar
+                // MARK: tool bar
                 HStack {
                     PrimaryDropdown(
                         selectedOption: $exampleName,
@@ -235,6 +89,261 @@ struct DashboardView: View {
             SettingsView()
         }
     }
+}
+
+// MARK: Latest Summary
+@ViewBuilder
+func latestSummary (sessions: [SessionData]) -> some View {
+    VStack(alignment: .leading) {
+        HStack {
+            Text("Latest Summary")
+                .font(.system(size: 22, weight: .semibold))
+            Spacer()
+        }
+
+        VStack(alignment: .center, spacing: 15) {
+            Text("Yesterday's Session")
+                .font(.system(size: 18, weight: .semibold))
+
+            sessionChart(sessions: sessions)
+
+            mostUsedApps()
+
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 30)
+        .background(.decorativeSkyBlue.opacity(0.13))
+        .clipShape(
+            RoundedRectangle(cornerRadius: 15)
+        )
+    }
+    .padding(.top, 30)
+}
+
+// MARK: Yesterday's Session Chart
+@ViewBuilder
+func sessionChart (sessions: [SessionData]) -> some View {
+    Chart(sessions) { session in
+        BarMark(
+            x: .value("Type", session.type),
+            y: .value("Duration", session.duration)
+        )
+        .foregroundStyle(session.color)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 15,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 15
+            )
+        )
+    }
+    .chartXAxis {
+        AxisMarks { _ in
+            AxisValueLabel()
+            AxisTick()
+        }
+    }
+    .chartYAxis {
+        AxisMarks(position: .leading) { value in
+            AxisValueLabel {
+                if let number = value.as(Double.self) {
+                    Text("\(Int(number))min")
+                }
+            }
+            AxisTick()
+        }
+    }
+    .chartPlotStyle { plotArea in
+        plotArea
+            .border(.clear)
+    }
+    .padding()
+    .background(.uiBackground)
+    .clipShape(
+        RoundedRectangle(cornerRadius: 15)
+    )
+}
+
+// MARK: Most Used Apps
+@ViewBuilder
+func mostUsedApps () -> some View {
+    VStack {
+        HStack {
+            Text("Most Used Apps")
+                .font(.system(size: 16, weight: .semibold))
+            Spacer()
+        }
+
+        VStack {
+            HStack {
+                Image("Instagram")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .cornerRadius(10)
+
+                Text("Instagram")
+                    .font(.system(size: 14, weight: .regular))
+
+                Spacer()
+
+                Text("2 Hours 30 Minutes")
+                    .font(.system(size: 14, weight: .medium))
+            }
+
+            HStack {
+                Image("TikTok")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .cornerRadius(10)
+
+                Text("TikTok")
+                    .font(.system(size: 14, weight: .regular))
+
+                Spacer()
+
+                Text("50 Minutes")
+                    .font(.system(size: 14, weight: .medium))
+            }
+
+            HStack {
+                Image("YouTube")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .cornerRadius(10)
+
+                Text("YouTube")
+                    .font(.system(size: 14, weight: .regular))
+
+                Spacer()
+
+                Text("20 Minutes")
+                    .font(.system(size: 14, weight: .medium))
+            }
+        }
+    }
+    .padding()
+    .background(.uiBackground)
+    .clipShape(
+        RoundedRectangle(cornerRadius: 15)
+    )
+}
+
+// MARK: In Session View
+@ViewBuilder
+func inSessionView (paused: Binding<Bool>) -> some View {
+    VStack(alignment: .leading, spacing: 15) {
+        Text("Current Session")
+            .font(Font.system(size: 24, weight: .semibold))
+
+        // session controls
+        HStack {
+            Text("1H 20M") // time left in session
+                .font(Font.system(size: 40, weight: .semibold))
+            
+            Spacer()
+            
+            // stop button
+            Button {
+                
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(Font.system(size: 20, weight: .semibold))
+                    .padding(10)
+                    .background(.white, in: Circle())
+                    .foregroundStyle(.primaryMediumBlue)
+            }
+            
+            // pause button
+            Button {
+                withAnimation {
+                    paused.wrappedValue.toggle()
+                }
+            } label: {
+                Image(systemName: paused.wrappedValue ? "play.fill" : "pause.fill")
+                    .font(Font.system(size: 20, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .padding(10)
+                    .background(.white, in: Circle())
+                    .foregroundStyle(.primaryMediumBlue)
+            }
+        }
+
+        // time progression bar
+        VStack(alignment: .leading) {
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .foregroundStyle(.white)
+
+                Capsule()
+                    .frame(width: 230)
+                    .foregroundStyle(.primaryTeal)
+            }
+            .frame(height: 12)
+            Text("Time Limit: 1 Hour 30 Minutes")
+        }
+        
+        Button {
+            
+        } label: {
+            Text("Add More Time")
+                .padding()
+                .frame(maxWidth: .infinity)
+                .font(Font.system(size: 18, weight: .semibold))
+                .foregroundStyle(.textPrimary)
+                .background(
+                    Capsule()
+                        .fill(.white)
+                )
+        }
+        .frame(maxWidth: .infinity)
+    }
+    .padding(.horizontal, 30)
+    .padding(.vertical, 25)
+    .foregroundStyle(.white)
+    .background(.primaryMediumBlue)
+    .clipShape(
+        RoundedRectangle(cornerRadius: 25)
+    )
+    .padding(.top, 30)
+}
+
+// MARK: Previous Session View
+@ViewBuilder
+func previousSessionView () -> some View {
+    VStack(alignment: .leading, spacing: 15) {
+        Text("Latest Screen Time")
+            .font(Font.system(size: 24, weight: .semibold))
+
+        Text("Total")
+
+        Text("3H 4M")
+            .font(Font.system(size: 40, weight: .semibold))
+
+        VStack(alignment: .leading) {
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .foregroundStyle(.white)
+
+                Capsule()
+                    .frame(width: 230)
+                    .foregroundStyle(.primaryTeal)
+            }
+            .frame(height: 12)
+            Text("75% of the session")
+        }
+    }
+    .padding(.horizontal, 30)
+    .padding(.vertical, 25)
+    .foregroundStyle(.white)
+    .background(.primaryMediumBlue)
+    .clipShape(
+        RoundedRectangle(cornerRadius: 25)
+    )
+    .padding(.top, 30)
 }
 
 #Preview {
