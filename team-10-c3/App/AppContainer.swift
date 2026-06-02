@@ -7,16 +7,38 @@
 // [P1] Builds all actors/services at launch
 
 import Foundation
+import SwiftData
 
 @MainActor
 final class AppContainer {
     let featureFlags: FeatureFlagService
+    let modelContainer: ModelContainer
+    let childRepository: ChildRepository
+    let profileViewModel: ProfileViewModel
 
-    init(featureFlags: FeatureFlagService) {
+    init(
+        featureFlags: FeatureFlagService,
+        modelContainer: ModelContainer,
+        childRepository: ChildRepository? = nil,
+        profileViewModel: ProfileViewModel? = nil
+    ) {
         self.featureFlags = featureFlags
+        self.modelContainer = modelContainer
+        self.childRepository = childRepository ?? SwiftDataChildRepository(
+            modelContext: modelContainer.mainContext
+        )
+        self.profileViewModel = profileViewModel ?? ProfileViewModel(
+            childRepository: self.childRepository
+        )
+        self.profileViewModel.loadChildren()
     }
 
     convenience init() {
-        self.init(featureFlags: FeatureFlagService())
+        do {
+            let modelContainer = try ModelContainer(for: Child.self)
+            self.init(featureFlags: FeatureFlagService(), modelContainer: modelContainer)
+        } catch {
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
     }
 }

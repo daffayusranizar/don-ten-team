@@ -39,29 +39,37 @@ struct RadioButton: View {
     }
 }
 
-struct tempAvatar: View {
+struct ProfileFormView: View {
+    @Environment(\.childRepository) private var childRepository
+    private let onSaveSuccess: ((Child) -> Void)?
+
+    init(onSaveSuccess: ((Child) -> Void)? = nil) {
+        self.onSaveSuccess = onSaveSuccess
+    }
+
     var body: some View {
-        Button {
-            
-        } label: {
-            Circle()
-                .fill(.primaryMediumBlue)
-                .frame(width: 80, height: 80)
-        }
+        ProfileFormScreen(
+            childRepository: childRepository,
+            onSaveSuccess: onSaveSuccess
+        )
     }
 }
 
-struct ProfileFormView: View {
+private struct ProfileFormScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var childName: String = ""
-    @State private var childsBirthday: Date? = nil
-    @State private var childIsMale: Bool = true
-    @State private var showConfirmation: Bool = false
-    
-    private var formCompleted: Bool {
-        !childName.isEmpty && childsBirthday != nil
+    @State private var viewModel: ProfileFormViewModel
+    private let onSaveSuccess: ((Child) -> Void)?
+
+    init(childRepository: ChildRepository, onSaveSuccess: ((Child) -> Void)? = nil) {
+        _viewModel = State(initialValue: ProfileFormViewModel(childRepository: childRepository))
+        self.onSaveSuccess = onSaveSuccess
     }
-    
+
+    init(viewModel: ProfileFormViewModel, onSaveSuccess: ((Child) -> Void)? = nil) {
+        _viewModel = State(initialValue: viewModel)
+        self.onSaveSuccess = onSaveSuccess
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
@@ -87,7 +95,7 @@ struct ProfileFormView: View {
                 VStack (alignment: .leading) {
                     Text("Child's Name")
                     PrimaryTextField(
-                        text: $childName,
+                        text: $viewModel.childName,
                         placeholder: "Type name...",
                         size: .large,
                         systemImage: "person.crop.circle.fill"
@@ -98,7 +106,7 @@ struct ProfileFormView: View {
                 VStack (alignment: .leading) {
                     Text("Birthdate")
                     PrimaryDateField(
-                        date: $childsBirthday,
+                        date: $viewModel.childsBirthday,
                         placeholder: "Insert Birthdate...",
                         size: .large,
                         systemImage: "calendar"
@@ -109,14 +117,14 @@ struct ProfileFormView: View {
                 HStack(spacing: 30) {
                     RadioButton(
                         title: "Male",
-                        isSelected: childIsMale,
-                        action: {childIsMale = true}
+                        isSelected: viewModel.childIsMale,
+                        action: { viewModel.selectGender(isMale: true) }
                     )
                     
                     RadioButton(
                         title: "Female",
-                        isSelected: !childIsMale,
-                        action: {childIsMale = false}
+                        isSelected: !viewModel.childIsMale,
+                        action: { viewModel.selectGender(isMale: false) }
                     )
                     
                     Spacer()
@@ -127,13 +135,13 @@ struct ProfileFormView: View {
                     Text("Choose Avatar")
                     ScrollView(.horizontal) {
                         HStack(spacing: 20) {
-                            tempAvatar()
-                            tempAvatar()
-                            tempAvatar()
-                            tempAvatar()
-                            tempAvatar()
-                            tempAvatar()
-                            tempAvatar()
+                            ForEach(ChildAvatarImage.allCases) { avatar in
+                                ChildAvatarOption(
+                                    avatar: avatar,
+                                    isSelected: viewModel.selectedAvatar == avatar,
+                                    action: { viewModel.selectAvatar(avatar) }
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, -30)
@@ -144,8 +152,8 @@ struct ProfileFormView: View {
                     title: "Save Child Profile",
                     size: .large,
                     systemImage: nil,
-                    isDisabled: !formCompleted,
-                    action: {showConfirmation = true}
+                    isDisabled: !viewModel.formCompleted,
+                    action: viewModel.requestSave
                 )
             }
             .navigationBarBackButtonHidden(true)
@@ -154,18 +162,18 @@ struct ProfileFormView: View {
             .padding(.horizontal, 30)
             .padding(.vertical)
             
-            if showConfirmation {
+            if viewModel.showConfirmation {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        showConfirmation = false
+                        viewModel.cancelConfirmation()
                     }
 
                 VStack(spacing: 30) {
                     Text("Save Child Profile")
                         .font(.headline)
 
-                    Text("You'll be adding \(childName) to your family. Do you want to continue?")
+                    Text(viewModel.confirmationMessage)
                         .foregroundStyle(.secondary)
                         .padding(.top, -20)
 
@@ -173,14 +181,14 @@ struct ProfileFormView: View {
                         SecondaryButton (
                             title: "Cancel",
                             size: .small,
-                            action: {showConfirmation = false}
+                            action: viewModel.cancelConfirmation
                         )
                         .frame(maxWidth: .infinity)
 
                         PrimaryButton (
                             title: "Yes, Save",
                             size: .small,
-                            action: {showConfirmation = false}
+                            action: saveConfirmedChild
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -190,11 +198,36 @@ struct ProfileFormView: View {
                 .padding(.horizontal, 40)
             }
         }
+        .alert("Could Not Save Profile", isPresented: saveErrorPresented) {
+            Button("OK", role: .cancel) {
+                viewModel.saveError = nil
+            }
+        } message: {
+            Text(viewModel.saveError ?? "")
+        }
+    }
+
+    private func saveConfirmedChild() {
+        guard let child = viewModel.makeChild(), viewModel.confirmSave() else { return }
+        onSaveSuccess?(child)
+        dismiss()
+    }
+
+    private var saveErrorPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.saveError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.saveError = nil
+                }
+            }
+        )
     }
 }
 
 #Preview {
     NavigationStack {
         ProfileFormView()
+            .environment(\.childRepository, InMemoryChildRepository())
     }
 }
