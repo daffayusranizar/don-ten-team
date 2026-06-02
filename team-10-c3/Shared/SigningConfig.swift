@@ -16,4 +16,5 @@ enum SigningConfig {
         let prefix = bundleID.components(separatedBy: ".").first ?? "abui"
         return "\(prefix).don-ten-team.ScreenRecorderExtension"
     }
+
 }

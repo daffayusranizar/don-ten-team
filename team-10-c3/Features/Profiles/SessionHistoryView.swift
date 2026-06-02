@@ -19,21 +19,32 @@ private enum HistoryLayout {
 
 struct SessionHistoryView: View {
     @Environment(\.suggestionHistoryRepository) private var suggestionHistoryRepository
+    @Environment(\.sessionRepository) private var sessionRepository
+    @Environment(\.profileViewModel) private var profileViewModel
 
     var body: some View {
         SessionHistoryScreen(
-            suggestionHistoryRepository: suggestionHistoryRepository
+            suggestionHistoryRepository: suggestionHistoryRepository,
+            sessionRepository: sessionRepository,
+            profileViewModel: profileViewModel
         )
     }
 }
 
 private struct SessionHistoryScreen: View {
     @State private var viewModel: SessionHistoryViewModel
+    private let profileViewModel: ProfileViewModel
 
-    init(suggestionHistoryRepository: SuggestionHistoryRepository) {
+    init(
+        suggestionHistoryRepository: SuggestionHistoryRepository,
+        sessionRepository: SessionRepository,
+        profileViewModel: ProfileViewModel
+    ) {
+        self.profileViewModel = profileViewModel
         _viewModel = State(
             initialValue: SessionHistoryViewModel(
-                suggestionHistoryRepository: suggestionHistoryRepository
+                suggestionHistoryRepository: suggestionHistoryRepository,
+                sessionRepository: sessionRepository
             )
         )
     }
@@ -53,7 +64,7 @@ private struct SessionHistoryScreen: View {
                 if viewModel.selectedTab == .suggestion {
                     suggestionContent
                 } else {
-                    screenTimePlaceholder
+                    screenTimeContent
                 }
             }
             .padding(.horizontal, HistoryLayout.horizontalPadding)
@@ -63,6 +74,12 @@ private struct SessionHistoryScreen: View {
         .foregroundStyle(.textPrimary)
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.reload(for: profileViewModel.selectedChild)
+        }
+        .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
+            viewModel.reload(for: profileViewModel.selectedChild)
+        }
         .alert("Could Not Load History", isPresented: loadErrorPresented) {
             Button("OK", role: .cancel) {
                 viewModel.loadError = nil
@@ -132,19 +149,23 @@ private struct SessionHistoryScreen: View {
         }
     }
 
-    private var screenTimePlaceholder: some View {
+    private var screenTimeContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(viewModel.selectedMonth)
                 .font(.heading6)
                 .foregroundStyle(.textPrimary)
 
-            Text(viewModel.screenTimePlaceholderMessage)
-                .font(.system(size: 14))
-                .foregroundStyle(.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-                .background(.uiSurface)
-                .clipShape(RoundedRectangle(cornerRadius: HistoryLayout.cardCornerRadius))
+            if viewModel.screenTimeEntries.isEmpty {
+                Text("No screen time sessions for \(viewModel.selectedMonth).")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(.uiSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: HistoryLayout.cardCornerRadius))
+            } else {
+                ScreenTimeHistoryCard(entries: viewModel.screenTimeEntries)
+            }
         }
     }
 
@@ -157,6 +178,32 @@ private struct SessionHistoryScreen: View {
                 }
             }
         )
+    }
+}
+
+// MARK: - Screen Time History Card
+
+private struct ScreenTimeHistoryCard: View {
+    let entries: [ScreenTimeHistoryEntry]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HistoryLayout.entrySpacing) {
+            ForEach(entries) { entry in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.dateLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.textPrimary)
+
+                    Text("\(entry.durationLabel) total · Top app: \(entry.topAppName)")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.textSecondary)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.uiSurface)
+                .clipShape(RoundedRectangle(cornerRadius: HistoryLayout.entryCornerRadius))
+            }
+        }
     }
 }
 
@@ -260,6 +307,8 @@ private enum OutcomePillColor {
 #Preview {
     NavigationStack {
         SessionHistoryView()
-            .environment(\.suggestionHistoryRepository, InMemorySuggestionHistoryRepository())
+            .environment(\.suggestionHistoryRepository, InMemorySuggestionHistoryRepository.preview)
+            .environment(\.sessionRepository, InMemorySessionRepository())
+            .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
     }
 }

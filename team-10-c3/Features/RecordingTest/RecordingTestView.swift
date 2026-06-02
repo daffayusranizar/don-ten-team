@@ -10,19 +10,14 @@ enum SessionStep {
     case results     // Show results
 }
 
-// MARK: - Dummy child store (replace with real data store later)
-private let dummyChildren: [Child] = [
-    Child(name: "Aiden", dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date())!, gender: .boy),
-    Child(name: "Sophia", dateOfBirth: Calendar.current.date(byAdding: .year, value: -11, to: Date())!, gender: .girl)
-]
-
 struct RecordingTestView: View {
 
+    @Environment(\.profileViewModel) private var profileViewModel
     @StateObject private var recordingManager = RecordingManager.shared
 
     // Session State
     @State private var step: SessionStep = .setup
-    @State private var selectedChild: Child? = dummyChildren.first
+    @State private var selectedChild: Child?
     @State private var sessionMinutes: Int = 1
 
     // Countdown
@@ -56,6 +51,10 @@ struct RecordingTestView: View {
         }
         .onAppear {
             RecordingReadyBridge.startListening()
+            profileViewModel.loadChildren()
+            if selectedChild == nil {
+                selectedChild = profileViewModel.selectedChild ?? profileViewModel.children.first
+            }
         }
     }
 
@@ -63,9 +62,15 @@ struct RecordingTestView: View {
     private var setupView: some View {
         Form {
             Section("Child") {
-                Picker("Select Child", selection: $selectedChild) {
-                    ForEach(dummyChildren) { child in
-                        Text("\(child.name) (age \(child.currentAge))").tag(Optional(child))
+                if profileViewModel.children.isEmpty {
+                    Text("Add a child profile in Settings before running a test session.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Select Child", selection: $selectedChild) {
+                        ForEach(profileViewModel.children) { child in
+                            Text("\(child.name) (age \(child.currentAge))").tag(Optional(child))
+                        }
                     }
                 }
             }
@@ -340,4 +345,5 @@ enum RecordingReadyBridge {
 
 #Preview {
     RecordingTestView()
+        .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
 }
