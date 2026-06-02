@@ -1,78 +1,340 @@
 import SwiftUI
 import ReplayKit
+import Combine
+
+// MARK: - Session Flow State
+enum SessionStep {
+    case setup       // Pick child + duration
+    case recording   // Countdown timer active
+    case processing  // AI pipeline running
+    case results     // Show results
+}
+
+// MARK: - Dummy child store (replace with real data store later)
+private let dummyChildren: [Child] = [
+    Child(name: "Aiden", dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date())!, gender: .boy),
+    Child(name: "Sophia", dateOfBirth: Calendar.current.date(byAdding: .year, value: -11, to: Date())!, gender: .girl)
+]
 
 struct RecordingTestView: View {
+
     @StateObject private var recordingManager = RecordingManager.shared
-    @State private var recordedPath: String?
-    
+
+    // Session State
+    @State private var step: SessionStep = .setup
+    @State private var selectedChild: Child? = dummyChildren.first
+    @State private var sessionMinutes: Int = 1
+
+    // Countdown
+    @State private var timeRemaining: TimeInterval = 0
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    // Pipeline Result
+    @State private var result: PipelineResult? = nil
+    @State private var errorMessage: String? = nil
+
     var body: some View {
-        VStack(spacing: 30) {
-            Text("Backend Testing Screen")
-                .font(.title)
-                .bold()
-            
-            // Removed Screen Time Permission UI due to Apple Developer constraints
-            
-            // 2. Broadcast Picker
-            VStack {
-                Text("Screen Recording (1 FPS)")
-                    .font(.headline)
-                
-                BroadcastPicker()
-                    .frame(width: 60, height: 60)
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(12)
-            
-            // 3. Status View
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Latest Recording Path:")
-                    .font(.headline)
-                
-                if let path = recordedPath {
-                    Text(path)
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else {
-                    Text("No recording found yet. Press the button above to start, and refresh when done.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+        NavigationStack {
+            Group {
+                switch step {
+                case .setup:       setupView
+                case .recording:   recordingView
+                case .processing:  processingView
+                case .results:     resultsView
                 }
-                
-                Button("Refresh Path") {
-                    recordedPath = recordingManager.fetchLatestRecordedVideoPath()
-                }
-                .padding(.top, 5)
             }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(12)
-            
+            .navigationTitle("Session Test")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        // Detect when iOS screen capture starts/stops
+        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
+            handleCaptureChange()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: RecordingReadyBridge.notification)) { _ in
+            guard step == .processing else { return }
+            Task { await runPipeline() }
+        }
+        .onAppear {
+            RecordingReadyBridge.startListening()
+        }
+    }
+
+    // MARK: - Step 1: Setup
+    private var setupView: some View {
+        Form {
+            Section("Child") {
+                Picker("Select Child", selection: $selectedChild) {
+                    ForEach(dummyChildren) { child in
+                        Text("\(child.name) (age \(child.currentAge))").tag(Optional(child))
+                    }
+                }
+            }
+
+            Section("Duration") {
+                Stepper("\(sessionMinutes) minute\(sessionMinutes == 1 ? "" : "s")", value: $sessionMinutes, in: 1...120)
+            }
+
+            Section {
+                VStack(spacing: 12) {
+                    Text("Tap the button below, then choose **ScreenRecorderExtension** from the list to start recording.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    // The system broadcast picker — the only way to start a broadcast on iOS
+                    BroadcastPickerView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                }
+            } header: {
+                Text("Start Recording")
+            }
+        }
+        .onAppear {
+            recordingManager.setSessionDuration(minutes: sessionMinutes)
+        }
+        .onChange(of: sessionMinutes) { _, newValue in
+            recordingManager.setSessionDuration(minutes: newValue)
+        }
+    }
+
+    // MARK: - Step 2: Recording (Countdown)
+    private var recordingView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            VStack(spacing: 8) {
+                Text("Recording in progress")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                if let child = selectedChild {
+                    Text(child.name)
+                        .font(.title2.bold())
+                }
+            }
+
+            // Big red countdown
+            Text(timeString(from: timeRemaining))
+                .font(.system(size: 72, weight: .bold, design: .monospaced))
+                .foregroundStyle(.red)
+                .padding(24)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+                .onReceive(ticker) { _ in
+                    if timeRemaining > 1 {
+                        timeRemaining -= 1
+                    } else if timeRemaining == 1 {
+                        timeRemaining = 0
+                        // Signal the extension to stop via Darwin notification
+                        postStopNotification()
+                    }
+                }
+
+            Text("Recording will stop automatically when the timer reaches 00:00")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
             Spacer()
         }
         .padding()
-        .onAppear {
-            recordedPath = recordingManager.fetchLatestRecordedVideoPath()
+    }
+
+    // MARK: - Step 3: Processing
+    private var processingView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Analyzing with AI…")
+                .font(.headline)
+            Text("This may take a moment")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
         }
+    }
+
+    // MARK: - Step 4: Results
+    private var resultsView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                if let error = errorMessage {
+                    Text("Error: \(error)")
+                        .foregroundStyle(.red)
+                        .padding()
+                }
+
+                if let result {
+                    ResultCard(icon: "📊", title: "Dominant Category", value: result.category)
+                    ResultCard(icon: "✍️", title: "AI Summary", value: result.summary)
+                    if !result.creators.isEmpty {
+                        ResultCard(icon: "🎥", title: "Creators Seen", value: result.creators.joined(separator: ", "))
+                    }
+                    if !result.signals.isEmpty {
+                        ResultCard(icon: "⚠️", title: "Concern Signals", value: result.signals.joined(separator: "\n"))
+                    }
+                    ResultCard(icon: "💡", title: "Conversation Starter", value: result.conversationStarter)
+                    ResultCard(icon: "🌿", title: "Offline Activity", value: result.offlineActivity)
+                }
+
+                Button("Start New Session") {
+                    result = nil
+                    errorMessage = nil
+                    step = .setup
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+            }
+            .padding()
+        }
+    }
+
+    // MARK: - Capture Detection
+    private func handleCaptureChange() {
+        if UIScreen.main.isCaptured {
+            guard step == .setup else { return }
+            timeRemaining = TimeInterval(sessionMinutes * 60)
+            step = .recording
+        } else {
+            guard step == .recording else { return }
+            step = .processing
+            // Pipeline will be triggered by the recordingReady Darwin notification
+            // once the extension has fully finished writing the file.
+            // Fallback: if extension doesn't signal within 10s, try anyway.
+            Task {
+                try? await Task.sleep(for: .seconds(10))
+                if step == .processing {
+                    await runPipeline()
+                }
+            }
+        }
+    }
+
+    // MARK: - Pipeline
+    @MainActor
+    private func runPipeline() async {
+        guard let videoURL = findRecordingFile() else {
+            let baseMessage = "No recording file found in App Group '\(recordingManager.appGroupIdentifier)'. The extension may not have saved the file properly.\n"
+            
+            // Try to read the extension_debug.log to see EXACTLY why AVAssetWriter failed
+            if let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: recordingManager.appGroupIdentifier) {
+                let logURL = groupURL.appendingPathComponent("extension_debug.log")
+                if let logData = try? String(contentsOf: logURL) {
+                    print("\n========== EXTENSION DEBUG LOG ==========\n\(logData)\n=========================================\n")
+                    errorMessage = baseMessage + "\nExtension Log:\n\(logData)"
+                } else {
+                    errorMessage = baseMessage + "\n(No extension debug log found)"
+                }
+            } else {
+                errorMessage = baseMessage
+            }
+            
+            step = .results
+            return
+        }
+
+        do {
+            let orchestrator = PipelineOrchestrator()
+            let output = try await orchestrator.processSession(videoURL: videoURL)
+            result = PipelineResult(from: output)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        step = .results
+    }
+    
+    /// Tries the UserDefaults path first, then scans the App Group container for any .mp4
+    private func findRecordingFile() -> URL? {
+        let fm = FileManager.default
+        
+        // 1. Try the stored path first
+        if let path = recordingManager.fetchLatestRecordedVideoPath() {
+            let url = URL(fileURLWithPath: path)
+            if fm.fileExists(atPath: url.path) {
+                print("✅ Found recording at stored path: \(url.lastPathComponent)")
+                return url
+            }
+            print("⚠️ Stored path doesn't exist: \(url.path)")
+        }
+        
+        // 2. Scan the App Group container for the most recent .mp4
+        guard let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: recordingManager.appGroupIdentifier) else {
+            print("❌ Cannot access App Group container")
+            return nil
+        }
+        
+        print("🔍 Scanning App Group container: \(containerURL.path)")
+        let files = (try? fm.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: [.contentModificationDateKey], options: [])) ?? []
+        let mp4s = files
+            .filter { $0.pathExtension == "mp4" }
+            .filter { url in
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                return size > 1000 // Ignore 0-byte or broken files (< 1KB)
+            }
+            .sorted {
+                let d1 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let d2 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return d1 > d2
+            }
+        
+        if let latest = mp4s.first {
+            print("✅ Found .mp4 via scan: \(latest.lastPathComponent)")
+            return latest
+        }
+        
+        print("❌ No .mp4 files found in container. All files: \(files.map(\.lastPathComponent))")
+        return nil
+    }
+
+    // MARK: - Helpers
+    private func postStopNotification() {
+        print("📡 Posting Darwin stop notification to extension.")
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            BroadcastConstants.stopBroadcastNotification,
+            nil, nil, true
+        )
+    }
+
+    private func timeString(from interval: TimeInterval) -> String {
+        let m = Int(interval) / 60
+        let s = Int(interval) % 60
+        return String(format: "%02d:%02d", m, s)
     }
 }
 
-// UIKit wrapper for RPSystemBroadcastPickerView
-struct BroadcastPicker: UIViewRepresentable {
+// MARK: - Broadcast Picker Wrapper
+struct BroadcastPickerView: UIViewRepresentable {
     func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
-        // Must use a non-zero frame, otherwise the internal button collapses in SwiftUI
         let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 60, height: 60))
-        
-        // IMPORTANT: Set this to the Bundle Identifier of your Broadcast Upload Extension
-        // If this is wrong, the picker will show a list of all apps instead of auto-selecting ours.
         picker.preferredExtension = BroadcastConstants.extensionBundleID
-        
-        picker.showsMicrophoneButton = true
+        picker.showsMicrophoneButton = false
         return picker
     }
-    
     func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {}
+}
+
+// MARK: - Darwin Notification Bridge
+// CFNotificationCenter callbacks must be C function pointers (no context capture).
+// This bridge re-fires the Darwin notification as a regular NotificationCenter event
+// so SwiftUI views can observe it normally with .onReceive.
+enum RecordingReadyBridge {
+    static let notification = Notification.Name("com.team10.c3.recordingReady.internal")
+
+    static func startListening() {
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            nil, // no observer context needed — we use the global NotificationCenter
+            { _, _, _, _, _ in
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: RecordingReadyBridge.notification, object: nil)
+                }
+            },
+            "com.team10.c3.recordingReady" as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
 }
 
 #Preview {

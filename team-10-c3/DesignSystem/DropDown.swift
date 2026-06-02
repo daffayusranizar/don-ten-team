@@ -100,15 +100,17 @@ enum DropdownSize {
 
 // MARK: Primary Textfield
 struct PrimaryDropdown: View {
+    @Environment(\.profileViewModel) private var profileViewModel
     @State private var isExpanded = false
     @State private var showAddChild: Bool = false
-    @Binding var selectedOption: String // temp type, replace with model
+    @Binding var selectedChild: Child?
     var size: DropdownSize = .medium
-    
-    // ! temporary until we have models
-    var iconOption: String = "person.crop.circle.fill" // replace with Image type once model implemented
-    @Binding var tempOptions: [String]
-    
+    var iconOption: String = "person.crop.circle.fill"
+
+    private var displayName: String {
+        selectedChild?.name ?? "Add a child"
+    }
+
     var body: some View {
         // Dropdown Button
         Button {
@@ -117,11 +119,15 @@ struct PrimaryDropdown: View {
             }
         } label: {
             HStack {
-                Image(systemName: iconOption)
-                    .font(.system(size: size.iconSize * 0.7, weight: .semibold))
-                    .foregroundStyle(.textPrimary)
+                if let selectedChild {
+                    ProfileAvatarView(child: selectedChild, size: size.iconSize * 0.85)
+                } else {
+                    Image(systemName: iconOption)
+                        .font(.system(size: size.iconSize * 0.7, weight: .semibold))
+                        .foregroundStyle(.textPrimary)
+                }
 
-                Text(selectedOption)
+                Text(displayName)
                     .font(size.font)
 
                 Spacer()
@@ -147,26 +153,23 @@ struct PrimaryDropdown: View {
         .overlay(alignment: .topLeading) {
             if isExpanded {
                 VStack(spacing: size.optionSpacing) {
-                    // each profile listing
-                    ForEach(tempOptions, id: \.self) { option in
+                    ForEach(profileViewModel.children) { child in
                         Button {
-                            selectedOption = option
+                            profileViewModel.selectChild(child)
+                            selectedChild = child
 
                             withAnimation(.snappy) {
                                 isExpanded = false
                             }
                         } label: {
                             HStack {
-                                // temp icon
-                                Image(systemName: iconOption)
-                                    .font(.system(size: size.iconSize * 0.7, weight: .semibold))
-                                    .foregroundStyle(.textPrimary)
-                                
-                                Text(option)
+                                ProfileAvatarView(child: child, size: size.iconSize * 0.85)
+
+                                Text(child.name)
 
                                 Spacer()
 
-                                if option == selectedOption {
+                                if child.id == selectedChild?.id {
                                     Image(systemName: "checkmark")
                                 }
                             }
@@ -177,8 +180,7 @@ struct PrimaryDropdown: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    
-                    // ! temporary for add child
+
                     Button {
                         withAnimation(.snappy) {
                             isExpanded = false
@@ -193,10 +195,10 @@ struct PrimaryDropdown: View {
                                     Circle()
                                         .fill(.primaryMediumBlue)
                                 )
-                            
+
                             Text("Add Child")
                                 .font(size.font)
-                            
+
                             Spacer()
                         }
                         .contentShape(Rectangle())
@@ -218,7 +220,10 @@ struct PrimaryDropdown: View {
         .frame(minHeight: size.minHeight)
         .zIndex(isExpanded ? 100 : 0)
         .navigationDestination(isPresented: $showAddChild) {
-            ProfileFormView()
+            ProfileFormView { child in
+                profileViewModel.handleChildSaved(child)
+                selectedChild = child
+            }
         }
     }
 }
@@ -448,31 +453,48 @@ struct TertiaryDropdown: View {
 }
 
 #Preview("Primary Dropdown") {
-    @Previewable @State var exampleName: String = "Raka Fadhilah"
-    @Previewable @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
-    
+    @Previewable @State var selectedChild: Child? = Child(
+        name: "Raka Fadhilah",
+        dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date()) ?? Date(),
+        gender: .boy
+    )
+    let repository = InMemoryChildRepository()
+    let profileViewModel = ProfileViewModel(childRepository: repository)
+
     NavigationStack {
         ZStack {
             VStack(spacing: 20) {
                 PrimaryDropdown(
-                    selectedOption: $exampleName,
-                    size: .large,
-                    tempOptions: $exampleOptions
+                    selectedChild: $selectedChild,
+                    size: .large
                 )
-                
+
                 PrimaryDropdown(
-                    selectedOption: $exampleName,
-                    size: .medium,
-                    tempOptions: $exampleOptions
+                    selectedChild: $selectedChild,
+                    size: .medium
                 )
-                
+
                 PrimaryDropdown(
-                    selectedOption: $exampleName,
-                    size: .small,
-                    tempOptions: $exampleOptions
+                    selectedChild: $selectedChild,
+                    size: .small
                 )
             }
             .padding()
+        }
+        .environment(\.profileViewModel, profileViewModel)
+        .environment(\.childRepository, repository)
+        .onAppear {
+            if let selectedChild {
+                try? repository.save(selectedChild)
+                try? repository.save(
+                    Child(
+                        name: "John Doe",
+                        dateOfBirth: Calendar.current.date(byAdding: .year, value: -10, to: Date()) ?? Date(),
+                        gender: .boy
+                    )
+                )
+                profileViewModel.loadChildren()
+            }
         }
     }
 }

@@ -9,8 +9,6 @@
 import SwiftUI
 import Charts
 
-func nothing() -> Void {}
-
 struct SessionData: Identifiable {
     let id = UUID()
     let type: String
@@ -19,36 +17,28 @@ struct SessionData: Identifiable {
 }
 
 struct DashboardView: View {
+    @Environment(\.profileViewModel) private var profileViewModel
     @State var showSettings: Bool = false
     @State var inSession: Bool = true
-    
-    // session control variables
     @State var paused: Bool = false
-    @State var addingTime: Bool = true
-    @State var timeAmount: Date = Date() // temp
-    
-    // - temp
-    @State var exampleName: String = "Raka Fadhilah"
-    @State var exampleOptions: [String] = ["Raka Fadhilah", "John Doe"]
-    
+    @State var addingTime: Bool = false
+
     let sessions: [SessionData] = [
         SessionData(type: "YouTube", duration: 90, color: .decorativeSkyBlue),
         SessionData(type: "TikTok", duration: 100, color: .decorativeSunnyYellow),
         SessionData(type: "Gallery", duration: 65, color: .decorativeMintGreen),
         SessionData(type: "Games", duration: 65, color: .decorativeCoralPink),
     ]
-    // - temp
-    
+
     var body: some View {
+        @Bindable var profileViewModel = profileViewModel
+
         ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .top) {
-
                 VStack(spacing: 0) {
-
                     Color.clear
                         .frame(height: 70)
 
-                    // MARK: session status
                     if inSession {
                         inSessionView(paused: $paused, addingTime: $addingTime, timeAmount: $timeAmount)
                     } else {
@@ -61,11 +51,9 @@ struct DashboardView: View {
                 .padding(.vertical)
                 .foregroundStyle(.textPrimary)
 
-                // MARK: tool bar
                 HStack {
                     PrimaryDropdown(
-                        selectedOption: $exampleName,
-                        tempOptions: $exampleOptions
+                        selectedChild: $profileViewModel.selectedChild
                     )
 
                     Button {
@@ -94,7 +82,7 @@ struct DashboardView: View {
 
 // MARK: Latest Summary
 @ViewBuilder
-func latestSummary (sessions: [SessionData]) -> some View {
+func latestSummary(sessions: [SessionData]) -> some View {
     VStack(alignment: .leading) {
         HStack {
             Text("Latest Summary")
@@ -109,7 +97,6 @@ func latestSummary (sessions: [SessionData]) -> some View {
             sessionChart(sessions: sessions)
 
             mostUsedApps()
-
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 30)
@@ -123,7 +110,7 @@ func latestSummary (sessions: [SessionData]) -> some View {
 
 // MARK: Yesterday's Session Chart
 @ViewBuilder
-func sessionChart (sessions: [SessionData]) -> some View {
+func sessionChart(sessions: [SessionData]) -> some View {
     Chart(sessions) { session in
         BarMark(
             x: .value("Type", session.type),
@@ -168,7 +155,7 @@ func sessionChart (sessions: [SessionData]) -> some View {
 
 // MARK: Most Used Apps
 @ViewBuilder
-func mostUsedApps () -> some View {
+func mostUsedApps() -> some View {
     VStack {
         HStack {
             Text("Most Used Apps")
@@ -178,7 +165,7 @@ func mostUsedApps () -> some View {
 
         VStack {
             HStack {
-                Image("Instagram")
+                ImageAsset.instagram.image
                     .resizable()
                     .scaledToFill()
                     .frame(width: 30, height: 30)
@@ -194,7 +181,7 @@ func mostUsedApps () -> some View {
             }
 
             HStack {
-                Image("TikTok")
+                ImageAsset.tiktok.image
                     .resizable()
                     .scaledToFill()
                     .frame(width: 30, height: 30)
@@ -210,7 +197,7 @@ func mostUsedApps () -> some View {
             }
 
             HStack {
-                Image("YouTube")
+                ImageAsset.youtube.image
                     .resizable()
                     .scaledToFill()
                     .frame(width: 30, height: 30)
@@ -240,16 +227,13 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
         Text("Current Session")
             .font(Font.system(size: 24, weight: .semibold))
 
-        // session controls
         HStack {
-            Text("1H 20M") // time left in session
+            Text("1H 20M")
                 .font(Font.system(size: 40, weight: .semibold))
-            
+
             Spacer()
-            
-            // stop button
+
             Button {
-                
             } label: {
                 Image(systemName: "stop.fill")
                     .font(Font.system(size: 20, weight: .semibold))
@@ -257,8 +241,7 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
                     .background(.white, in: Circle())
                     .foregroundStyle(.primaryMediumBlue)
             }
-            
-            // pause button
+
             Button {
                 withAnimation {
                     paused.wrappedValue.toggle()
@@ -273,7 +256,6 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
             }
         }
 
-        // time progression bar
         VStack(alignment: .leading) {
             ZStack(alignment: .leading) {
                 Capsule()
@@ -286,7 +268,7 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
             .frame(height: 12)
             Text("Time Limit: 1 Hour 30 Minutes")
         }
-        
+
         Button {
             addingTime.wrappedValue = true
         } label: {
@@ -322,7 +304,7 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>, timeAmount
 
 // MARK: Previous Session View
 @ViewBuilder
-func previousSessionView () -> some View {
+func previousSessionView() -> some View {
     VStack(alignment: .leading, spacing: 15) {
         Text("Latest Screen Time")
             .font(Font.system(size: 24, weight: .semibold))

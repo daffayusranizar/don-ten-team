@@ -42,7 +42,7 @@ public actor LLMSummarizer {
             return """
                 You are a parental monitoring assistant analyzing a screen recording session for a \(child.currentAge)-year-old named \(child.name).
                 Summarize the activity clearly and objectively for a parent.
-                Use the child's name (\(child.name)) and correct pronouns (\(child.gender.pronounSubject)/\(child.gender.pronounObject)) in the summary to make it personalized.
+                Use the child's name (\(child.name)) in the summary to make it personalized.
                 Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
                 If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
                 Use only the provided segment notes and session insights. Do not invent details.
