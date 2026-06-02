@@ -10,7 +10,10 @@ import SwiftUI
 struct ParentsAccessView: View {
     @State var changePassword: Bool = false
     @State var setFaceID: Bool = false
-    @Environment(\.familyControlsAuth) private var familyControlsAuth
+    #if DEBUG
+    @State var showScreenTimeDebug: Bool = false
+    #endif
+    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
 
     @Environment(\.dismiss) private var dismiss
     
@@ -86,6 +89,16 @@ struct ParentsAccessView: View {
                 )
             }
 
+            #if DEBUG
+            NavLink(
+                icon: "ladybug.fill",
+                title: "Screen Time Debugger",
+                changePage: $showScreenTimeDebug
+            ) {
+                ScreenTimeDebugView()
+            }
+            #endif
+
             Spacer()
         }
         .navigationBarBackButtonHidden(true)
@@ -93,6 +106,9 @@ struct ParentsAccessView: View {
         .padding(.horizontal, 30)
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
+        .onAppear {
+            familyControlsAuth.refreshAuthorizationStatus()
+        }
     }
 }
 

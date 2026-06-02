@@ -11,9 +11,9 @@ import SwiftUI
 struct KidSessionSetupView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     @Environment(\.profileViewModel) private var profileViewModel
+    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
     @Environment(\.dismiss) private var dismiss
-    @State private var showActiveSession = false
-
+    @State private var showScreenTimeAuthAlert = false
     private var genderLabel: String {
         guard let gender = kidSessionViewModel.selectedChild?.gender else { return "" }
         switch gender {
@@ -96,20 +96,11 @@ struct KidSessionSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
         .onAppear {
+            familyControlsAuth.refreshAuthorizationStatus()
             kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         }
-        .navigationDestination(isPresented: $showActiveSession) {
-            KidSessionActiveView()
-        }
-        .navigationDestination(isPresented: Binding(
-            get: { kidSessionViewModel.isSessionComplete },
-            set: { isPresented in
-                if !isPresented {
-                    kidSessionViewModel.resetAfterEndScreen()
-                }
-            }
-        )) {
-            KidSessionEndView()
+        .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
+            startSessionAfterAuthorization()
         }
     }
 
@@ -148,8 +139,17 @@ struct KidSessionSetupView: View {
     }
 
     private func startSession() {
+        familyControlsAuth.refreshAuthorizationStatus()
+        guard familyControlsAuth.canRecordSessionUsage else {
+            showScreenTimeAuthAlert = true
+            return
+        }
+        startSessionAfterAuthorization()
+    }
+
+    private func startSessionAfterAuthorization() {
         kidSessionViewModel.startSession()
-        showActiveSession = true
+        dismiss()
     }
 }
 
@@ -159,7 +159,8 @@ struct KidSessionSetupView: View {
             .environment(\.kidSessionViewModel, KidSessionViewModel(
                 sessionCoordinator: SessionCoordinator(
                     sessionRepository: InMemorySessionRepository(),
-                    screenTimeService: ScreenTimeService()
+                    screenTimeService: ScreenTimeService(),
+                    familyControlsAuth: PreviewFamilyControlsAuthService()
                 )
             ))
     }

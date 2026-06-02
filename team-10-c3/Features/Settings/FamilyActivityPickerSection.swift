@@ -10,7 +10,7 @@ struct FamilyActivityPickerSection: View {
             Text("Monitored Apps")
                 .font(.system(size: 20, weight: .semibold))
 
-            Text("Choose which apps count toward session screen time.")
+            Text("Optional: add apps for monitoring focus. Usage always includes all installed apps on this device (TikTok, Instagram, etc.).")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 

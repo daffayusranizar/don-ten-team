@@ -14,4 +14,5 @@ enum ScreenTimeConstants {
     )
 
     static let sessionActivityName = "parentguide.kid.session"
+    static let extensionHeartbeatKey = "deviceActivityExtensionHeartbeat"
 }

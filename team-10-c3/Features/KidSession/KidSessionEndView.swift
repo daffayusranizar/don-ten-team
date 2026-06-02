@@ -55,7 +55,8 @@ struct KidSessionEndView: View {
             .environment(\.kidSessionViewModel, KidSessionViewModel(
                 sessionCoordinator: SessionCoordinator(
                     sessionRepository: InMemorySessionRepository(),
-                    screenTimeService: ScreenTimeService()
+                    screenTimeService: ScreenTimeService(),
+                    familyControlsAuth: PreviewFamilyControlsAuthService()
                 )
             ))
     }

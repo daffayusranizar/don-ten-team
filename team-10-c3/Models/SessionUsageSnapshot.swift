@@ -8,7 +8,12 @@ public final class SessionUsageSnapshot {
     public var startAt: Date
     public var stopAt: Date
     public var fetchedAt: Date
+    /// Wall-clock active session time (matches parent timer).
     public var totalSeconds: Int
+    /// Sum of per-app Screen Time seconds saved in `appUsageJSON`.
+    public var screenTimeAppTotalSeconds: Int
+    /// Parent-chosen session limit at start (e.g. 30 min). 0 on legacy snapshots.
+    public var plannedDurationSeconds: Int
     public var appUsageJSON: String
 
     public init(
@@ -18,6 +23,8 @@ public final class SessionUsageSnapshot {
         stopAt: Date,
         fetchedAt: Date = Date(),
         totalSeconds: Int,
+        screenTimeAppTotalSeconds: Int = 0,
+        plannedDurationSeconds: Int = 0,
         appUsageJSON: String
     ) {
         self.id = id
@@ -26,7 +33,14 @@ public final class SessionUsageSnapshot {
         self.stopAt = stopAt
         self.fetchedAt = fetchedAt
         self.totalSeconds = totalSeconds
+        self.screenTimeAppTotalSeconds = screenTimeAppTotalSeconds
+        self.plannedDurationSeconds = plannedDurationSeconds
         self.appUsageJSON = appUsageJSON
+    }
+
+    public var resolvedScreenTimeSeconds: Int {
+        if screenTimeAppTotalSeconds > 0 { return screenTimeAppTotalSeconds }
+        return appUsageRows.map(\.durationSeconds).reduce(0, +)
     }
 
     public var appUsageRows: [AppUsageRow] {
@@ -34,6 +48,7 @@ public final class SessionUsageSnapshot {
               let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
             return []
         }
+        if SessionUsageSanitizer.isLegacyMockAppList(rows) { return [] }
         return rows
     }
 }

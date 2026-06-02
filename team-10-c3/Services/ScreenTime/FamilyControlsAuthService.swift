@@ -1,22 +1,54 @@
 import Foundation
 import FamilyControls
+import Observation
 
 @MainActor
-protocol FamilyControlsAuthProviding {
+protocol FamilyControlsAuthProviding: AnyObject {
     var isAuthorized: Bool { get }
+    var hasUsageDataAccess: Bool { get }
+    /// Per-app session usage can be recorded only when this is true.
+    var canRecordSessionUsage: Bool { get }
+    var authorizationStatusDescription: String { get }
+    func refreshAuthorizationStatus()
     func requestAuthorization() async throws
+    /// User-facing reason when `canRecordSessionUsage` is false; nil when recording is allowed.
+    func recordingBlockedMessage() -> String?
 }
 
+@Observable
 @MainActor
 final class FamilyControlsAuthService: FamilyControlsAuthProviding {
-    private(set) var isAuthorized: Bool = false
+    private(set) var isAuthorized = false
+    private(set) var hasUsageDataAccess = false
+    private(set) var authorizationStatusDescription = "unknown"
 
     init() {
         refreshAuthorizationStatus()
     }
 
     func refreshAuthorizationStatus() {
-        isAuthorized = AuthorizationCenter.shared.authorizationStatus == .approved
+        let status = AuthorizationCenter.shared.authorizationStatus
+        authorizationStatusDescription = String(describing: status)
+        if #available(iOS 26.4, *) {
+            hasUsageDataAccess = status == .approvedWithDataAccess
+        } else {
+            hasUsageDataAccess = status == .approved
+        }
+        isAuthorized = status == .approved || hasUsageDataAccess
+    }
+
+    var canRecordSessionUsage: Bool {
+        hasUsageDataAccess
+    }
+
+    func recordingBlockedMessage() -> String? {
+        guard !canRecordSessionUsage else { return nil }
+        if !isAuthorized {
+            return "Screen Time access is required before starting a session. Tap Enable to allow access, then try again."
+        }
+        return ScreenTimeFetchError.missingUsageDataAccess(
+            status: authorizationStatusDescription
+        ).localizedDescription
     }
 
     func requestAuthorization() async throws {
@@ -25,8 +57,21 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     }
 }
 
+@Observable
 @MainActor
 final class PreviewFamilyControlsAuthService: FamilyControlsAuthProviding {
-    var isAuthorized: Bool = true
-    func requestAuthorization() async throws {}
+    var isAuthorized = true
+    var hasUsageDataAccess = true
+    var canRecordSessionUsage = true
+    var authorizationStatusDescription = "approvedWithDataAccess"
+
+    func refreshAuthorizationStatus() {}
+
+    func recordingBlockedMessage() -> String? { nil }
+
+    func requestAuthorization() async throws {
+        isAuthorized = true
+        hasUsageDataAccess = true
+        canRecordSessionUsage = true
+    }
 }

@@ -7,13 +7,11 @@ DEVELOPMENT_TEAM = 35SGY39Y8Z
 MAIN_BUNDLE_IDENTIFIER = $(APP_BUNDLE_ID_PREFIX).don-ten-team
 SCREEN_RECORDER_EXTENSION_BUNDLE_IDENTIFIER = $(MAIN_BUNDLE_IDENTIFIER).ScreenRecorderExtension
 SCREEN_RECORDER_SETUP_UI_BUNDLE_IDENTIFIER = $(MAIN_BUNDLE_IDENTIFIER).ScreenRecorderExtensionSetupUI
-DEVICE_ACTIVITY_REPORT_EXTENSION_BUNDLE_IDENTIFIER = $(MAIN_BUNDLE_IDENTIFIER).DeviceActivityReportExtension
 APP_GROUP_IDENTIFIER = group.$(APP_BUNDLE_ID_PREFIX).don-ten-team.shared
 
 // Use team-10-c3.dev.entitlements in Signing.local if Family Controls is not approved for your team.
 MAIN_APP_ENTITLEMENTS = team-10-c3/team-10-c3.entitlements
 EXTENSION_ENTITLEMENTS = ScreenRecorderExtension/ScreenRecorderExtension.entitlements
 EXTENSION_SETUP_UI_ENTITLEMENTS = ScreenRecorderExtensionSetupUI/ScreenRecorderExtensionSetupUI.entitlements
-DEVICE_ACTIVITY_REPORT_ENTITLEMENTS = DeviceActivityReportExtension/DeviceActivityReportExtension.entitlements
 
 #include? "Signing.local.xcconfig"

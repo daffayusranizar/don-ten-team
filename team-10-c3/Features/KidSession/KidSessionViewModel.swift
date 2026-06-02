@@ -13,13 +13,6 @@ final class KidSessionViewModel {
 
     var selectedChild: Child?
 
-    var youtubeAllowed = false
-    var tiktokAllowed = false
-    var instagramAllowed = false
-    var mobileLegendsAllowed = false
-    var candyCrushAllowed = false
-    var pubgAllowed = false
-
     let durationOptions: [Int]
 
     init(

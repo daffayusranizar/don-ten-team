@@ -14,14 +14,9 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
     private let center = DeviceActivityCenter()
     private let activityName = DeviceActivityName(ScreenTimeConstants.sessionActivityName)
 
-    func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws {
-        let selection = FamilyActivitySelectionStore.load()
-        guard !selection.applicationTokens.isEmpty
-            || !selection.categoryTokens.isEmpty
-            || !selection.webDomainTokens.isEmpty else {
-            return
-        }
+    private let fetchAttemptDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(6)]
 
+    func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws {
         let schedule = DeviceActivitySchedule(
             intervalStart: DateComponents.from(date: startAt),
             intervalEnd: DateComponents.from(date: plannedEndAt),
@@ -36,90 +31,110 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
     }
 
     func fetchUsage(childId: UUID, startAt: Date, stopAt: Date) async throws -> SessionUsagePayload {
-        writeQueryToAppGroup(childId: childId, startAt: startAt, stopAt: stopAt)
+        DeviceActivityUsageAggregator.refreshAuthorizationStatus()
+        let status = AuthorizationCenter.shared.authorizationStatus
 
-        if let payload = await waitForUsagePayload(
-            childId: childId,
-            startAt: startAt,
-            stopAt: stopAt,
-            timeoutSeconds: 8
-        ) {
-            return payload
+        AgentDebugLog.log(
+            hypothesisId: "B",
+            location: "ScreenTimeService.fetchUsage:start",
+            message: "fetchUsage via activityData",
+            data: [
+                "childId": childId.uuidString,
+                "authorizationStatus": String(describing: status),
+                "hasUsageDataAccess": String(DeviceActivityUsageAggregator.hasRequiredAuthorization()),
+                "startAt": ISO8601DateFormatter().string(from: startAt),
+                "stopAt": ISO8601DateFormatter().string(from: stopAt),
+            ]
+        )
+
+        guard DeviceActivityUsageAggregator.hasRequiredAuthorization() else {
+            AgentDebugLog.log(
+                hypothesisId: "B",
+                location: "ScreenTimeService.fetchUsage:unauthorized",
+                message: "missing approvedWithDataAccess",
+                data: ["authorizationStatus": String(describing: status)]
+            )
+            throw ScreenTimeFetchError.missingUsageDataAccess(
+                status: DeviceActivityUsageAggregator.authorizationStatusLabel()
+            )
         }
 
-        return MockScreenTimeUsageBuilder.build(
-            childId: childId,
-            startAt: startAt,
-            stopAt: stopAt
-        )
-    }
+        let wallClockSeconds = max(1, Int(stopAt.timeIntervalSince(startAt)))
+        var best: SessionUsagePayload?
+        var lastError: Error?
 
-    private func writeQueryToAppGroup(childId: UUID, startAt: Date, stopAt: Date) {
-        guard let defaults = UserDefaults(suiteName: ScreenTimeConstants.appGroupID) else { return }
-        defaults.set(childId.uuidString, forKey: ScreenTimeConstants.queryChildIdKey)
-        defaults.set(startAt.timeIntervalSince1970, forKey: ScreenTimeConstants.queryStartKey)
-        defaults.set(stopAt.timeIntervalSince1970, forKey: ScreenTimeConstants.queryEndKey)
-        defaults.removeObject(forKey: ScreenTimeConstants.usagePayloadKey)
-        defaults.synchronize()
-        postUsageQueryNotification()
-    }
-
-    private func postUsageQueryNotification() {
-        let notification = ScreenTimeConstants.usageReadyNotification
-        CFNotificationCenterPostNotification(
-            CFNotificationCenterGetDarwinNotifyCenter(),
-            notification,
-            nil,
-            nil,
-            true
-        )
-    }
-
-    private func waitForUsagePayload(
-        childId: UUID,
-        startAt: Date,
-        stopAt: Date,
-        timeoutSeconds: TimeInterval
-    ) async -> SessionUsagePayload? {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
-        while Date() < deadline {
-            if let payload = readPayloadFromAppGroup(),
-               payload.childId == childId,
-               abs(payload.startAt.timeIntervalSince(startAt)) < 2,
-               abs(payload.stopAt.timeIntervalSince(stopAt)) < 2 {
-                return payload
+        for delay in fetchAttemptDelays {
+            try await Task.sleep(for: delay)
+            do {
+                let payload = try await DeviceActivityUsageAggregator.aggregate(
+                    childId: childId,
+                    startAt: startAt,
+                    stopAt: stopAt
+                )
+                best = ScreenTimePayloadSelector.preferRicher(
+                    existing: best,
+                    new: payload,
+                    wallClockSeconds: wallClockSeconds
+                )
+                if usageBackfillIsRichEnough(best?.apps ?? []) { break }
+            } catch {
+                lastError = error
+                AgentDebugLog.log(
+                    hypothesisId: "D",
+                    location: "ScreenTimeService.fetchUsage:attempt",
+                    message: "activityData attempt failed",
+                    data: ["error": String(describing: error)]
+                )
             }
-            try? await Task.sleep(for: .milliseconds(250))
         }
-        return readPayloadFromAppGroup()
-    }
 
-    private func readPayloadFromAppGroup() -> SessionUsagePayload? {
-        guard let defaults = UserDefaults(suiteName: ScreenTimeConstants.appGroupID),
-              let json = defaults.string(forKey: ScreenTimeConstants.usagePayloadKey) else {
-            return nil
+        let merged: SessionUsagePayload
+        if let best {
+            merged = best
+        } else if let lastError {
+            throw ScreenTimeFetchError.activityDataUnavailable(String(describing: lastError))
+        } else {
+            merged = SessionUsagePayload(
+                childId: childId,
+                startAt: startAt,
+                stopAt: stopAt,
+                totalSeconds: 0,
+                apps: []
+            )
         }
-        return SessionUsagePayload.decodeJSON(json)
+
+        let sanitized = SessionUsageSanitizer.sanitizedPayload(merged)
+        ScreenTimePipelineLogger.logOutput(
+            stage: "afterSanitize",
+            apps: sanitized.apps,
+            sessionElapsedSeconds: wallClockSeconds,
+            extra: [
+                "payloadTotalSeconds": String(sanitized.totalSeconds),
+                "hasTikTok": String(sanitized.apps.contains {
+                    KnownAppLabels.matches(bundleId: $0.bundleIdentifier, app: .tiktok)
+                }),
+            ]
+        )
+        AgentDebugLog.log(
+            hypothesisId: "D",
+            location: "ScreenTimeService.fetchUsage:success",
+            message: "activityData payload",
+            data: [
+                "appCount": String(sanitized.apps.count),
+                "totalSeconds": String(sanitized.totalSeconds),
+                "appsList": ScreenTimePipelineLogger.formatApps(sanitized.apps),
+                "hasTikTok": String(sanitized.apps.contains {
+                    KnownAppLabels.matches(bundleId: $0.bundleIdentifier, app: .tiktok)
+                }),
+                "topBundles": sanitized.apps.prefix(5).map(\.bundleIdentifier).joined(separator: ","),
+            ]
+        )
+        return sanitized
     }
 }
 
-@MainActor
-enum MockScreenTimeUsageBuilder {
-    static func build(childId: UUID, startAt: Date, stopAt: Date) -> SessionUsagePayload {
-        let duration = max(60, Int(stopAt.timeIntervalSince(startAt)))
-        let apps: [AppUsageRow] = [
-            AppUsageRow(displayName: "YouTube", bundleIdentifier: "com.google.ios.youtube", durationSeconds: duration * 45 / 100),
-            AppUsageRow(displayName: "TikTok", bundleIdentifier: "com.zhiliaoapp.musically", durationSeconds: duration * 30 / 100),
-            AppUsageRow(displayName: "Games", bundleIdentifier: "com.apple.game", durationSeconds: duration * 25 / 100)
-        ]
-        return SessionUsagePayload(
-            childId: childId,
-            startAt: startAt,
-            stopAt: stopAt,
-            totalSeconds: apps.map(\.durationSeconds).reduce(0, +),
-            apps: apps
-        )
-    }
+private func usageBackfillIsRichEnough(_ apps: [AppUsageRow]) -> Bool {
+    apps.contains { $0.durationSeconds >= 30 }
 }
 
 private extension DateComponents {

@@ -64,7 +64,7 @@ private struct SessionHistoryScreen: View {
                 if viewModel.selectedTab == .suggestion {
                     suggestionContent
                 } else {
-                    screenTimePlaceholder
+                    screenTimeContent
                 }
             }
             .padding(.horizontal, HistoryLayout.horizontalPadding)
@@ -149,7 +149,7 @@ private struct SessionHistoryScreen: View {
         }
     }
 
-    private var screenTimePlaceholder: some View {
+    private var screenTimeContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(viewModel.selectedMonth)
                 .font(.heading6)
@@ -307,7 +307,7 @@ private enum OutcomePillColor {
 #Preview {
     NavigationStack {
         SessionHistoryView()
-            .environment(\.suggestionHistoryRepository, InMemorySuggestionHistoryRepository())
+            .environment(\.suggestionHistoryRepository, InMemorySuggestionHistoryRepository.preview)
             .environment(\.sessionRepository, InMemorySessionRepository())
             .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
     }

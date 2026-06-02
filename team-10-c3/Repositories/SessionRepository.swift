@@ -18,46 +18,48 @@ struct DayActivitySummary: Sendable, Equatable {
     let day: Date
     let isToday: Bool
     let isYesterday: Bool
+    let sessionCount: Int
     let mergedApps: [AppUsageRow]
+    /// Sum of wall-clock session timers that day (parent-facing headline).
     let totalSeconds: Int
+    /// Sum of per-app estimated Screen Time seconds for the day.
+    let screenTimeAppTotalSeconds: Int
 
     var periodTitle: String {
-        if isToday { return "Today's Session" }
-        if isYesterday { return "Yesterday's Session" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return "\(formatter.string(from: day))'s Session"
+        let base: String
+        if isToday {
+            base = "Today"
+        } else if isYesterday {
+            base = "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            base = formatter.string(from: day)
+        }
+        if sessionCount > 1 {
+            return "\(base) (\(sessionCount) sessions)"
+        }
+        return base
     }
 
     static func from(snapshots: [SessionUsageSnapshot], day: Date, isToday: Bool, isYesterday: Bool) -> DayActivitySummary {
-        let mergedApps = mergeApps(from: snapshots)
-        let totalSeconds = mergedApps.map(\.durationSeconds).reduce(0, +)
+        let mergedApps = SessionUsageHourMerge.mergeAppsHourAware(from: snapshots)
+        let sessionElapsed = snapshots.map(\.totalSeconds).reduce(0, +)
+        let screenTimeAppTotal = mergedApps.map(\.durationSeconds).reduce(0, +)
         return DayActivitySummary(
             day: day,
             isToday: isToday,
             isYesterday: isYesterday,
+            sessionCount: snapshots.count,
             mergedApps: mergedApps,
-            totalSeconds: totalSeconds
+            totalSeconds: sessionElapsed,
+            screenTimeAppTotalSeconds: screenTimeAppTotal
         )
     }
+}
 
-    private static func mergeApps(from snapshots: [SessionUsageSnapshot]) -> [AppUsageRow] {
-        var totals: [String: (name: String, seconds: Int)] = [:]
-        for snapshot in snapshots {
-            for app in snapshot.appUsageRows {
-                let existing = totals[app.bundleIdentifier]?.seconds ?? 0
-                totals[app.bundleIdentifier] = (app.displayName, existing + app.durationSeconds)
-            }
-        }
-        return totals.map { bundleId, value in
-            AppUsageRow(
-                displayName: value.name,
-                bundleIdentifier: bundleId,
-                durationSeconds: value.seconds
-            )
-        }
-        .sorted { $0.durationSeconds > $1.durationSeconds }
-    }
+private func persistedUserFacingApps(from rows: [AppUsageRow]) -> [AppUsageRow] {
+    SessionUsageNoiseFilter.userFacingApps(SessionUsageSanitizer.sanitizedApps(rows))
 }
 
 @MainActor
@@ -70,12 +72,14 @@ protocol SessionRepository {
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
+        plannedDurationSeconds: Int,
         appUsageRows: [AppUsageRow]
     ) throws -> SessionUsageSnapshot
     func fetchSnapshots(for childId: UUID, month: String) throws -> [SessionUsageSnapshot]
     func availableMonths(for childId: UUID) throws -> [String]
     func dayActivitySummary(for childId: UUID, referenceDate: Date?) throws -> DayActivitySummary?
     func todayActivitySummary(for childId: UUID, referenceDate: Date?) throws -> DayActivitySummary?
+    func purgeLegacyMockUsageSnapshots() throws
 }
 
 @MainActor
@@ -138,20 +142,49 @@ final class SwiftDataSessionRepository: SessionRepository {
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
+        plannedDurationSeconds: Int,
         appUsageRows: [AppUsageRow]
     ) throws -> SessionUsageSnapshot {
-        let jsonData = try JSONEncoder().encode(appUsageRows)
+        let apps = persistedUserFacingApps(from: appUsageRows)
+        let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
+        let jsonData = try JSONEncoder().encode(apps)
         let json = String(data: jsonData, encoding: .utf8) ?? "[]"
         let snapshot = SessionUsageSnapshot(
             childId: childId,
             startAt: startAt,
             stopAt: stopAt,
             totalSeconds: totalSeconds,
+            screenTimeAppTotalSeconds: screenTimeAppTotal,
+            plannedDurationSeconds: plannedDurationSeconds,
             appUsageJSON: json
         )
         modelContext.insert(snapshot)
         try modelContext.save()
         return snapshot
+    }
+
+    /// Rewrites snapshots that still contain pre-integration mock app rows (YouTube / TikTok / Games).
+    func purgeLegacyMockUsageSnapshots() throws {
+        let descriptor = FetchDescriptor<SessionUsageSnapshot>()
+        let snapshots = try modelContext.fetch(descriptor)
+        var didChange = false
+
+        for snapshot in snapshots {
+            guard let data = snapshot.appUsageJSON.data(using: .utf8),
+                  let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
+                continue
+            }
+            let apps = SessionUsageSanitizer.sanitizedApps(rows)
+            guard apps.count != rows.count else { continue }
+
+            snapshot.appUsageJSON = String(data: try JSONEncoder().encode(apps), encoding: .utf8) ?? "[]"
+            snapshot.totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
+            didChange = true
+        }
+
+        if didChange {
+            try modelContext.save()
+        }
     }
 
     func fetchSnapshots(for childId: UUID, month: String) throws -> [SessionUsageSnapshot] {
@@ -246,8 +279,8 @@ final class SwiftDataSessionRepository: SessionRepository {
     private func latestSnapshot(childId: UUID, startAt: Date, stopAt: Date) throws -> SessionUsageSnapshot? {
         let snapshots = try fetchAllSnapshots(for: childId)
         return snapshots.first {
-            abs($0.startAt.timeIntervalSince(startAt)) < 1
-                && abs($0.stopAt.timeIntervalSince(stopAt)) < 1
+            abs($0.startAt.timeIntervalSince(startAt)) < 5
+                && abs($0.stopAt.timeIntervalSince(stopAt)) < 5
         }
     }
 }
@@ -297,19 +330,37 @@ final class InMemorySessionRepository: SessionRepository {
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
+        plannedDurationSeconds: Int,
         appUsageRows: [AppUsageRow]
     ) throws -> SessionUsageSnapshot {
-        let jsonData = try JSONEncoder().encode(appUsageRows)
+        let apps = persistedUserFacingApps(from: appUsageRows)
+        let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
+        let jsonData = try JSONEncoder().encode(apps)
         let json = String(data: jsonData, encoding: .utf8) ?? "[]"
         let snapshot = SessionUsageSnapshot(
             childId: childId,
             startAt: startAt,
             stopAt: stopAt,
             totalSeconds: totalSeconds,
+            screenTimeAppTotalSeconds: screenTimeAppTotal,
+            plannedDurationSeconds: plannedDurationSeconds,
             appUsageJSON: json
         )
         snapshots.append(snapshot)
         return snapshot
+    }
+
+    func purgeLegacyMockUsageSnapshots() throws {
+        for snapshot in snapshots {
+            guard let data = snapshot.appUsageJSON.data(using: .utf8),
+                  let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
+                continue
+            }
+            let apps = SessionUsageSanitizer.sanitizedApps(rows)
+            guard apps.count != rows.count else { continue }
+            snapshot.appUsageJSON = String(data: try JSONEncoder().encode(apps), encoding: .utf8) ?? "[]"
+            snapshot.totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
+        }
     }
 
     func fetchSnapshots(for childId: UUID, month: String) throws -> [SessionUsageSnapshot] {

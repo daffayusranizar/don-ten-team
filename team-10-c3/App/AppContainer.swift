@@ -16,10 +16,11 @@ final class AppContainer {
     let childRepository: ChildRepository
     let sessionRepository: SessionRepository
     let profileViewModel: ProfileViewModel
-    let familyControlsAuth: FamilyControlsAuthProviding
+    let familyControlsAuth: FamilyControlsAuthService
     let screenTimeService: ScreenTimeUsageProviding
     let sessionCoordinator: SessionCoordinator
     let kidSessionViewModel: KidSessionViewModel
+    let suggestionHistoryRepository: SuggestionHistoryRepository
 
     init(
         featureFlags: FeatureFlagService,
@@ -27,10 +28,11 @@ final class AppContainer {
         childRepository: ChildRepository? = nil,
         sessionRepository: SessionRepository? = nil,
         profileViewModel: ProfileViewModel? = nil,
-        familyControlsAuth: FamilyControlsAuthProviding? = nil,
+        familyControlsAuth: FamilyControlsAuthService? = nil,
         screenTimeService: ScreenTimeUsageProviding? = nil,
         sessionCoordinator: SessionCoordinator? = nil,
-        kidSessionViewModel: KidSessionViewModel? = nil
+        kidSessionViewModel: KidSessionViewModel? = nil,
+        suggestionHistoryRepository: SuggestionHistoryRepository? = nil
     ) {
         self.featureFlags = featureFlags
         self.modelContainer = modelContainer
@@ -47,21 +49,51 @@ final class AppContainer {
         self.screenTimeService = screenTimeService ?? ScreenTimeService()
         self.sessionCoordinator = sessionCoordinator ?? SessionCoordinator(
             sessionRepository: self.sessionRepository,
-            screenTimeService: self.screenTimeService
+            screenTimeService: self.screenTimeService,
+            familyControlsAuth: self.familyControlsAuth
         )
         self.kidSessionViewModel = kidSessionViewModel ?? KidSessionViewModel(
             sessionCoordinator: self.sessionCoordinator
         )
+        self.suggestionHistoryRepository = suggestionHistoryRepository
+            ?? InMemorySuggestionHistoryRepository()
+
+        try? self.sessionRepository.purgeLegacyMockUsageSnapshots()
+
         self.profileViewModel.loadChildren()
     }
 
     convenience init() {
         do {
-            let schema = Schema([Child.self, SessionMarker.self, SessionUsageSnapshot.self])
-            let modelContainer = try ModelContainer(for: schema)
+            let modelContainer = try Self.makeModelContainer()
             self.init(featureFlags: FeatureFlagService(), modelContainer: modelContainer)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
+        }
+    }
+
+    private static func makeModelContainer() throws -> ModelContainer {
+        let schema = Schema([Child.self, SessionMarker.self, SessionUsageSnapshot.self])
+        let configuration = ModelConfiguration()
+        do {
+            return try ModelContainer(for: schema, configurations: configuration)
+        } catch {
+            // Existing installs lack `screenTimeAppTotalSeconds`; recreate the local store once.
+            try resetPersistentStore(configuration: configuration)
+            return try ModelContainer(for: schema, configurations: configuration)
+        }
+    }
+
+    private static func resetPersistentStore(configuration: ModelConfiguration) throws {
+        let storeURL = configuration.url
+        let fileManager = FileManager.default
+        let relatedURLs = [
+            storeURL,
+            URL(fileURLWithPath: storeURL.path + "-wal"),
+            URL(fileURLWithPath: storeURL.path + "-shm"),
+        ]
+        for url in relatedURLs where fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
         }
     }
 }

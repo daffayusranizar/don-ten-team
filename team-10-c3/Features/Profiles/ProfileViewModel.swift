@@ -26,16 +26,19 @@ final class ProfileViewModel {
         do {
             children = try childRepository.fetchAll()
             loadError = nil
-
-            if selectedChild == nil {
-                selectedChild = children.first
-            } else if let selectedChild,
-                      !children.contains(where: { $0.id == selectedChild.id }) {
-                self.selectedChild = children.first
-            }
+            reconcileSelectedChild()
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// Keeps a valid selection so the dashboard can load usage on first visit.
+    private func reconcileSelectedChild() {
+        if let selectedChild,
+           children.contains(where: { $0.id == selectedChild.id }) {
+            return
+        }
+        selectedChild = children.first
     }
 
     func handleChildSaved(_ child: Child) {

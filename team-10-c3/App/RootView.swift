@@ -9,7 +9,11 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.sessionCoordinator) private var sessionCoordinator
+
     var body: some View {
+        @Bindable var sessionCoordinator = sessionCoordinator
+
         NavigationStack {
             DashboardView()
         }
