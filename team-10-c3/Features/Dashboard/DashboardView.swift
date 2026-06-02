@@ -18,12 +18,12 @@ struct SessionData: Identifiable {
 
 struct DashboardView: View {
     @Environment(\.profileViewModel) private var profileViewModel
+    @Environment(\.sessionCoordinator) private var sessionCoordinator
     @State var showSettings: Bool = false
-    @State var inSession: Bool = true
     @State var paused: Bool = false
     @State var addingTime: Bool = false
 
-    let sessions: [SessionData] = [
+    private static let placeholderSessions: [SessionData] = [
         SessionData(type: "YouTube", duration: 90, color: .decorativeSkyBlue),
         SessionData(type: "TikTok", duration: 100, color: .decorativeSunnyYellow),
         SessionData(type: "Gallery", duration: 65, color: .decorativeMintGreen),
@@ -32,6 +32,7 @@ struct DashboardView: View {
 
     var body: some View {
         @Bindable var profileViewModel = profileViewModel
+        @Bindable var sessionCoordinator = sessionCoordinator
 
         ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .top) {
@@ -39,13 +40,27 @@ struct DashboardView: View {
                     Color.clear
                         .frame(height: 70)
 
-                    if inSession {
-                        inSessionView(paused: $paused, addingTime: $addingTime)
+                    if sessionCoordinator.isSessionActive {
+                        inSessionView(
+                            paused: $paused,
+                            addingTime: $addingTime,
+                            onStop: {
+                                Task { await sessionCoordinator.stopSession() }
+                            }
+                        )
+                    } else if sessionCoordinator.hasTodayActivity {
+                        currentScreenTimeView(coordinator: sessionCoordinator)
                     } else {
-                        previousSessionView()
+                        latestScreenTimeView(coordinator: sessionCoordinator)
                     }
 
-                    latestSummary(sessions: sessions)
+                    latestSummary(
+                        periodTitle: sessionCoordinator.summaryPeriodTitle,
+                        sessions: summarySessions(from: sessionCoordinator),
+                        topApps: sessionCoordinator.hasSummaryData
+                            ? sessionCoordinator.summaryTopApps
+                            : nil
+                    )
                 }
                 .padding(.horizontal, 30)
                 .padding(.vertical)
@@ -77,12 +92,31 @@ struct DashboardView: View {
         .navigationDestination(isPresented: $showSettings) {
             SettingsView()
         }
+        .onAppear {
+            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+        }
+        .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
+            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+        }
+    }
+
+    private func summarySessions(from coordinator: SessionCoordinator) -> [SessionData] {
+        if coordinator.hasSummaryData {
+            return coordinator.summaryChartSessions.map {
+                SessionData(type: $0.type, duration: $0.duration, color: $0.color)
+            }
+        }
+        return Self.placeholderSessions
     }
 }
 
 // MARK: Latest Summary
 @ViewBuilder
-func latestSummary(sessions: [SessionData]) -> some View {
+func latestSummary(
+    periodTitle: String,
+    sessions: [SessionData],
+    topApps: [AppUsageRow]?
+) -> some View {
     VStack(alignment: .leading) {
         HStack {
             Text("Latest Summary")
@@ -91,12 +125,12 @@ func latestSummary(sessions: [SessionData]) -> some View {
         }
 
         VStack(alignment: .center, spacing: 15) {
-            Text("Yesterday's Session")
+            Text(periodTitle)
                 .font(.system(size: 18, weight: .semibold))
 
             sessionChart(sessions: sessions)
 
-            mostUsedApps()
+            mostUsedApps(topApps: topApps)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 30)
@@ -155,7 +189,7 @@ func sessionChart(sessions: [SessionData]) -> some View {
 
 // MARK: Most Used Apps
 @ViewBuilder
-func mostUsedApps() -> some View {
+func mostUsedApps(topApps: [AppUsageRow]?) -> some View {
     VStack {
         HStack {
             Text("Most Used Apps")
@@ -164,52 +198,72 @@ func mostUsedApps() -> some View {
         }
 
         VStack {
-            HStack {
-                ImageAsset.instagram.image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 30, height: 30)
-                    .cornerRadius(10)
+            if let topApps, !topApps.isEmpty {
+                ForEach(topApps.prefix(3)) { app in
+                    HStack {
+                        appIcon(for: app)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 30, height: 30)
+                            .cornerRadius(10)
 
-                Text("Instagram")
-                    .font(.system(size: 14, weight: .regular))
+                        Text(app.displayName)
+                            .font(.system(size: 14, weight: .regular))
 
-                Spacer()
+                        Spacer()
 
-                Text("2 Hours 30 Minutes")
-                    .font(.system(size: 14, weight: .medium))
-            }
+                        Text(DurationFormatting.hoursAndMinutes(TimeInterval(app.durationSeconds)))
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                }
+            } else {
+                HStack {
+                    ImageAsset.instagram.image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .cornerRadius(10)
 
-            HStack {
-                ImageAsset.tiktok.image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 30, height: 30)
-                    .cornerRadius(10)
+                    Text("Instagram")
+                        .font(.system(size: 14, weight: .regular))
 
-                Text("TikTok")
-                    .font(.system(size: 14, weight: .regular))
+                    Spacer()
 
-                Spacer()
+                    Text("2 Hours 30 Minutes")
+                        .font(.system(size: 14, weight: .medium))
+                }
 
-                Text("50 Minutes")
-                    .font(.system(size: 14, weight: .medium))
-            }
+                HStack {
+                    ImageAsset.tiktok.image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .cornerRadius(10)
 
-            HStack {
-                ImageAsset.youtube.image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 30, height: 30)
-                    .cornerRadius(10)
+                    Text("TikTok")
+                        .font(.system(size: 14, weight: .regular))
 
-                Text("YouTube")
-                    .font(.system(size: 14, weight: .regular))
+                    Spacer()
 
-                Spacer()
+                    Text("50 Minutes")
+                        .font(.system(size: 14, weight: .medium))
+                }
 
-                Text("20 Minutes")
-                    .font(.system(size: 14, weight: .medium))
+                HStack {
+                    ImageAsset.youtube.image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .cornerRadius(10)
+
+                    Text("YouTube")
+                        .font(.system(size: 14, weight: .regular))
+
+                    Spacer()
+
+                    Text("20 Minutes")
+                        .font(.system(size: 14, weight: .medium))
+                }
             }
         }
     }
@@ -220,9 +274,28 @@ func mostUsedApps() -> some View {
     )
 }
 
+private func appIcon(for app: AppUsageRow) -> Image {
+    let name = app.displayName.lowercased()
+    let bundle = app.bundleIdentifier.lowercased()
+    if name.contains("instagram") || bundle.contains("instagram") {
+        return ImageAsset.instagram.image
+    }
+    if name.contains("tiktok") || bundle.contains("tiktok") || bundle.contains("musically") {
+        return ImageAsset.tiktok.image
+    }
+    if name.contains("youtube") || bundle.contains("youtube") {
+        return ImageAsset.youtube.image
+    }
+    return Image(systemName: "app.fill")
+}
+
 // MARK: In Session View
 @ViewBuilder
-func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>) -> some View {
+func inSessionView(
+    paused: Binding<Bool>,
+    addingTime: Binding<Bool>,
+    onStop: @escaping () -> Void
+) -> some View {
     VStack(alignment: .leading, spacing: 15) {
         Text("Current Session")
             .font(Font.system(size: 24, weight: .semibold))
@@ -234,6 +307,7 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>) -> some Vi
             Spacer()
 
             Button {
+                onStop()
             } label: {
                 Image(systemName: "stop.fill")
                     .font(Font.system(size: 20, weight: .semibold))
@@ -302,29 +376,66 @@ func inSessionView (paused: Binding<Bool>, addingTime: Binding<Bool>) -> some Vi
     .padding(.top, 30)
 }
 
-// MARK: Previous Session View
+// MARK: Current Screen Time (today has recorded activity)
 @ViewBuilder
-func previousSessionView() -> some View {
+func currentScreenTimeView(coordinator: SessionCoordinator) -> some View {
+    screenTimeBannerView(
+        title: "Current Screen Time",
+        total: coordinator.formattedCurrentDayTotal,
+        progress: coordinator.currentDayProgress,
+        progressLabel: "\(Int(coordinator.currentDayProgress * 100))% of today's limit"
+    )
+}
+
+// MARK: Latest Screen Time (no activity today yet)
+@ViewBuilder
+func latestScreenTimeView(coordinator: SessionCoordinator) -> some View {
+    let hasData = coordinator.latestBannerTotalSeconds > 0
+    let total = hasData
+        ? coordinator.formattedLatestBannerTotal
+        : (coordinator.isRefreshingScreenTime ? "…" : "—")
+    let progress = hasData ? coordinator.latestBannerProgress : 0
+
+    screenTimeBannerView(
+        title: "Latest Screen Time",
+        total: total,
+        progress: progress,
+        progressLabel: hasData
+            ? "\(Int(progress * 100))% of the session"
+            : "Fetching screen time…"
+    )
+}
+
+@ViewBuilder
+private func screenTimeBannerView(
+    title: String,
+    total: String,
+    progress: Double,
+    progressLabel: String
+) -> some View {
     VStack(alignment: .leading, spacing: 15) {
-        Text("Latest Screen Time")
+        Text(title)
             .font(Font.system(size: 24, weight: .semibold))
 
         Text("Total")
 
-        Text("3H 4M")
+        Text(total)
             .font(Font.system(size: 40, weight: .semibold))
 
         VStack(alignment: .leading) {
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .foregroundStyle(.white)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .foregroundStyle(.white)
 
-                Capsule()
-                    .frame(width: 230)
-                    .foregroundStyle(.primaryTeal)
+                    Capsule()
+                        .frame(width: geometry.size.width * progress)
+                        .foregroundStyle(.primaryTeal)
+                }
             }
             .frame(height: 12)
-            Text("75% of the session")
+
+            Text(progressLabel)
         }
     }
     .padding(.horizontal, 30)
@@ -338,16 +449,16 @@ func previousSessionView() -> some View {
 }
 
 // MARK: Additional Time Sheet View
-func addTimeView (addingTime: Binding<Bool>) -> some View {
+func addTimeView(addingTime: Binding<Bool>) -> some View {
     @State var hours = 0
     @State var minutes = 25 // defaults to 25 minutes for adding
     @State var seconds = 0
-    
+
     // total time added as seconds
     var totalSeconds: Int {
         hours * 3600 + minutes * 60 + seconds
     }
-    
+
     return VStack(alignment: .center) {
         // top bar
         ZStack {
@@ -359,14 +470,14 @@ func addTimeView (addingTime: Binding<Bool>) -> some View {
                         .padding(20)
                 }
                 .glassEffect(in: Circle())
-                
+
                 Spacer()
             }
-            
+
             Text("Add Additional Time")
                 .font(.system(size: 20, weight: .semibold))
         }
-        
+
         // time adder
         HStack {
             Picker("Hours", selection: $hours) {
@@ -388,7 +499,7 @@ func addTimeView (addingTime: Binding<Bool>) -> some View {
             }
         }
         .pickerStyle(.wheel)
-        
+
         PrimaryButton(
             title: "Add Time",
             size: .large,
@@ -404,5 +515,10 @@ func addTimeView (addingTime: Binding<Bool>) -> some View {
 #Preview {
     NavigationStack {
         DashboardView()
+            .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
+            .environment(\.sessionCoordinator, SessionCoordinator(
+                sessionRepository: InMemorySessionRepository(),
+                screenTimeService: ScreenTimeService()
+            ))
     }
 }

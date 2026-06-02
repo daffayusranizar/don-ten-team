@@ -18,7 +18,20 @@ struct ParentGuideApp: App {
             RootView()
                 .environment(\.featureFlags, container.featureFlags)
                 .environment(\.childRepository, container.childRepository)
+                .environment(\.sessionRepository, container.sessionRepository)
                 .environment(\.profileViewModel, container.profileViewModel)
+                .environment(\.sessionCoordinator, container.sessionCoordinator)
+                .environment(\.kidSessionViewModel, container.kidSessionViewModel)
+                .environment(\.familyControlsAuth, container.familyControlsAuth)
+                .overlay {
+                    if let request = container.sessionCoordinator.usageReportRequest {
+                        SessionUsageReportHost(
+                            childId: request.childId,
+                            startAt: request.startAt,
+                            stopAt: request.stopAt
+                        )
+                    }
+                }
         }
         .modelContainer(container.modelContainer)
     }

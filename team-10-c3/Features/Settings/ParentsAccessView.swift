@@ -10,7 +10,8 @@ import SwiftUI
 struct ParentsAccessView: View {
     @State var changePassword: Bool = false
     @State var setFaceID: Bool = false
-    
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
+
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -63,7 +64,28 @@ struct ParentsAccessView: View {
                     .fill(.primarySoftPurple)
                     .opacity(0.2)
             )
-            
+
+            FamilyActivityPickerSection()
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(.primarySoftPurple)
+                        .opacity(0.2)
+                )
+
+            if !familyControlsAuth.isAuthorized {
+                PrimaryButton(
+                    title: "Authorize Screen Time",
+                    size: .medium,
+                    systemImage: "hourglass",
+                    action: {
+                        Task {
+                            try? await familyControlsAuth.requestAuthorization()
+                        }
+                    }
+                )
+            }
+
             Spacer()
         }
         .navigationBarBackButtonHidden(true)

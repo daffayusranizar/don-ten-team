@@ -52,6 +52,11 @@ struct KidSessionEndView: View {
 #Preview {
     NavigationStack {
         KidSessionEndView()
-            .environment(\.kidSessionViewModel, KidSessionViewModel())
+            .environment(\.kidSessionViewModel, KidSessionViewModel(
+                sessionCoordinator: SessionCoordinator(
+                    sessionRepository: InMemorySessionRepository(),
+                    screenTimeService: ScreenTimeService()
+                )
+            ))
     }
 }

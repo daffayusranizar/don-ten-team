@@ -156,6 +156,11 @@ struct KidSessionSetupView: View {
 #Preview {
     NavigationStack {
         KidSessionSetupView()
-            .environment(\.kidSessionViewModel, KidSessionViewModel())
+            .environment(\.kidSessionViewModel, KidSessionViewModel(
+                sessionCoordinator: SessionCoordinator(
+                    sessionRepository: InMemorySessionRepository(),
+                    screenTimeService: ScreenTimeService()
+                )
+            ))
     }
 }

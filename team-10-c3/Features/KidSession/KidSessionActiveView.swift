@@ -79,14 +79,18 @@ struct KidSessionActiveView: View {
     NavigationStack {
         KidSessionActiveView()
             .environment(\.kidSessionViewModel, {
-                let viewModel = KidSessionViewModel()
+                let coordinator = SessionCoordinator(
+                    sessionRepository: InMemorySessionRepository(),
+                    screenTimeService: ScreenTimeService()
+                )
+                let viewModel = KidSessionViewModel(sessionCoordinator: coordinator)
                 viewModel.selectedChild = Child(
                     name: "Raka",
                     dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date()) ?? Date(),
                     gender: .boy
                 )
-                viewModel.remainingSeconds = 900
-                viewModel.isSessionActive = true
+                coordinator.remainingSeconds = 900
+                coordinator.isSessionActive = true
                 return viewModel
             }())
     }
