@@ -3,7 +3,7 @@ import AVFoundation
 
 class SampleHandler: RPBroadcastSampleHandler {
     
-    private var appGroupIdentifier: String {
+    private var appGroupID: String {
         Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String
             ?? "group.abui.don-ten-team.shared"
     }
