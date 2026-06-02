@@ -140,11 +140,14 @@ struct KidSessionSetupView: View {
 
     private func startSession() {
         familyControlsAuth.refreshAuthorizationStatus()
-        guard familyControlsAuth.canRecordSessionUsage else {
-            showScreenTimeAuthAlert = true
-            return
+        Task {
+            do {
+                try await familyControlsAuth.ensureUsageAuthorization()
+                startSessionAfterAuthorization()
+            } catch {
+                showScreenTimeAuthAlert = true
+            }
         }
-        startSessionAfterAuthorization()
     }
 
     private func startSessionAfterAuthorization() {

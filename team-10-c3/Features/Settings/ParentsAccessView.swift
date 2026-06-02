@@ -76,17 +76,20 @@ struct ParentsAccessView: View {
                         .opacity(0.2)
                 )
 
-            if !familyControlsAuth.isAuthorized {
+            if !familyControlsAuth.canRecordSessionUsage {
                 PrimaryButton(
-                    title: "Authorize Screen Time",
+                    title: "Allow Screen Time usage",
                     size: .medium,
                     systemImage: "hourglass",
                     action: {
                         Task {
-                            try? await familyControlsAuth.requestAuthorization()
+                            try? await familyControlsAuth.ensureUsageAuthorization()
                         }
                     }
                 )
+                Text("Status: \(familyControlsAuth.authorizationStatusDescription)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             #if DEBUG

@@ -11,8 +11,21 @@ protocol FamilyControlsAuthProviding: AnyObject {
     var authorizationStatusDescription: String { get }
     func refreshAuthorizationStatus()
     func requestAuthorization() async throws
+    /// Shows the system Screen Time permission sheet if usage data access is not granted yet.
+    func ensureUsageAuthorization() async throws
     /// User-facing reason when `canRecordSessionUsage` is false; nil when recording is allowed.
     func recordingBlockedMessage() -> String?
+}
+
+enum FamilyControlsAuthError: LocalizedError {
+    case usageAccessNotGranted(status: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .usageAccessNotGranted(let status):
+            return ScreenTimeFetchError.missingUsageDataAccess(status: status).localizedDescription
+        }
+    }
 }
 
 @Observable
@@ -55,6 +68,20 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
         refreshAuthorizationStatus()
     }
+
+    func ensureUsageAuthorization() async throws {
+        refreshAuthorizationStatus()
+        if canRecordSessionUsage { return }
+
+        try await requestAuthorization()
+        refreshAuthorizationStatus()
+
+        guard canRecordSessionUsage else {
+            throw FamilyControlsAuthError.usageAccessNotGranted(
+                status: authorizationStatusDescription
+            )
+        }
+    }
 }
 
 @Observable
@@ -73,5 +100,9 @@ final class PreviewFamilyControlsAuthService: FamilyControlsAuthProviding {
         isAuthorized = true
         hasUsageDataAccess = true
         canRecordSessionUsage = true
+    }
+
+    func ensureUsageAuthorization() async throws {
+        try await requestAuthorization()
     }
 }

@@ -33,17 +33,17 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("Enable Screen Time", isPresented: $isPresented) {
+            .alert("Screen Time permission", isPresented: $isPresented) {
                 Button("Not Now", role: .cancel) {
                     onDismissWithoutAuth?()
                 }
-                Button("Enable") {
+                Button("Continue") {
                     Task { await requestScreenTimeAccess() }
                 }
             } message: {
                 Text(
-                    "Allow Screen Time access so the app can show per-app usage after each session. " +
-                    "Apple will ask you to confirm on the next screen."
+                    "ParentGuide needs Screen Time permission to read per-app usage for your sessions. " +
+                    "Tap Continue for Apple’s permission screen, then allow access to app usage."
                 )
             }
             .alert("Screen Time Access", isPresented: $showAuthError) {
@@ -55,17 +55,11 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
 
     private func requestScreenTimeAccess() async {
         do {
-            try await familyControlsAuth.requestAuthorization()
-            familyControlsAuth.refreshAuthorizationStatus()
-            if familyControlsAuth.canRecordSessionUsage {
-                onAuthorized?()
-            } else {
-                authErrorMessage = familyControlsAuth.recordingBlockedMessage()
-                    ?? "Screen Time access was not granted. Try again in Parent's Access."
-                showAuthError = true
-            }
+            try await familyControlsAuth.ensureUsageAuthorization()
+            onAuthorized?()
         } catch {
-            authErrorMessage = error.localizedDescription
+            authErrorMessage = familyControlsAuth.recordingBlockedMessage()
+                ?? error.localizedDescription
             showAuthError = true
         }
     }

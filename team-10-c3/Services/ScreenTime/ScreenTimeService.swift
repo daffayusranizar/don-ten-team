@@ -14,6 +14,7 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
     private let center = DeviceActivityCenter()
     private let activityName = DeviceActivityName(ScreenTimeConstants.sessionActivityName)
 
+    /// Delay before each of three aggregate attempts (no early exit on app totals).
     private let fetchAttemptDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(6)]
 
     func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws {
@@ -63,7 +64,7 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
         var best: SessionUsagePayload?
         var lastError: Error?
 
-        for delay in fetchAttemptDelays {
+        for (attempt, delay) in fetchAttemptDelays.enumerated() {
             try await Task.sleep(for: delay)
             do {
                 let payload = try await DeviceActivityUsageAggregator.aggregate(
@@ -76,14 +77,26 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
                     new: payload,
                     wallClockSeconds: wallClockSeconds
                 )
-                if usageBackfillIsRichEnough(best?.apps ?? []) { break }
+                AgentDebugLog.log(
+                    hypothesisId: "D",
+                    location: "ScreenTimeService.fetchUsage:attempt",
+                    message: "aggregate attempt finished",
+                    data: [
+                        "attempt": String(attempt + 1),
+                        "appCount": String(payload.apps.count),
+                        "bestAppCount": String(best?.apps.count ?? 0),
+                    ]
+                )
             } catch {
                 lastError = error
                 AgentDebugLog.log(
                     hypothesisId: "D",
                     location: "ScreenTimeService.fetchUsage:attempt",
                     message: "activityData attempt failed",
-                    data: ["error": String(describing: error)]
+                    data: [
+                        "attempt": String(attempt + 1),
+                        "error": String(describing: error),
+                    ]
                 )
             }
         }
@@ -131,10 +144,6 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
         )
         return sanitized
     }
-}
-
-private func usageBackfillIsRichEnough(_ apps: [AppUsageRow]) -> Bool {
-    apps.contains { $0.durationSeconds >= 30 }
 }
 
 private extension DateComponents {

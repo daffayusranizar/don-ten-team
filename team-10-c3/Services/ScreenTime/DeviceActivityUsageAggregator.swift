@@ -78,6 +78,7 @@ enum DeviceActivityUsageAggregator {
                         childId: childId,
                         startAt: startAt,
                         stopAt: stopAt,
+                        wallClockSeconds: wallClockSeconds,
                         filter: labeled.filter,
                         filterLabel: labeled.label,
                         policy: policy,
@@ -116,7 +117,15 @@ enum DeviceActivityUsageAggregator {
             wallClockSeconds: wallClockSeconds
         )
 
+        let richestFallback = scoredCandidates.max(by: {
+            let lhs = $0.payload.apps.map(\.durationSeconds).reduce(0, +)
+            let rhs = $1.payload.apps.map(\.durationSeconds).reduce(0, +)
+            if lhs != rhs { return lhs < rhs }
+            return $0.payload.apps.count < $1.payload.apps.count
+        })?.payload
+
         let base = selected?.payload
+            ?? richestFallback
             ?? emptyPayload(childId: childId, startAt: startAt, stopAt: stopAt)
 
         if let selected {
@@ -160,6 +169,7 @@ enum DeviceActivityUsageAggregator {
         childId: UUID,
         startAt: Date,
         stopAt: Date,
+        wallClockSeconds: Int,
         filter: DeviceActivityFilter,
         filterLabel: String,
         policy: DeviceActivityData.Policy,
@@ -174,10 +184,8 @@ enum DeviceActivityUsageAggregator {
             policy: String(describing: policy)
         )
 
-        let sessionWallClockSeconds = max(1, Int(stopAt.timeIntervalSince(startAt)))
-
-        // bundleId -> hourStart -> (displayName, capped seconds); sum per hour then hour cap, sum across hours.
-        var byBundleHour: [String: [Date: (name: String, seconds: Int)]] = [:]
+        // bundleId -> (displayName, raw sum in session); cap each app at wall-clock before save.
+        var byBundle: [String: (name: String, seconds: Int)] = [:]
         var segmentCount = 0
         var overlappingSegmentCount = 0
         var applicationCount = 0
@@ -190,7 +198,7 @@ enum DeviceActivityUsageAggregator {
                 for await segment in activityData.activitySegments {
                     segmentCount += 1
                     let segmentInterval = segment.dateInterval
-                    guard let hourOverlap = SessionUsageHourMerge.normalizedHourOverlap(
+                    guard SessionUsageHourMerge.overlapsSession(
                         segmentInterval: segmentInterval,
                         sessionStart: startAt,
                         sessionEnd: stopAt
@@ -219,13 +227,6 @@ enum DeviceActivityUsageAggregator {
                                 displayName: resolved.displayName
                             )
 
-                            let overlapCap = max(1, Int(hourOverlap.overlapInHour.rounded()))
-                            let capped = SessionUsageHourMerge.cappedSeconds(
-                                rawSeconds: appSeconds,
-                                overlapInHour: hourOverlap.overlapInHour,
-                                sessionWallClockSeconds: sessionWallClockSeconds
-                            )
-
                             guard userFacing else {
                                 #if DEBUG
                                 SessionUsageNoiseFilter.logDropped(
@@ -241,37 +242,14 @@ enum DeviceActivityUsageAggregator {
                                     rawSeconds: appSeconds,
                                     segmentStart: segmentInterval.start,
                                     segmentEnd: segmentInterval.end,
-                                    disposition: "dropped-noise",
-                                    hourBucketStart: hourOverlap.hourStart,
-                                    normalizedStart: hourOverlap.normalizedStart,
-                                    normalizedEnd: hourOverlap.normalizedEnd,
-                                    overlapCapSeconds: overlapCap,
-                                    sessionCapSeconds: sessionWallClockSeconds,
-                                    cappedSeconds: capped
+                                    disposition: "dropped-noise"
                                 )
                                 continue
                             }
 
-                            guard capped > 0 else { continue }
-
-                            var hourMap = byBundleHour[resolved.bundleId] ?? [:]
-                            let prior = hourMap[hourOverlap.hourStart]?.seconds ?? 0
-                            let hourOverlapSec = SessionUsageHourMerge.overlapSecondsInHour(
-                                hourStart: hourOverlap.hourStart,
-                                sessionStart: startAt,
-                                sessionEnd: stopAt
-                            )
-                            let hourly = SessionUsageHourMerge.accumulateInHourBucket(
-                                existing: prior,
-                                added: capped,
-                                hourOverlapSeconds: hourOverlapSec
-                            )
-                            let agg = hourly > prior ? "sum_capped" : "skip"
-                            hourMap[hourOverlap.hourStart] = (
-                                resolved.displayName,
-                                hourly
-                            )
-                            byBundleHour[resolved.bundleId] = hourMap
+                            let prior = byBundle[resolved.bundleId]?.seconds ?? 0
+                            let bundleTotal = prior + appSeconds
+                            byBundle[resolved.bundleId] = (resolved.displayName, bundleTotal)
 
                             ScreenTimePipelineLogger.logRawAPIRow(
                                 bundleId: resolved.bundleId,
@@ -281,13 +259,9 @@ enum DeviceActivityUsageAggregator {
                                 segmentStart: segmentInterval.start,
                                 segmentEnd: segmentInterval.end,
                                 disposition: "kept",
-                                hourBucketStart: hourOverlap.hourStart,
-                                normalizedStart: hourOverlap.normalizedStart,
-                                normalizedEnd: hourOverlap.normalizedEnd,
-                                overlapCapSeconds: overlapCap,
-                                sessionCapSeconds: sessionWallClockSeconds,
-                                cappedSeconds: capped,
-                                aggregation: agg
+                                sessionCapSeconds: wallClockSeconds,
+                                bucketSeconds: bundleTotal,
+                                aggregation: bundleTotal > prior ? "sum" : "skip"
                             )
                         }
                     }
@@ -307,17 +281,11 @@ enum DeviceActivityUsageAggregator {
             throw error
         }
 
-        let apps = byBundleHour.map { bundleId, hourMap in
-            let name = hourMap.values.first?.name ?? bundleId
-            let sumAcrossHours = hourMap.values.map(\.seconds).reduce(0, +)
-            let seconds = SessionUsageHourMerge.cappedBundleTotal(
-                sumAcrossHours: sumAcrossHours,
-                sessionWallClockSeconds: sessionWallClockSeconds
-            )
-            return AppUsageRow(
-                displayName: name,
+        let apps = byBundle.map { bundleId, entry in
+            AppUsageRow(
+                displayName: entry.name,
                 bundleIdentifier: bundleId,
-                durationSeconds: seconds
+                durationSeconds: min(entry.seconds, wallClockSeconds)
             )
         }
         .sorted { $0.durationSeconds > $1.durationSeconds }

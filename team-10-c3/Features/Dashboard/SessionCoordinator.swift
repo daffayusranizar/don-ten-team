@@ -110,12 +110,9 @@ final class SessionCoordinator {
         formatDuration(seconds: latestBannerDisplaySeconds)
     }
 
-    /// Wall-clock until Screen Time apps arrive; then per-app Screen Time total.
+    /// Exact parent session timer for the Last Screen Time banner.
     var latestBannerDisplaySeconds: Int {
-        if latestScreenTimeAppTotalSeconds > 0 {
-            return latestScreenTimeAppTotalSeconds
-        }
-        return latestTotalSeconds
+        latestTotalSeconds
     }
 
     var currentDayProgress: Double {
@@ -341,10 +338,16 @@ final class SessionCoordinator {
 
     func startSession(child: Child, durationMinutes: Int) {
         guard !isSessionActive else { return }
+        Task { await startSessionAuthorized(child: child, durationMinutes: durationMinutes) }
+    }
 
-        familyControlsAuth.refreshAuthorizationStatus()
-        if let blocked = familyControlsAuth.recordingBlockedMessage() {
-            loadError = blocked
+    private func startSessionAuthorized(child: Child, durationMinutes: Int) async {
+        guard !isSessionActive else { return }
+
+        do {
+            try await familyControlsAuth.ensureUsageAuthorization()
+        } catch {
+            loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
             return
         }
 
@@ -384,7 +387,7 @@ final class SessionCoordinator {
         timerTask?.cancel()
         resetPauseState()
 
-        var savedTotalSeconds = elapsedSeconds
+        let plannedSeconds = durationMinutes * 60
         var savedApps: [AppUsageRow] = []
         var fetchError: String?
 
@@ -394,33 +397,30 @@ final class SessionCoordinator {
             isRefreshingScreenTime = true
             defer { isRefreshingScreenTime = false }
 
-            let payload = try await screenTimeService.fetchUsage(
-                childId: childId,
-                startAt: startAt,
-                stopAt: stopAt
-            )
-            // #region agent log
-            ScreenTimePipelineLogger.logOutput(
-                stage: "afterFetch",
-                apps: payload.apps,
-                sessionElapsedSeconds: elapsedSeconds
-            )
-            AgentDebugLog.log(
-                hypothesisId: "E",
-                location: "SessionCoordinator.stopSession:afterFetch",
-                message: "fetch completed",
-                data: [
-                    "appCount": String(payload.apps.count),
-                    "appSumSeconds": String(payload.apps.map(\.durationSeconds).reduce(0, +)),
-                    "appsList": ScreenTimePipelineLogger.formatApps(payload.apps),
-                    "payloadTotalSeconds": String(payload.totalSeconds),
-                    "elapsedSeconds": String(elapsedSeconds),
-                ]
-            )
-            // #endregion
-            savedApps = payload.apps
-            savedTotalSeconds = elapsedSeconds
-            latestScreenTimeAppTotalSeconds = payload.apps.map(\.durationSeconds).reduce(0, +)
+            do {
+                try await familyControlsAuth.ensureUsageAuthorization()
+            } catch {
+                fetchError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
+            }
+
+            if fetchError == nil {
+            do {
+                let payload = try await screenTimeService.fetchUsage(
+                    childId: childId,
+                    startAt: startAt,
+                    stopAt: stopAt
+                )
+                savedApps = payload.apps
+                latestScreenTimeAppTotalSeconds = payload.apps.map(\.durationSeconds).reduce(0, +)
+                ScreenTimePipelineLogger.logOutput(
+                    stage: "afterFetch",
+                    apps: payload.apps,
+                    sessionElapsedSeconds: elapsedSeconds
+                )
+            } catch {
+                fetchError = error.localizedDescription
+            }
+            }
             try? screenTimeService.stopMonitoring()
         } catch {
             fetchError = error.localizedDescription
@@ -434,42 +434,25 @@ final class SessionCoordinator {
                 childId: childId,
                 startAt: startAt,
                 stopAt: stopAt,
-                totalSeconds: savedTotalSeconds,
-                plannedDurationSeconds: durationMinutes * 60,
+                totalSeconds: elapsedSeconds,
+                plannedDurationSeconds: plannedSeconds,
                 appUsageRows: savedApps
             )
-            // #region agent log
             ScreenTimePipelineLogger.logOutput(
                 stage: "afterSave",
                 apps: snapshot.appUsageRows,
-                sessionElapsedSeconds: savedTotalSeconds,
+                sessionElapsedSeconds: elapsedSeconds,
                 extra: [
                     "savedScreenTimeAppTotal": String(snapshot.screenTimeAppTotalSeconds),
                     "fetchError": fetchError ?? "none",
                 ]
             )
-            AgentDebugLog.log(
-                hypothesisId: "E",
-                location: "SessionCoordinator.stopSession:afterSave",
-                message: "snapshot saved",
-                data: [
-                    "childId": childId.uuidString,
-                    "savedTotalSeconds": String(savedTotalSeconds),
-                    "savedScreenTimeAppTotal": String(snapshot.screenTimeAppTotalSeconds),
-                    "savedAppCount": String(savedApps.count),
-                    "snapshotAppCount": String(snapshot.appUsageRows.count),
-                    "appsList": ScreenTimePipelineLogger.formatApps(snapshot.appUsageRows),
-                    "snapshotJSONLength": String(snapshot.appUsageJSON.count),
-                    "fetchError": fetchError ?? "none",
-                ]
-            )
-            // #endregion
 
             applyCompletedDisplay(
                 childId: childId,
                 startAt: startAt,
                 stopAt: stopAt,
-                totalSeconds: savedTotalSeconds,
+                totalSeconds: elapsedSeconds,
                 apps: savedApps,
                 snapshot: snapshot
             )
@@ -478,21 +461,12 @@ final class SessionCoordinator {
                     state.hasTodayActivity = today.totalSeconds > 0
                     state.currentDayTotalSeconds = today.totalSeconds
                 } else {
-                    state.hasTodayActivity = savedTotalSeconds > 0
-                    state.currentDayTotalSeconds = savedTotalSeconds
+                    state.hasTodayActivity = elapsedSeconds > 0
+                    state.currentDayTotalSeconds = elapsedSeconds
                 }
             }
+            loadSummaryActivity(for: childId, publishUI: refreshChildId == childId)
             loadError = fetchError
-
-            if savedApps.isEmpty || !usageBackfillIsRichEnough(savedApps) {
-                scheduleUsageBackfill(
-                    childId: childId,
-                    startAt: startAt,
-                    stopAt: stopAt,
-                    elapsedSeconds: elapsedSeconds,
-                    initialApps: savedApps
-                )
-            }
         } catch {
             loadError = error.localizedDescription
         }
@@ -642,7 +616,7 @@ final class SessionCoordinator {
             applyLatestFromCache(completed: completed, into: &state)
         }
 
-        if let snapshot = completed.snapshot, !snapshot.appUsageRows.isEmpty {
+        if let snapshot = completed.snapshot, snapshotHasUsableAppBreakdown(snapshot) {
             // #region agent log
             AgentDebugLog.log(
                 hypothesisId: "H1",
@@ -661,101 +635,33 @@ final class SessionCoordinator {
             return
         }
 
-        let showFetching = childDisplayState(for: childId).latestScreenTimeAppTotalSeconds == 0
-            && childDisplayState(for: childId).latestTotalSeconds > 0
-        if showFetching, isActiveRefresh(childId: childId, epoch: epoch) {
-            isRefreshingScreenTime = true
-        }
-        defer {
-            if isActiveRefresh(childId: childId, epoch: epoch) {
-                isRefreshingScreenTime = false
-            }
-        }
+        let elapsedSeconds = max(
+            0,
+            Int(completed.stoppedAt.timeIntervalSince(completed.startedAt))
+        )
+        let plannedSeconds = plannedLimitSeconds(for: completed)
+        let publish = isActiveRefresh(childId: childId, epoch: epoch)
 
-        do {
-            let payload = try await screenTimeService.fetchUsage(
-                childId: childId,
-                startAt: completed.startedAt,
-                stopAt: completed.stoppedAt
-            )
-
-            let elapsedSeconds = max(
-                0,
-                Int(completed.stoppedAt.timeIntervalSince(completed.startedAt))
-            )
-
-            let plannedSeconds = plannedLimitSeconds(for: completed)
-            let screenTimeSeconds = payload.apps.map(\.durationSeconds).reduce(0, +)
-            _ = try sessionRepository.saveUsageSnapshot(
-                childId: childId,
-                startAt: completed.startedAt,
-                stopAt: completed.stoppedAt,
-                totalSeconds: elapsedSeconds,
-                plannedDurationSeconds: plannedSeconds,
-                appUsageRows: payload.apps
-            )
-
-            let publish = isActiveRefresh(childId: childId, epoch: epoch)
-            mutateChildDisplayState(for: childId, publish: publish) { state in
-                applyLastSessionBanner(
-                    completed: completed,
-                    screenTimeSeconds: screenTimeSeconds,
-                    into: &state
-                )
-                if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
-                    state.hasTodayActivity = today.totalSeconds > 0
-                    state.currentDayTotalSeconds = today.totalSeconds
-                }
-            }
-            if !publish {
-                // #region agent log
-                AgentDebugLog.log(
-                    hypothesisId: "H1",
-                    location: "SessionCoordinator.refreshLatestScreenTimeFromAPI",
-                    message: "stale fetch — updated child cache only",
-                    data: ["childId": childId.uuidString, "epoch": String(epoch)]
-                )
-                // #endregion
-            }
+        await fetchAndPersistUsage(
+            childId: childId,
+            startAt: completed.startedAt,
+            stopAt: completed.stoppedAt,
+            elapsedSeconds: elapsedSeconds,
+            plannedSeconds: plannedSeconds,
+            publish: publish
+        )
+        if !publish {
             // #region agent log
             AgentDebugLog.log(
                 hypothesisId: "H1",
                 location: "SessionCoordinator.refreshLatestScreenTimeFromAPI",
-                message: "API fetch done — loadSummary",
-                data: [
-                    "childId": childId.uuidString,
-                    "epoch": String(epoch),
-                    "currentEpoch": String(refreshEpoch),
-                    "epochStale": String(epoch != refreshEpoch),
-                    "fetchedAppCount": String(payload.apps.count),
-                ]
-            )
-            // #endregion
-            loadSummaryActivity(for: childId, epoch: epoch)
-        } catch {
-            let publish = isActiveRefresh(childId: childId, epoch: epoch)
-            if publish {
-                mutateChildDisplayState(for: childId, publish: true) { state in
-                    applyLatestFromCache(completed: completed, into: &state)
-                }
-                if let error = error as? ScreenTimeFetchError {
-                    loadError = error.localizedDescription
-                }
-            }
-            // #region agent log
-            AgentDebugLog.log(
-                hypothesisId: "H1",
-                location: "SessionCoordinator.refreshLatestScreenTimeFromAPI",
-                message: "API fetch failed",
-                data: [
-                    "childId": childId.uuidString,
-                    "epoch": String(epoch),
-                    "currentEpoch": String(refreshEpoch),
-                    "error": String(describing: error),
-                ]
+                message: "stale fetch — updated child cache only",
+                data: ["childId": childId.uuidString, "epoch": String(epoch)]
             )
             // #endregion
         }
+        guard isActiveRefresh(childId: childId, epoch: epoch) else { return }
+        loadSummaryActivity(for: childId, epoch: epoch)
     }
 
     private func applyCachedBannerState(for childId: UUID, publish: Bool) {
@@ -801,7 +707,7 @@ final class SessionCoordinator {
         let screen = screenTimeSeconds ?? completed.snapshot?.resolvedScreenTimeSeconds ?? 0
         state.latestScreenTimeAppTotalSeconds = screen
         state.latestTotalSeconds = max(state.latestTotalSeconds, wallClock)
-        state.latestBannerTotalSeconds = screen > 0 ? screen : wallClock
+        state.latestBannerTotalSeconds = wallClock
     }
 
     private func applyLatestFromCache(
@@ -811,8 +717,8 @@ final class SessionCoordinator {
         applyLastSessionBanner(completed: completed, into: &state)
     }
 
-    private func loadSummaryActivity(for childId: UUID, epoch: UInt64 = 0) {
-        let publish = isActiveRefresh(childId: childId, epoch: epoch)
+    private func loadSummaryActivity(for childId: UUID, epoch: UInt64 = 0, publishUI: Bool? = nil) {
+        let publish = publishUI ?? isActiveRefresh(childId: childId, epoch: epoch)
         let epochStale = epoch > 0 && epoch != refreshEpoch
         if !publish {
             // #region agent log
@@ -923,102 +829,67 @@ final class SessionCoordinator {
         resetSummaryDisplay(for: childId, publish: publish)
     }
 
-    /// Screen Time data can arrive seconds after stop; retry without blocking the UI.
-    private func scheduleUsageBackfill(
+    /// Non-empty persisted app rows (ignore wall-clock-only snapshots).
+    private func snapshotHasUsableAppBreakdown(_ snapshot: SessionUsageSnapshot) -> Bool {
+        !snapshot.appUsageRows.isEmpty
+    }
+
+    /// Pull-to-refresh / dashboard refresh: triple-attempt fetch, upsert snapshot, update summary.
+    private func fetchAndPersistUsage(
         childId: UUID,
         startAt: Date,
         stopAt: Date,
         elapsedSeconds: Int,
-        initialApps: [AppUsageRow]
-    ) {
-        let delays: [Duration] = [.seconds(5), .seconds(12), .seconds(25)]
-        Task {
-            var previousApps = initialApps
-            for delay in delays {
-                try? await Task.sleep(for: delay)
-                guard !isSessionActive else { return }
-                do {
-                    let payload = try await screenTimeService.fetchUsage(
-                        childId: childId,
-                        startAt: startAt,
-                        stopAt: stopAt
-                    )
-                    guard !payload.apps.isEmpty else { continue }
+        plannedSeconds: Int,
+        publish: Bool
+    ) async {
+        isRefreshingScreenTime = true
+        defer { isRefreshingScreenTime = false }
 
-                    let newScore = ScreenTimePayloadSelector.qualityScore(
-                        payload: payload,
-                        wallClockSeconds: elapsedSeconds
-                    )
-                    let previousScore = ScreenTimePayloadSelector.qualityScore(
-                        payload: SessionUsagePayload(
-                            childId: childId,
-                            startAt: startAt,
-                            stopAt: stopAt,
-                            totalSeconds: 0,
-                            apps: previousApps
-                        ),
-                        wallClockSeconds: elapsedSeconds
-                    )
-                    let stable = usageBackfillIsStable(previous: previousApps, new: payload.apps)
-                    let richEnough = usageBackfillIsRichEnough(payload.apps)
-                    guard newScore > previousScore || stable else { continue }
-
-                    _ = try sessionRepository.saveUsageSnapshot(
-                        childId: childId,
-                        startAt: startAt,
-                        stopAt: stopAt,
-                        totalSeconds: elapsedSeconds,
-                        plannedDurationSeconds: durationMinutes * 60,
-                        appUsageRows: payload.apps
-                    )
-                    let completed = CompletedSessionInfo(
-                        childId: childId,
-                        startedAt: startAt,
-                        stoppedAt: stopAt,
-                        snapshot: nil
-                    )
-                    let publish = refreshChildId == childId
-                    mutateChildDisplayState(for: childId, publish: publish) { state in
-                        applyLastSessionBanner(
-                            completed: completed,
-                            screenTimeSeconds: payload.apps.map(\.durationSeconds).reduce(0, +),
-                            plannedLimitSeconds: durationMinutes * 60,
-                            into: &state
-                        )
-                        state.hasTodayActivity = true
-                        if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
-                            state.currentDayTotalSeconds = today.totalSeconds
-                        } else {
-                            state.currentDayTotalSeconds = elapsedSeconds
-                        }
-                    }
-                    loadSummaryActivity(for: childId)
-                    if publish {
-                        loadError = nil
-                    }
-                    previousApps = payload.apps
-                    if stable || richEnough { return }
-                } catch {
-                    if loadError == nil {
-                        loadError = error.localizedDescription
-                    }
+        do {
+            try await familyControlsAuth.ensureUsageAuthorization()
+            let payload = try await screenTimeService.fetchUsage(
+                childId: childId,
+                startAt: startAt,
+                stopAt: stopAt
+            )
+            let snapshot = try sessionRepository.saveUsageSnapshot(
+                childId: childId,
+                startAt: startAt,
+                stopAt: stopAt,
+                totalSeconds: elapsedSeconds,
+                plannedDurationSeconds: plannedSeconds,
+                appUsageRows: payload.apps
+            )
+            let completed = CompletedSessionInfo(
+                childId: childId,
+                startedAt: startAt,
+                stoppedAt: stopAt,
+                snapshot: snapshot
+            )
+            let shouldPublish = publish && refreshChildId == childId
+            mutateChildDisplayState(for: childId, publish: shouldPublish) { state in
+                applyLastSessionBanner(
+                    completed: completed,
+                    screenTimeSeconds: payload.apps.map(\.durationSeconds).reduce(0, +),
+                    plannedLimitSeconds: plannedSeconds,
+                    into: &state
+                )
+                if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
+                    state.hasTodayActivity = today.totalSeconds > 0
+                    state.currentDayTotalSeconds = today.totalSeconds
                 }
             }
+            loadSummaryActivity(for: childId, publishUI: shouldPublish)
+            if shouldPublish {
+                latestScreenTimeAppTotalSeconds = payload.apps.map(\.durationSeconds).reduce(0, +)
+                loadError = nil
+            }
+        } catch {
+            if publish, refreshChildId == childId {
+                loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
+            }
         }
-    }
-
-    private func usageBackfillIsRichEnough(_ apps: [AppUsageRow]) -> Bool {
-        apps.contains { $0.durationSeconds >= 30 }
-    }
-
-    private func usageBackfillIsStable(previous: [AppUsageRow], new: [AppUsageRow]) -> Bool {
-        guard !previous.isEmpty, !new.isEmpty else { return false }
-        let previousTop = Set(previous.prefix(3).map(\.bundleIdentifier))
-        let newTop = Set(new.prefix(3).map(\.bundleIdentifier))
-        guard previousTop == newTop else { return false }
-        let previousSum = previous.map(\.durationSeconds).reduce(0, +)
-        let newSum = new.map(\.durationSeconds).reduce(0, +)
-        return newSum > previousSum
     }
 
     private func applySummaryDisplay(
@@ -1057,6 +928,7 @@ final class SessionCoordinator {
         let stopAt = Date()
 
         do {
+            try await familyControlsAuth.ensureUsageAuthorization()
             let payload = try await screenTimeService.fetchUsage(
                 childId: childId,
                 startAt: startAt,
@@ -1069,7 +941,7 @@ final class SessionCoordinator {
                 publish: true
             )
         } catch {
-            loadError = error.localizedDescription
+            loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
         }
     }
 

@@ -148,6 +148,7 @@ enum ScreenTimePipelineLogger {
         overlapCapSeconds: Int? = nil,
         sessionCapSeconds: Int? = nil,
         cappedSeconds: Int? = nil,
+        bucketSeconds: Int? = nil,
         aggregation: String? = nil
     ) {
         var parts = [
@@ -172,6 +173,9 @@ enum ScreenTimePipelineLogger {
         }
         if let cappedSeconds {
             parts.append("capped=\(cappedSeconds)s")
+        }
+        if let bucketSeconds {
+            parts.append("bucket=\(bucketSeconds)s")
         }
         if let aggregation {
             parts.append("agg=\(aggregation)")
@@ -206,6 +210,9 @@ enum ScreenTimePipelineLogger {
         }
         if let cappedSeconds {
             data["cappedSeconds"] = String(cappedSeconds)
+        }
+        if let bucketSeconds {
+            data["bucketSeconds"] = String(bucketSeconds)
         }
         if let aggregation {
             data["aggregation"] = aggregation

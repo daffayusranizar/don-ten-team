@@ -186,19 +186,33 @@ struct DashboardView: View {
     }
 
     private func presentScreenTimePromptIfNeeded() {
-        familyControlsAuth.refreshAuthorizationStatus()
         guard profileViewModel.selectedChild != nil,
-              !familyControlsAuth.canRecordSessionUsage,
               !screenTimeAuthPromptDismissed else {
             return
         }
-        showScreenTimeAuthAlert = true
+        familyControlsAuth.refreshAuthorizationStatus()
+        guard !familyControlsAuth.canRecordSessionUsage else { return }
+
+        Task {
+            do {
+                try await familyControlsAuth.ensureUsageAuthorization()
+            } catch {
+                showScreenTimeAuthAlert = true
+            }
+        }
     }
 
     private func beginKidSessionFlow() {
         familyControlsAuth.refreshAuthorizationStatus()
         guard familyControlsAuth.canRecordSessionUsage else {
-            showScreenTimeAuthAlert = true
+            Task {
+                do {
+                    try await familyControlsAuth.ensureUsageAuthorization()
+                    showKidSession = true
+                } catch {
+                    showScreenTimeAuthAlert = true
+                }
+            }
             return
         }
         showKidSession = true
@@ -268,7 +282,7 @@ func latestSummary(
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .help(
-                    "ParentGuide counts session minutes with a timer. App bars use iOS Screen Time, which reports by the hour. Two sessions in the same hour won't double-count the same app."
+                    "ParentGuide counts session minutes with a timer. App bars sum iOS Screen Time per session today—multiple sessions add together."
                 )
         }
 
@@ -305,7 +319,7 @@ func latestSummary(
                     .foregroundStyle(.secondary)
             }
             if showsTotalsMismatch {
-                Text("That's normal. Session time is exact; app breakdown comes from Apple in hourly slices.")
+                Text("That's normal. Session time is exact; app breakdown is Apple's estimate and can differ when several apps were used in one session.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -507,18 +521,11 @@ func lastScreenTimeView(
     onStartSession: @escaping () -> Void
 ) -> some View {
     let hasData = coordinator.latestTotalSeconds > 0
-        || coordinator.latestScreenTimeAppTotalSeconds > 0
-    let isFetching = coordinator.isRefreshingScreenTime
-        && coordinator.latestScreenTimeAppTotalSeconds == 0
-        && coordinator.latestTotalSeconds > 0
     let total = hasData
         ? coordinator.formattedLatestBannerTotal
-        : (isFetching ? "…" : "—")
+        : "—"
 
     let progressLabel: String = {
-        if isFetching {
-            return "Fetching screen time…"
-        }
         if hasData {
             return "\(Int(coordinator.latestBannerProgress * 100))% of the session"
         }

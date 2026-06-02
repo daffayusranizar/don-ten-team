@@ -38,13 +38,19 @@ enum ScreenTimePayloadSelector {
         return scored.max(by: { $0.score < $1.score })
     }
 
-    /// Prefer the richer of two successive fetches (backfill), not max per app across filters.
+    /// Prefer the richer of two successive fetch attempts (same session window).
     static func preferRicher(
         existing: SessionUsagePayload?,
         new: SessionUsagePayload,
         wallClockSeconds: Int
     ) -> SessionUsagePayload {
         guard let existing else { return new }
+        let existingSum = existing.apps.map(\.durationSeconds).reduce(0, +)
+        let newSum = new.apps.map(\.durationSeconds).reduce(0, +)
+        if existing.apps.isEmpty, !new.apps.isEmpty { return new }
+        if new.apps.isEmpty { return existing }
+        if newSum > existingSum { return new }
+        if existingSum > newSum { return existing }
         let existingScore = score(
             payload: existing,
             wallClockSeconds: wallClockSeconds,
@@ -58,15 +64,6 @@ enum ScreenTimePayloadSelector {
             policy: "new"
         ) ?? Int.min
         return newScore > existingScore ? new : existing
-    }
-
-    static func qualityScore(payload: SessionUsagePayload, wallClockSeconds: Int) -> Int {
-        score(
-            payload: payload,
-            wallClockSeconds: wallClockSeconds,
-            filterLabel: "retry",
-            policy: "retry"
-        ) ?? Int.min
     }
 
     private static func score(

@@ -62,6 +62,31 @@ private func persistedUserFacingApps(from rows: [AppUsageRow]) -> [AppUsageRow] 
     SessionUsageNoiseFilter.userFacingApps(SessionUsageSanitizer.sanitizedApps(rows))
 }
 
+private enum SessionSnapshotMatching {
+    static let windowTolerance: TimeInterval = 5
+
+    static func matches(
+        snapshot: SessionUsageSnapshot,
+        childId: UUID,
+        startAt: Date,
+        stopAt: Date
+    ) -> Bool {
+        snapshot.childId == childId
+            && abs(snapshot.startAt.timeIntervalSince(startAt)) < windowTolerance
+            && abs(snapshot.stopAt.timeIntervalSince(stopAt)) < windowTolerance
+    }
+
+    static func preferRicher(_ lhs: SessionUsageSnapshot, _ rhs: SessionUsageSnapshot) -> SessionUsageSnapshot {
+        if lhs.screenTimeAppTotalSeconds != rhs.screenTimeAppTotalSeconds {
+            return lhs.screenTimeAppTotalSeconds > rhs.screenTimeAppTotalSeconds ? lhs : rhs
+        }
+        if lhs.appUsageRows.count != rhs.appUsageRows.count {
+            return lhs.appUsageRows.count > rhs.appUsageRows.count ? lhs : rhs
+        }
+        return lhs.fetchedAt >= rhs.fetchedAt ? lhs : rhs
+    }
+}
+
 @MainActor
 protocol SessionRepository {
     func recordMarker(childId: UUID, type: SessionMarkerType, timestamp: Date) throws -> SessionMarker
@@ -149,6 +174,33 @@ final class SwiftDataSessionRepository: SessionRepository {
         let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
         let jsonData = try JSONEncoder().encode(apps)
         let json = String(data: jsonData, encoding: .utf8) ?? "[]"
+
+        let matching = try fetchAllSnapshots(for: childId).filter {
+            SessionSnapshotMatching.matches(snapshot: $0, childId: childId, startAt: startAt, stopAt: stopAt)
+        }
+
+        if let existing = matching.reduce(nil as SessionUsageSnapshot?, { best, candidate in
+            guard let best else { return candidate }
+            return SessionSnapshotMatching.preferRicher(best, candidate)
+        }) {
+            existing.fetchedAt = Date()
+            existing.totalSeconds = totalSeconds
+            if plannedDurationSeconds > 0 {
+                existing.plannedDurationSeconds = plannedDurationSeconds
+            }
+            if !apps.isEmpty || screenTimeAppTotal > existing.screenTimeAppTotalSeconds {
+                existing.screenTimeAppTotalSeconds = screenTimeAppTotal
+                existing.appUsageJSON = json
+            } else if screenTimeAppTotal == 0, existing.screenTimeAppTotalSeconds == 0 {
+                existing.appUsageJSON = json
+            }
+            for duplicate in matching where duplicate.id != existing.id {
+                modelContext.delete(duplicate)
+            }
+            try modelContext.save()
+            return existing
+        }
+
         let snapshot = SessionUsageSnapshot(
             childId: childId,
             startAt: startAt,
@@ -277,10 +329,12 @@ final class SwiftDataSessionRepository: SessionRepository {
     }
 
     private func latestSnapshot(childId: UUID, startAt: Date, stopAt: Date) throws -> SessionUsageSnapshot? {
-        let snapshots = try fetchAllSnapshots(for: childId)
-        return snapshots.first {
-            abs($0.startAt.timeIntervalSince(startAt)) < 5
-                && abs($0.stopAt.timeIntervalSince(stopAt)) < 5
+        let matching = try fetchAllSnapshots(for: childId).filter {
+            SessionSnapshotMatching.matches(snapshot: $0, childId: childId, startAt: startAt, stopAt: stopAt)
+        }
+        return matching.reduce(nil) { best, candidate in
+            guard let best else { return candidate }
+            return SessionSnapshotMatching.preferRicher(best, candidate)
         }
     }
 }
@@ -312,11 +366,19 @@ final class InMemorySessionRepository: SessionRepository {
             .max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
         }
-        let snapshot = snapshots.first {
-            $0.childId == childId
-                && abs($0.startAt.timeIntervalSince(matchingStart.timestamp)) < 1
-                && abs($0.stopAt.timeIntervalSince(lastStop.timestamp)) < 1
-        }
+        let snapshot = snapshots
+            .filter {
+                SessionSnapshotMatching.matches(
+                    snapshot: $0,
+                    childId: childId,
+                    startAt: matchingStart.timestamp,
+                    stopAt: lastStop.timestamp
+                )
+            }
+            .reduce(nil as SessionUsageSnapshot?) { best, candidate in
+                guard let best else { return candidate }
+                return SessionSnapshotMatching.preferRicher(best, candidate)
+            }
         return CompletedSessionInfo(
             childId: childId,
             startedAt: matchingStart.timestamp,
@@ -337,6 +399,32 @@ final class InMemorySessionRepository: SessionRepository {
         let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
         let jsonData = try JSONEncoder().encode(apps)
         let json = String(data: jsonData, encoding: .utf8) ?? "[]"
+
+        let matching = snapshots.filter {
+            SessionSnapshotMatching.matches(snapshot: $0, childId: childId, startAt: startAt, stopAt: stopAt)
+        }
+
+        if let existing = matching.reduce(nil as SessionUsageSnapshot?, { best, candidate in
+            guard let best else { return candidate }
+            return SessionSnapshotMatching.preferRicher(best, candidate)
+        }) {
+            existing.fetchedAt = Date()
+            existing.totalSeconds = totalSeconds
+            if plannedDurationSeconds > 0 {
+                existing.plannedDurationSeconds = plannedDurationSeconds
+            }
+            if !apps.isEmpty || screenTimeAppTotal > existing.screenTimeAppTotalSeconds {
+                existing.screenTimeAppTotalSeconds = screenTimeAppTotal
+                existing.appUsageJSON = json
+            } else if screenTimeAppTotal == 0, existing.screenTimeAppTotalSeconds == 0 {
+                existing.appUsageJSON = json
+            }
+            snapshots.removeAll { snap in
+                matching.contains(where: { $0.id == snap.id }) && snap.id != existing.id
+            }
+            return existing
+        }
+
         let snapshot = SessionUsageSnapshot(
             childId: childId,
             startAt: startAt,
