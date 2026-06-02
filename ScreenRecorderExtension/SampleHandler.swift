@@ -4,8 +4,11 @@ import AVFoundation
 class SampleHandler: RPBroadcastSampleHandler {
     
     private var appGroupID: String {
-        Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String
-            ?? "group.abui.don-ten-team.shared"
+        guard let bundleID = Bundle.main.bundleIdentifier else {
+            return "group.abui.don-ten-team.shared"
+        }
+        let prefix = bundleID.components(separatedBy: ".").first ?? "abui"
+        return "group.\(prefix).don-ten-team.shared"
     }
     
     private var assetWriter: AVAssetWriter?
@@ -36,6 +39,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         log("🚀 Extension Started!")
         
+        let currentAppGroupID = appGroupID
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
             Unmanaged.passRetained(self).toOpaque(),
@@ -44,11 +48,11 @@ class SampleHandler: RPBroadcastSampleHandler {
                 let handler = Unmanaged<SampleHandler>.fromOpaque(observer).takeUnretainedValue()
                 handler.log("⏱ Darwin stop signal received.")
                 handler.finalizeAndSave()
-                let err = NSError(domain: "com.team10.c3.timeout", code: 0,
+                let err = NSError(domain: "\(handler.appGroupID).timeout", code: 0,
                                   userInfo: [NSLocalizedDescriptionKey: "Session timer completed"])
                 handler.finishBroadcastWithError(err)
             },
-            "com.team10.c3.stopBroadcast" as CFString,
+            "\(currentAppGroupID).stopBroadcast" as CFString,
             nil,
             .deliverImmediately
         )
@@ -81,11 +85,12 @@ class SampleHandler: RPBroadcastSampleHandler {
                 let delay = Double(targetMinutes * 60)
                 log("⏱ Auto-stopping in \(delay)s")
                 let workItem = DispatchWorkItem { [weak self] in
-                    self?.log("⏱ GCD timer fired.")
-                    self?.finalizeAndSave()
-                    let err = NSError(domain: "com.team10.c3.timeout", code: 0,
+                    guard let self else { return }
+                    self.log("⏱ GCD timer fired.")
+                    self.finalizeAndSave()
+                    let err = NSError(domain: "\(self.appGroupID).timeout", code: 0,
                                       userInfo: [NSLocalizedDescriptionKey: "Session timer completed"])
-                    self?.finishBroadcastWithError(err)
+                    self.finishBroadcastWithError(err)
                 }
                 stopWorkItem = workItem
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -153,7 +158,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
                 CFNotificationCenterPostNotification(
                     CFNotificationCenterGetDarwinNotifyCenter(),
-                    CFNotificationName("com.team10.c3.recordingReady" as CFString),
+                    CFNotificationName("\(self.appGroupID).recordingReady" as CFString),
                     nil, nil, true
                 )
             } catch {

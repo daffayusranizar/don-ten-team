@@ -319,9 +319,10 @@ struct BroadcastPickerView: UIViewRepresentable {
 // This bridge re-fires the Darwin notification as a regular NotificationCenter event
 // so SwiftUI views can observe it normally with .onReceive.
 enum RecordingReadyBridge {
-    static let notification = Notification.Name("com.team10.c3.recordingReady.internal")
+    static let notification = Notification.Name("RecordingReadyInternalNotification")
 
     static func startListening() {
+        let appGroupID = BroadcastConstants.appGroupID
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
             nil, // no observer context needed — we use the global NotificationCenter
@@ -330,7 +331,7 @@ enum RecordingReadyBridge {
                     NotificationCenter.default.post(name: RecordingReadyBridge.notification, object: nil)
                 }
             },
-            "com.team10.c3.recordingReady" as CFString,
+            "\(appGroupID).recordingReady" as CFString,
             nil,
             .deliverImmediately
         )
