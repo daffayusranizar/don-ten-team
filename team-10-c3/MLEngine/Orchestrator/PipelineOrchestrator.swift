@@ -203,15 +203,27 @@ public actor PipelineOrchestrator {
         let fullTranscriptString = fullTranscripts.map { $0.text }.joined(separator: " ")
         let sentimentResult = await sentimentAnalyzer.analyze(transcript: fullTranscriptString)
         if sentimentResult.isHighlyNegative {
+            let snippet = sentimentResult.mostNegativeSnippet ?? "the spoken audio"
             concernSignals.append(ConcernSignal(
-                title: "Negative Sentiment",
-                description: "Highly negative sentiment detected in the spoken audio.",
+                title: "Negative Audio Detected",
+                description: "Highly negative sentiment was detected in the video's audio. For example: \"\(snippet.trimmingCharacters(in: .whitespacesAndNewlines))\"",
                 severity: .high
             ))
         }
         
-        // 9. Return the beautiful result to the UI!
+        // 9. Cleanup & Return the beautiful result to the UI!
         print("[\(Date().formatted(date: .omitted, time: .standard))] ✅ Pipeline complete! Returning results.")
+        
+        // Auto-delete the video file to save disk space
+        do {
+            if FileManager.default.fileExists(atPath: videoURL.path) {
+                try FileManager.default.removeItem(at: videoURL)
+                print("🗑️ Automatically deleted processed video file: \(videoURL.lastPathComponent)")
+            }
+        } catch {
+            print("⚠️ Failed to delete processed video: \(error)")
+        }
+        
         return SessionAnalysisResult(
             dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []), 
             aiProseSummary: aiProseSummary,
