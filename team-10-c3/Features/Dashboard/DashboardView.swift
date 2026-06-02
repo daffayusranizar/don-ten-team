@@ -54,18 +54,34 @@ struct DashboardView: View {
                     }
 
                     if profileViewModel.selectedChild != nil,
+                       familyControlsAuth.needsPermissionPrompt {
+                        ScreenTimePermissionBanner(
+                            gaps: familyControlsAuth.missingPermissions,
+                            statusDescription: familyControlsAuth.authorizationStatusDescription,
+                            onEnable: { showScreenTimeAuthAlert = true }
+                        )
+                    }
+
+                    if profileViewModel.selectedChild != nil,
                        let screenTimeError = sessionCoordinator.loadError {
-                        Text(screenTimeError)
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.orange.opacity(0.12))
-                            )
+                        Button {
+                            if familyControlsAuth.needsPermissionPrompt {
+                                showScreenTimeAuthAlert = true
+                            }
+                        } label: {
+                            Text(screenTimeError)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.orange.opacity(0.12))
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     if profileViewModel.selectedChild != nil {
@@ -184,31 +200,16 @@ struct DashboardView: View {
             return
         }
         familyControlsAuth.refreshAuthorizationStatus()
-        guard !familyControlsAuth.canRecordSessionUsage else { return }
-
-        Task {
-            do {
-                try await familyControlsAuth.ensureUsageAuthorization()
-            } catch {
-                showScreenTimeAuthAlert = true
-            }
-        }
+        guard familyControlsAuth.needsPermissionPrompt else { return }
+        showScreenTimeAuthAlert = true
     }
 
     private func beginKidSessionFlow() {
-        familyControlsAuth.refreshAuthorizationStatus()
-        guard familyControlsAuth.canRecordSessionUsage else {
-            Task {
-                do {
-                    try await familyControlsAuth.ensureUsageAuthorization()
-                    showKidSession = true
-                } catch {
-                    showScreenTimeAuthAlert = true
-                }
-            }
-            return
-        }
-        showKidSession = true
+        ScreenTimePermissionGate.runIfAuthorized(
+            auth: familyControlsAuth,
+            showAlert: { showScreenTimeAuthAlert = true },
+            onAuthorized: { showKidSession = true }
+        )
     }
 
     @ViewBuilder

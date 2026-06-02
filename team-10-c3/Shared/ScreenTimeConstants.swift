@@ -8,6 +8,9 @@ enum ScreenTimeConstants {
     static let queryEndKey = "sessionUsageQueryEnd"
     static let usagePayloadKey = "sessionUsagePayloadJSON"
     static let familySelectionKey = "familyActivitySelection"
+    static let sessionShieldActiveKey = "sessionShieldActive"
+    static let sessionShieldAllowedKey = "sessionShieldAllowed"
+    static let sessionShieldBlockedKey = "sessionShieldBlocked"
 
     static let usageReadyNotification = CFNotificationName(
         "com.team10.c3.sessionUsageReady" as CFString

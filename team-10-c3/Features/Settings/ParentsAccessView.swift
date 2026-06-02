@@ -13,6 +13,7 @@ struct ParentsAccessView: View {
     #if DEBUG
     @State var showScreenTimeDebug: Bool = false
     #endif
+    @State private var showScreenTimeAuthAlert = false
     @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
 
     @Environment(\.dismiss) private var dismiss
@@ -76,17 +77,16 @@ struct ParentsAccessView: View {
                         .opacity(0.2)
                 )
 
-            if !familyControlsAuth.canRecordSessionUsage {
-                PrimaryButton(
-                    title: "Allow Screen Time usage",
-                    size: .medium,
-                    systemImage: "hourglass",
-                    action: {
-                        Task {
-                            try? await familyControlsAuth.ensureUsageAuthorization()
-                        }
-                    }
+            if familyControlsAuth.needsPermissionPrompt {
+                ScreenTimePermissionBanner(
+                    gaps: familyControlsAuth.missingPermissions,
+                    statusDescription: familyControlsAuth.authorizationStatusDescription,
+                    onEnable: { showScreenTimeAuthAlert = true }
                 )
+            } else {
+                Label("Screen Time ready", systemImage: "checkmark.shield.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.green)
                 Text("Status: \(familyControlsAuth.authorizationStatusDescription)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -112,6 +112,7 @@ struct ParentsAccessView: View {
         .onAppear {
             familyControlsAuth.refreshAuthorizationStatus()
         }
+        .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert)
     }
 }
 

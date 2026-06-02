@@ -78,6 +78,11 @@ struct KidSessionSetupView: View {
                             .opacity(0.2)
                     )
 
+                    Text("Only TikTok and YouTube can be opened during the session. Other apps will be blocked.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
                     PrimaryButton(
                         title: "Start Session",
                         size: .large,
@@ -139,15 +144,11 @@ struct KidSessionSetupView: View {
     }
 
     private func startSession() {
-        familyControlsAuth.refreshAuthorizationStatus()
-        Task {
-            do {
-                try await familyControlsAuth.ensureUsageAuthorization()
-                startSessionAfterAuthorization()
-            } catch {
-                showScreenTimeAuthAlert = true
-            }
-        }
+        ScreenTimePermissionGate.runIfAuthorized(
+            auth: familyControlsAuth,
+            showAlert: { showScreenTimeAuthAlert = true },
+            onAuthorized: { startSessionAfterAuthorization() }
+        )
     }
 
     private func startSessionAfterAuthorization() {

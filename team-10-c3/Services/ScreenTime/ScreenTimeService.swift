@@ -4,6 +4,8 @@ import FamilyControls
 
 @MainActor
 protocol ScreenTimeUsageProviding {
+    func activateSessionRestrictions() async throws
+    func deactivateSessionRestrictions()
     func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws
     func stopMonitoring() throws
     func fetchUsage(childId: UUID, startAt: Date, stopAt: Date) async throws -> SessionUsagePayload
@@ -21,6 +23,14 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
     /// Delay before each of three aggregate attempts (no early exit on app totals).
     private let fetchAttemptDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(6)]
 
+    func activateSessionRestrictions() async throws {
+        try await SessionAppShield.applyAllowlist()
+    }
+
+    func deactivateSessionRestrictions() {
+        SessionAppShield.clear()
+    }
+
     func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws {
         let schedule = DeviceActivitySchedule(
             intervalStart: DateComponents.from(date: startAt),
@@ -29,6 +39,7 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
         )
 
         try center.startMonitoring(activityName, during: schedule)
+        SessionShieldStore.applyFromAppGroupIfActive()
     }
 
     func stopMonitoring() throws {
@@ -177,7 +188,7 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
             sessions: sessions
         )
 
-        let apps = SessionUsageNoiseFilter.userFacingApps(
+        let apps = MonitoredAppsFilter.userFacingApps(
             SessionUsageSanitizer.sanitizedApps(result.apps)
         )
 

@@ -64,7 +64,9 @@ enum DeviceActivityUsageAggregator {
             return HourlyChartUsageResult(hourlyApps: [], apps: [])
         }
 
-        let identity = await ApplicationIdentityResolver.load()
+        let identityLoad = await ApplicationIdentityResolver.load()
+        let identity = identityLoad.resolver
+        let monitoredTokens = identityLoad.monitoredApplicationTokens
         let calendar = Calendar.current
         let hourStarts = SessionUsageHourMerge.unionHourStarts(sessions: windows, calendar: calendar)
         let capSeconds = 3600
@@ -83,6 +85,7 @@ enum DeviceActivityUsageAggregator {
         for hourStart in hourStarts {
             guard let labeled = SessionActivityFilterBuilder.filterForHour(
                 hourStart: hourStart,
+                applications: monitoredTokens,
                 calendar: calendar
             ) else {
                 continue
@@ -268,12 +271,9 @@ enum DeviceActivityUsageAggregator {
                             let appSeconds = Int(application.totalActivityDuration.rounded())
                             guard appSeconds > 0 else { continue }
 
-                            let userFacing = SessionUsageNoiseFilter.isUserFacingUsage(
-                                bundleId: resolved.bundleId,
-                                displayName: resolved.displayName
-                            )
+                            let isMonitored = MonitoredAppsFilter.includes(bundleId: resolved.bundleId)
 
-                            guard userFacing else {
+                            guard isMonitored else {
                                 #if DEBUG
                                 SessionUsageNoiseFilter.logDropped(
                                     bundleId: resolved.bundleId,

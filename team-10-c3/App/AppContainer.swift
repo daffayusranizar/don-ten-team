@@ -59,6 +59,7 @@ final class AppContainer {
             ?? InMemorySuggestionHistoryRepository()
 
         try? self.sessionRepository.purgeLegacyMockUsageSnapshots()
+        self.screenTimeService.deactivateSessionRestrictions()
 
         self.profileViewModel.loadChildren()
     }

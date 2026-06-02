@@ -23,4 +23,9 @@ enum FamilyActivitySelectionStore {
         defaults.set(data, forKey: ScreenTimeConstants.familySelectionKey)
         defaults.synchronize()
     }
+
+    /// Stale encoded tokens can crash system Screen Time APIs; do not reuse across launches.
+    static func clearPersistedSelection() {
+        defaults?.removeObject(forKey: ScreenTimeConstants.familySelectionKey)
+    }
 }

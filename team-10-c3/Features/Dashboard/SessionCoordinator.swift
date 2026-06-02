@@ -262,6 +262,7 @@ final class SessionCoordinator {
                 .count ?? -1
             if let active = try sessionRepository.activeSession(for: child.id) {
                 applyActiveSession(childId: child.id, startedAt: active.startedAt)
+                try? await screenTimeService.activateSessionRestrictions()
             } else if !(isSessionActive && activeChildId == child.id), !isStoppingSession {
                 clearActiveSessionState()
             }
@@ -330,9 +331,12 @@ final class SessionCoordinator {
         guard !isSessionActive else { return }
 
         do {
-            try await familyControlsAuth.ensureUsageAuthorization()
+            try await familyControlsAuth.ensureSessionAuthorization()
+            try await screenTimeService.activateSessionRestrictions()
         } catch {
-            loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
+            screenTimeService.deactivateSessionRestrictions()
+            loadError = familyControlsAuth.sessionPermissionBlockedMessage()
+                ?? error.localizedDescription
             return
         }
 
@@ -344,7 +348,7 @@ final class SessionCoordinator {
 
         do {
             _ = try sessionRepository.recordMarker(childId: child.id, type: .start, timestamp: startAt)
-            try? screenTimeService.startMonitoring(
+            try screenTimeService.startMonitoring(
                 childId: child.id,
                 startAt: startAt,
                 plannedEndAt: plannedEnd
@@ -377,9 +381,11 @@ final class SessionCoordinator {
         do {
             _ = try sessionRepository.recordMarker(childId: childId, type: .stop, timestamp: stopAt)
             try? screenTimeService.stopMonitoring()
+            screenTimeService.deactivateSessionRestrictions()
         } catch {
             loadError = error.localizedDescription
             try? screenTimeService.stopMonitoring()
+            screenTimeService.deactivateSessionRestrictions()
         }
 
         isSessionActive = false
@@ -526,6 +532,7 @@ final class SessionCoordinator {
     }
 
     private func clearActiveSessionState() {
+        screenTimeService.deactivateSessionRestrictions()
         isSessionActive = false
         activeChildId = nil
         timerTask?.cancel()
@@ -799,7 +806,7 @@ final class SessionCoordinator {
         for childId: UUID,
         publish: Bool
     ) {
-        let apps = SessionUsageNoiseFilter.appsForDisplay(
+        let apps = MonitoredAppsFilter.appsForDisplay(
             SessionUsageSanitizer.sanitizedApps(apps)
         )
         let appSum = apps.map(\.durationSeconds).reduce(0, +)

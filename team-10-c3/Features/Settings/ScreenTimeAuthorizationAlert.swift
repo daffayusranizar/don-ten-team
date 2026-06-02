@@ -22,6 +22,48 @@ extension View {
     }
 }
 
+struct ScreenTimePermissionBanner: View {
+    let gaps: [ScreenTimePermissionGap]
+    let statusDescription: String
+    let onEnable: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Screen Time permission needed", systemImage: "hourglass.badge.plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.orange)
+
+            Text(summaryText)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+
+            Text("Status: \(statusDescription)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            PrimaryButton(
+                title: "Enable Screen Time",
+                size: .medium,
+                systemImage: "checkmark.shield",
+                action: onEnable
+            )
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.orange.opacity(0.12))
+        )
+    }
+
+    private var summaryText: String {
+        if gaps.contains(.familyControlsNotApproved) {
+            return "Allow Screen Time so sessions can block every app except TikTok and YouTube."
+        }
+        return "Allow app usage data to show TikTok and YouTube time on the dashboard."
+    }
+}
+
 private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
     @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
     @Binding var isPresented: Bool
@@ -33,7 +75,7 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("Screen Time permission", isPresented: $isPresented) {
+            .alert(familyControlsAuth.permissionAlertTitle(), isPresented: $isPresented) {
                 Button("Not Now", role: .cancel) {
                     onDismissWithoutAuth?()
                 }
@@ -41,10 +83,7 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
                     Task { await requestScreenTimeAccess() }
                 }
             } message: {
-                Text(
-                    "ParentGuide needs Screen Time permission to read per-app usage for your sessions. " +
-                    "Tap Continue for Apple’s permission screen, then allow access to app usage."
-                )
+                Text(familyControlsAuth.permissionAlertMessage())
             }
             .alert("Screen Time Access", isPresented: $showAuthError) {
                 Button("OK", role: .cancel) {}
@@ -54,11 +93,13 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
     }
 
     private func requestScreenTimeAccess() async {
+        familyControlsAuth.refreshAuthorizationStatus()
         do {
-            try await familyControlsAuth.ensureUsageAuthorization()
+            try await familyControlsAuth.ensureSessionAuthorization()
             onAuthorized?()
         } catch {
-            authErrorMessage = familyControlsAuth.recordingBlockedMessage()
+            familyControlsAuth.refreshAuthorizationStatus()
+            authErrorMessage = familyControlsAuth.sessionPermissionBlockedMessage()
                 ?? error.localizedDescription
             showAuthError = true
         }

@@ -5,13 +5,23 @@ import ManagedSettings
 /// Maps Screen Time `Application` records to bundle IDs and display names.
 @available(iOS 26.4, *)
 struct ApplicationIdentityResolver {
+    struct LoadResult: Sendable {
+        let resolver: ApplicationIdentityResolver
+        let monitoredApplicationTokens: Set<ApplicationToken>
+    }
+
     private var byToken: [ApplicationToken: (bundleId: String, displayName: String)] = [:]
 
-    static func load() async -> ApplicationIdentityResolver {
+    @MainActor
+    static func load() async -> LoadResult {
         var resolver = ApplicationIdentityResolver()
+        var monitoredTokens: Set<ApplicationToken> = []
         guard DeviceActivityUsageAggregator.hasRequiredAuthorization() else {
-            return resolver
+            return LoadResult(resolver: resolver, monitoredApplicationTokens: monitoredTokens)
         }
+
+        FamilyActivitySelectionStore.clearPersistedSelection()
+
         do {
             let installed = try await FamilyActivityData.shared.installedApplications
             for app in installed {
@@ -23,6 +33,9 @@ struct ApplicationIdentityResolver {
                     localized: app.localizedDisplayName
                 )
                 resolver.byToken[token] = (bundleId, name)
+                if MonitoredAppsFilter.includes(bundleId: bundleId) {
+                    monitoredTokens.insert(token)
+                }
             }
             let tiktokBundles = installed.compactMap(\.bundleIdentifier).filter {
                 KnownAppLabels.matches(bundleId: $0, app: .tiktok)
@@ -33,6 +46,7 @@ struct ApplicationIdentityResolver {
                 message: "installed app map built",
                 data: [
                     "mappedCount": String(resolver.byToken.count),
+                    "monitoredTokenCount": String(monitoredTokens.count),
                     "tiktokInInstalled": String(!tiktokBundles.isEmpty),
                     "tiktokBundles": tiktokBundles.joined(separator: ","),
                 ]
@@ -45,7 +59,7 @@ struct ApplicationIdentityResolver {
                 data: ["error": String(describing: error)]
             )
         }
-        return resolver
+        return LoadResult(resolver: resolver, monitoredApplicationTokens: monitoredTokens)
     }
 
     func resolve(_ application: Application) -> (bundleId: String, displayName: String)? {
