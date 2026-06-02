@@ -29,7 +29,7 @@ struct SessionSetupView: View {
         ZStack(alignment: .top) {
             VStack(spacing: 18) {
                 Color.clear
-                    .frame(height: 200) // reserves space for toolbar + dropdown
+                    .frame(height: 210) // reserves space for toolbar + dropdown
 
                 durationSection(hours: $hours, minutes: $minutes, seconds: $seconds)
 
@@ -37,14 +37,17 @@ struct SessionSetupView: View {
                     title: "Record your screen",
                     isOn: $recordScreen
                 )
+                .padding(.top, 10)
+                .font(.system(size: 17, weight: .semibold))
+                
+                Spacer()
 
                 PrimaryButton(
-                    title: "Start Session"
+                    title: "Start Session",
+                    size: .large
                 ) {
                     nothing()
                 }
-
-                Spacer()
             }
 
             toolBar()
@@ -53,12 +56,13 @@ struct SessionSetupView: View {
             // child profile selection
             VStack(alignment: .leading, spacing: 4) {
                 Text("Choose Your Child's Profile")
+                    .font(.system(size: 17, weight: .semibold))
 
                 PrimaryDropdown(
                     selectedChild: $profileViewModel.selectedChild
                 )
             }
-            .padding(.top, 100)
+            .padding(.top, 110)
             .zIndex(1000)
         }
         .navigationBarBackButtonHidden(true)
@@ -98,6 +102,8 @@ func toolBar () -> some View {
 func durationSection (hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding<Int>) -> some View {
     return VStack(alignment: .leading) {
         Text("Duration")
+            .font(.system(size: 17, weight: .semibold))
+        
         timeSelection(
             hours: hours,
             minutes: minutes,
@@ -134,6 +140,7 @@ func timeSelection (hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding
         // quick select
         VStack(alignment: .leading) {
             Text("Quick Select")
+                .font(.system(size: 17, weight: .semibold))
             
             HStack {
                 PrimaryButton(
@@ -146,6 +153,8 @@ func timeSelection (hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding
                     }
                 )
                 
+                Spacer()
+                
                 PrimaryButton(
                     title: "2 hour",
                     size: .small,
@@ -155,6 +164,8 @@ func timeSelection (hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding
                         }
                     }
                 )
+                
+                Spacer()
                 
                 PrimaryButton(
                     title: "3 hour",
@@ -167,8 +178,9 @@ func timeSelection (hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding
                 )
             }
         }
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity)
     }
-    .padding()
 }
 
 #Preview {

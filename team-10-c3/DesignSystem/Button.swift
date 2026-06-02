@@ -103,6 +103,7 @@ struct PrimaryButton: View {
     var body: some View {
         Button(action: action) {
             buttonLabel(font: size.primaryFont)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, size.horizontalPadding)
                 .padding(.vertical, size.verticalPadding)
                 .background(Color("primaryMediumBlue"))
