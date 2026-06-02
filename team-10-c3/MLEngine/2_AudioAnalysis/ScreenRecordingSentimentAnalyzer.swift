@@ -4,10 +4,12 @@ import NaturalLanguage
 public struct SentimentAnalysisResult: Sendable {
     public let score: Double
     public let isHighlyNegative: Bool
+    public let mostNegativeSnippet: String?
     
-    public init(score: Double, isHighlyNegative: Bool) {
+    public init(score: Double, isHighlyNegative: Bool, mostNegativeSnippet: String? = nil) {
         self.score = score
         self.isHighlyNegative = isHighlyNegative
+        self.mostNegativeSnippet = mostNegativeSnippet
     }
 }
 
@@ -25,13 +27,31 @@ public actor ScreenRecordingSentimentAnalyzer {
         let tagger = NLTagger(tagSchemes: [.sentimentScore])
         tagger.string = trimmed
         
-        let (sentiment, _) = tagger.tag(at: trimmed.startIndex, unit: .paragraph, scheme: .sentimentScore)
+        // Get the overall paragraph score
+        let (overallSentiment, _) = tagger.tag(at: trimmed.startIndex, unit: .paragraph, scheme: .sentimentScore)
+        let overallScore = Double(overallSentiment?.rawValue ?? "0.0") ?? 0.0
         
-        let score = Double(sentiment?.rawValue ?? "0.0") ?? 0.0
+        // Find the single most negative sentence to provide context
+        var mostNegativeScore = 1.0
+        var mostNegativeSentence: String? = nil
         
-        // A score below -0.6 is considered highly negative (e.g., cyberbullying, profanity, extreme anger)
-        let isHighlyNegative = score <= -0.6
+        tagger.enumerateTags(in: trimmed.startIndex..<trimmed.endIndex, unit: .sentence, scheme: .sentimentScore, options: []) { tag, tokenRange in
+            if let tag = tag, let score = Double(tag.rawValue) {
+                if score < mostNegativeScore {
+                    mostNegativeScore = score
+                    mostNegativeSentence = String(trimmed[tokenRange])
+                }
+            }
+            return true
+        }
         
-        return SentimentAnalysisResult(score: score, isHighlyNegative: isHighlyNegative)
+        // A score below -0.6 overall, or a single sentence below -0.8, is flagged
+        let isHighlyNegative = overallScore <= -0.6 || mostNegativeScore <= -0.8
+        
+        return SentimentAnalysisResult(
+            score: overallScore, 
+            isHighlyNegative: isHighlyNegative,
+            mostNegativeSnippet: isHighlyNegative ? mostNegativeSentence : nil
+        )
     }
 }

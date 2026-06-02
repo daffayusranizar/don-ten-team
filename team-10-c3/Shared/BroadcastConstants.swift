@@ -21,12 +21,13 @@ enum BroadcastConstants {
     static let broadcastActiveKey = "broadcastActive"
 
     static let recordingReadyNotification = CFNotificationName(
-        "com.abui.iamge-detection.recordingReady" as CFString
+        "com.team10.c3.recordingReady" as CFString
     )
 
     static let stopBroadcastNotification = CFNotificationName(
-        "com.abui.iamge-detection.stopBroadcast" as CFString
+        "com.team10.c3.stopBroadcast" as CFString
     )
+
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
     static var fallbackExtensionBundleID: String { SigningConfig.screenRecorderExtensionBundleID }

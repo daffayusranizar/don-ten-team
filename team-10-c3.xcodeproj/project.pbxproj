@@ -8,26 +8,26 @@
 
 /* Begin PBXBuildFile section */
 		8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8FDA4F172FC5E0BA001AF248 /* WhisperKit */; };
-		8FDA50002FC93173001AF248 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
-		8FDA500A2FC93173001AF248 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
-		8FDA500B2FC93173001AF248 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FB02FC930A2001AF248 /* UIKit.framework */; };
-		8FDA50122FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		8FDA50152FC93173001AF248 /* ScreenRecorderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8FDB9C572FCD3C46006D4D7E /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
+		8FDB9C612FCD3C47006D4D7E /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
+		8FDB9C622FCD3C47006D4D7E /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FB02FC930A2001AF248 /* UIKit.framework */; };
+		8FDB9C692FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8FDB9C6C2FCD3C47006D4D7E /* ScreenRecorderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		8FDA50102FC93173001AF248 /* PBXContainerItemProxy */ = {
+		8FDB9C672FCD3C47006D4D7E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 8FDA50082FC93173001AF248;
+			remoteGlobalIDString = 8FDB9C5F2FCD3C47006D4D7E;
 			remoteInfo = ScreenRecorderExtensionSetupUI;
 		};
-		8FDA50132FC93173001AF248 /* PBXContainerItemProxy */ = {
+		8FDB9C6A2FCD3C47006D4D7E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 8FDA4FFE2FC93173001AF248;
+			remoteGlobalIDString = 8FDB9C552FCD3C46006D4D7E;
 			remoteInfo = ScreenRecorderExtension;
 		};
 /* End PBXContainerItemProxy section */
@@ -39,8 +39,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				8FDA50152FC93173001AF248 /* ScreenRecorderExtension.appex in Embed Foundation Extensions */,
-				8FDA50122FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */,
+				8FDB9C6C2FCD3C47006D4D7E /* ScreenRecorderExtension.appex in Embed Foundation Extensions */,
+				8FDB9C692FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -59,19 +59,19 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		8FDA50162FC93173001AF248 /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */ = {
+		8FDB9C6D2FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */;
+			target = 8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */;
 		};
-		8FDA501A2FC93173001AF248 /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */ = {
+		8FDB9C712FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */;
+			target = 8FDB9C5F2FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -81,18 +81,18 @@
 			path = "team-10-c3";
 			sourceTree = "<group>";
 		};
-		8FDA50012FC93173001AF248 /* ScreenRecorderExtension */ = {
+		8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				8FDA50162FC93173001AF248 /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */,
+				8FDB9C6D2FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtension" folder in "ScreenRecorderExtension" target */,
 			);
 			path = ScreenRecorderExtension;
 			sourceTree = "<group>";
 		};
-		8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */ = {
+		8FDB9C632FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				8FDA501A2FC93173001AF248 /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */,
+				8FDB9C712FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */,
 			);
 			path = ScreenRecorderExtensionSetupUI;
 			sourceTree = "<group>";
@@ -108,20 +108,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA4FFC2FC93173001AF248 /* Frameworks */ = {
+		8FDB9C532FCD3C46006D4D7E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8FDA50002FC93173001AF248 /* ReplayKit.framework in Frameworks */,
+				8FDB9C572FCD3C46006D4D7E /* ReplayKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA50062FC93173001AF248 /* Frameworks */ = {
+		8FDB9C5D2FCD3C47006D4D7E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8FDA500A2FC93173001AF248 /* ReplayKit.framework in Frameworks */,
-				8FDA500B2FC93173001AF248 /* UIKit.framework in Frameworks */,
+				8FDB9C612FCD3C47006D4D7E /* ReplayKit.framework in Frameworks */,
+				8FDB9C622FCD3C47006D4D7E /* UIKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,8 +133,8 @@
 			children = (
 				8FTEAM032FC94000001AF248 /* Config */,
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
-				8FDA50012FC93173001AF248 /* ScreenRecorderExtension */,
-				8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
+				8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */,
+				8FDB9C632FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 				8FDA4F162FC5E0B0001AF248 /* Frameworks */,
 				8F5E2D282FC04CB700A62CBC /* Products */,
 			);
@@ -144,8 +144,8 @@
 			isa = PBXGroup;
 			children = (
 				8F5E2D272FC04CB700A62CBC /* team-10-c3.app */,
-				8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */,
-				8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */,
+				8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */,
+				8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -184,8 +184,8 @@
 			buildRules = (
 			);
 			dependencies = (
-				8FDA50112FC93173001AF248 /* PBXTargetDependency */,
-				8FDA50142FC93173001AF248 /* PBXTargetDependency */,
+				8FDB9C682FCD3C47006D4D7E /* PBXTargetDependency */,
+				8FDB9C6B2FCD3C47006D4D7E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
@@ -198,48 +198,48 @@
 			productReference = 8F5E2D272FC04CB700A62CBC /* team-10-c3.app */;
 			productType = "com.apple.product-type.application";
 		};
-		8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */ = {
+		8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8FDA50172FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */;
+			buildConfigurationList = 8FDB9C6E2FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */;
 			buildPhases = (
-				8FDA4FFB2FC93173001AF248 /* Sources */,
-				8FDA4FFC2FC93173001AF248 /* Frameworks */,
-				8FDA4FFD2FC93173001AF248 /* Resources */,
+				8FDB9C522FCD3C46006D4D7E /* Sources */,
+				8FDB9C532FCD3C46006D4D7E /* Frameworks */,
+				8FDB9C542FCD3C46006D4D7E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				8FDA50012FC93173001AF248 /* ScreenRecorderExtension */,
+				8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */,
 			);
 			name = ScreenRecorderExtension;
 			packageProductDependencies = (
 			);
 			productName = ScreenRecorderExtension;
-			productReference = 8FDA4FFF2FC93173001AF248 /* ScreenRecorderExtension.appex */;
+			productReference = 8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */ = {
+		8FDB9C5F2FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8FDA501B2FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */;
+			buildConfigurationList = 8FDB9C722FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */;
 			buildPhases = (
-				8FDA50052FC93173001AF248 /* Sources */,
-				8FDA50062FC93173001AF248 /* Frameworks */,
-				8FDA50072FC93173001AF248 /* Resources */,
+				8FDB9C5C2FCD3C47006D4D7E /* Sources */,
+				8FDB9C5D2FCD3C47006D4D7E /* Frameworks */,
+				8FDB9C5E2FCD3C47006D4D7E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				8FDA500C2FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
+				8FDB9C632FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 			);
 			name = ScreenRecorderExtensionSetupUI;
 			packageProductDependencies = (
 			);
 			productName = ScreenRecorderExtensionSetupUI;
-			productReference = 8FDA50092FC93173001AF248 /* ScreenRecorderExtensionSetupUI.appex */;
+			productReference = 8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -255,10 +255,10 @@
 					8F5E2D262FC04CB700A62CBC = {
 						CreatedOnToolsVersion = 26.5;
 					};
-					8FDA4FFE2FC93173001AF248 = {
+					8FDB9C552FCD3C46006D4D7E = {
 						CreatedOnToolsVersion = 26.5;
 					};
-					8FDA50082FC93173001AF248 = {
+					8FDB9C5F2FCD3C47006D4D7E = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -281,8 +281,8 @@
 			projectRoot = "";
 			targets = (
 				8F5E2D262FC04CB700A62CBC /* team-10-c3 */,
-				8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */,
-				8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */,
+				8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */,
+				8FDB9C5F2FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 			);
 		};
 /* End PBXProject section */
@@ -295,14 +295,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA4FFD2FC93173001AF248 /* Resources */ = {
+		8FDB9C542FCD3C46006D4D7E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA50072FC93173001AF248 /* Resources */ = {
+		8FDB9C5E2FCD3C47006D4D7E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -319,14 +319,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA4FFB2FC93173001AF248 /* Sources */ = {
+		8FDB9C522FCD3C46006D4D7E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8FDA50052FC93173001AF248 /* Sources */ = {
+		8FDB9C5C2FCD3C47006D4D7E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -336,15 +336,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		8FDA50112FC93173001AF248 /* PBXTargetDependency */ = {
+		8FDB9C682FCD3C47006D4D7E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 8FDA50082FC93173001AF248 /* ScreenRecorderExtensionSetupUI */;
-			targetProxy = 8FDA50102FC93173001AF248 /* PBXContainerItemProxy */;
+			target = 8FDB9C5F2FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */;
+			targetProxy = 8FDB9C672FCD3C47006D4D7E /* PBXContainerItemProxy */;
 		};
-		8FDA50142FC93173001AF248 /* PBXTargetDependency */ = {
+		8FDB9C6B2FCD3C47006D4D7E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 8FDA4FFE2FC93173001AF248 /* ScreenRecorderExtension */;
-			targetProxy = 8FDA50132FC93173001AF248 /* PBXContainerItemProxy */;
+			target = 8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */;
+			targetProxy = 8FDB9C6A2FCD3C47006D4D7E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -495,6 +495,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(MAIN_BUNDLE_IDENTIFIER)";
+				PRODUCT_BUNDLE_IDENTIFIER = "daffa.don-ten-team";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -544,7 +545,7 @@
 			};
 			name = Release;
 		};
-		8FDA50182FC93173001AF248 /* Debug */ = {
+		8FDB9C6F2FCD3C47006D4D7E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "$(EXTENSION_ENTITLEMENTS)";
@@ -574,7 +575,7 @@
 			};
 			name = Debug;
 		};
-		8FDA50192FC93173001AF248 /* Release */ = {
+		8FDB9C702FCD3C47006D4D7E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "$(EXTENSION_ENTITLEMENTS)";
@@ -604,7 +605,7 @@
 			};
 			name = Release;
 		};
-		8FDA501C2FC93173001AF248 /* Debug */ = {
+		8FDB9C732FCD3C47006D4D7E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "$(EXTENSION_SETUP_UI_ENTITLEMENTS)";
@@ -634,7 +635,7 @@
 			};
 			name = Debug;
 		};
-		8FDA501D2FC93173001AF248 /* Release */ = {
+		8FDB9C742FCD3C47006D4D7E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "$(EXTENSION_SETUP_UI_ENTITLEMENTS)";
@@ -685,20 +686,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		8FDA50172FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */ = {
+		8FDB9C6E2FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				8FDA50182FC93173001AF248 /* Debug */,
-				8FDA50192FC93173001AF248 /* Release */,
+				8FDB9C6F2FCD3C47006D4D7E /* Debug */,
+				8FDB9C702FCD3C47006D4D7E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		8FDA501B2FC93173001AF248 /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */ = {
+		8FDB9C722FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				8FDA501C2FC93173001AF248 /* Debug */,
-				8FDA501D2FC93173001AF248 /* Release */,
+				8FDB9C732FCD3C47006D4D7E /* Debug */,
+				8FDB9C742FCD3C47006D4D7E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
