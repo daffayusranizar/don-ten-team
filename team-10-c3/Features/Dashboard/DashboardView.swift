@@ -10,14 +10,6 @@ import SwiftUI
 import Charts
 import UIKit
 
-struct SessionData: Identifiable {
-    let id = UUID()
-    let type: String
-    /// Wall-clock seconds from Screen Time (`totalActivityDuration`).
-    let durationSeconds: Int
-    let color: Color
-}
-
 struct DashboardView: View {
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.sessionCoordinator) private var sessionCoordinator
@@ -79,11 +71,12 @@ struct DashboardView: View {
                     if profileViewModel.selectedChild != nil {
                         latestSummary(
                             periodTitle: sessionCoordinator.summaryPeriodTitle,
-                            sessions: summarySessions(from: sessionCoordinator),
+                            hourlySegments: sessionCoordinator.summaryHourlyChartSegments,
                             topApps: sessionCoordinator.hasSummaryData
                                 ? sessionCoordinator.summaryTopApps
                                 : [],
-                            isUpdating: sessionCoordinator.isRefreshingPartialUsage,
+                            isUpdating: sessionCoordinator.isLoadingSummaryUsage
+                                || sessionCoordinator.isRefreshingPartialUsage,
                             sessionElapsedSeconds: sessionCoordinator.summarySessionElapsedSeconds,
                             screenTimeAppTotalSeconds: sessionCoordinator.summaryScreenTimeAppTotalSeconds,
                             showsTotalsMismatch: sessionCoordinator.showsScreenTimeTotalsMismatch
@@ -254,19 +247,13 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func summarySessions(from coordinator: SessionCoordinator) -> [SessionData]? {
-        guard coordinator.hasSummaryData else { return nil }
-        return coordinator.summaryChartSessions.map {
-            SessionData(type: $0.type, durationSeconds: $0.durationSeconds, color: $0.color)
-        }
-    }
 }
 
 // MARK: Latest Summary
 @ViewBuilder
 func latestSummary(
     periodTitle: String,
-    sessions: [SessionData]?,
+    hourlySegments: [HourlyStackedChartSegment],
     topApps: [AppUsageRow],
     isUpdating: Bool = false,
     sessionElapsedSeconds: Int = 0,
@@ -282,7 +269,7 @@ func latestSummary(
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .help(
-                    "ParentGuide counts session minutes with a timer. App bars sum iOS Screen Time per session today—multiple sessions add together."
+                    "ParentGuide counts session minutes with a timer. The chart stacks estimated per-app Screen Time by hour for today."
                 )
         }
 
@@ -290,13 +277,21 @@ func latestSummary(
             Text(periodTitle)
                 .font(.system(size: 18, weight: .semibold))
 
-            if let sessions, !sessions.isEmpty {
-                sessionChart(sessions: sessions)
+            if HourlyStackedChartBuilder.hasChartData(hourlySegments) {
+                hourlyStackedAppChart(segments: hourlySegments)
+                if hourlySegments.contains(where: \.isPartialHour) {
+                    Text(
+                        "Dotted bars: the parent session covered only part of that hour. App usage is still Apple's estimate for the whole hour bucket."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                }
             } else if isUpdating {
-                summaryEmptyState(message: "Updating usage…")
+                summaryEmptyState(message: "Loading app usage…")
             } else {
                 summaryEmptyState(
-                    message: "App breakdown can take a minute after a session ends. Pull to refresh or check again shortly."
+                    message: "No app usage for this period yet. End a session or pull to refresh."
                 )
             }
 
@@ -346,27 +341,31 @@ func latestSummary(
     .padding(.top, 30)
 }
 
-// MARK: Yesterday's Session Chart
+// MARK: 24-hour stacked app usage
 @ViewBuilder
-func sessionChart(sessions: [SessionData]) -> some View {
-    Chart(sessions) { session in
+func hourlyStackedAppChart(segments: [HourlyStackedChartSegment]) -> some View {
+    let appNames = Array(Set(segments.map(\.appDisplayName))).sorted()
+    let colorScale = Dictionary(
+        uniqueKeysWithValues: segments.map { ($0.appDisplayName, $0.color) }
+    )
+
+    Chart(segments) { segment in
         BarMark(
-            x: .value("Type", session.type),
-            y: .value("Seconds", session.durationSeconds)
+            x: .value("Hour", segment.hour),
+            y: .value("Seconds", segment.durationSeconds)
         )
-        .foregroundStyle(session.color)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 15,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 15
-            )
-        )
+        .foregroundStyle(hourlyBarForegroundStyle(segment))
     }
+    .chartForegroundStyleScale(
+        domain: appNames,
+        range: appNames.compactMap { colorScale[$0] }
+    )
+    .chartXScale(domain: 0...23)
     .chartXAxis {
-        AxisMarks { _ in
-            AxisValueLabel()
+        AxisMarks(values: [0, 6, 12, 18]) { value in
+            if let hour = value.as(Int.self) {
+                AxisValueLabel(hourAxisLabel(hour))
+            }
             AxisTick()
         }
     }
@@ -380,15 +379,32 @@ func sessionChart(sessions: [SessionData]) -> some View {
             AxisTick()
         }
     }
+    .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
     .chartPlotStyle { plotArea in
-        plotArea
-            .border(.clear)
+        plotArea.border(.clear)
     }
     .padding()
     .background(.uiBackground)
-    .clipShape(
-        RoundedRectangle(cornerRadius: 15)
-    )
+    .clipShape(RoundedRectangle(cornerRadius: 15))
+}
+
+private func hourlyBarForegroundStyle(_ segment: HourlyStackedChartSegment) -> AnyShapeStyle {
+    if segment.isPartialHour {
+        AnyShapeStyle(
+            HourlyChartDotPattern.fill(base: segment.color, cacheKey: segment.colorName)
+        )
+    } else {
+        AnyShapeStyle(segment.color)
+    }
+}
+
+private func hourAxisLabel(_ hour: Int) -> String {
+    switch hour {
+    case 0: return "12a"
+    case 1..<12: return "\(hour)a"
+    case 12: return "12p"
+    default: return "\(hour - 12)p"
+    }
 }
 
 // MARK: Most Used Apps

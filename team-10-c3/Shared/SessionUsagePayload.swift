@@ -20,6 +20,20 @@ struct SessionUsagePayload: Codable, Sendable, Equatable {
     let totalSeconds: Int
     let apps: [AppUsageRow]
 
+    init(
+        childId: UUID,
+        startAt: Date,
+        stopAt: Date,
+        totalSeconds: Int,
+        apps: [AppUsageRow]
+    ) {
+        self.childId = childId
+        self.startAt = startAt
+        self.stopAt = stopAt
+        self.totalSeconds = totalSeconds
+        self.apps = apps
+    }
+
     static func encodeJSON(_ payload: SessionUsagePayload) -> String? {
         guard let data = try? JSONEncoder().encode(payload) else { return nil }
         return String(data: data, encoding: .utf8)

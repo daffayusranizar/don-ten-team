@@ -107,7 +107,7 @@ final class SessionHistoryViewModel {
                     id: snapshot.id,
                     date: snapshot.stopAt,
                     totalSeconds: snapshot.totalSeconds,
-                    topAppName: snapshot.appUsageRows.first?.displayName ?? "Apps"
+                    topAppName: "Session"
                 )
             }
             loadError = nil

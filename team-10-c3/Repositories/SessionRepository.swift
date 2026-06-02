@@ -14,16 +14,18 @@ struct CompletedSessionInfo: Sendable, Equatable {
     let snapshot: SessionUsageSnapshot?
 }
 
+struct SessionWindow: Sendable, Equatable {
+    let startAt: Date
+    let stopAt: Date
+}
+
 struct DayActivitySummary: Sendable, Equatable {
     let day: Date
     let isToday: Bool
     let isYesterday: Bool
     let sessionCount: Int
-    let mergedApps: [AppUsageRow]
     /// Sum of wall-clock session timers that day (parent-facing headline).
     let totalSeconds: Int
-    /// Sum of per-app estimated Screen Time seconds for the day.
-    let screenTimeAppTotalSeconds: Int
 
     var periodTitle: String {
         let base: String
@@ -43,23 +45,48 @@ struct DayActivitySummary: Sendable, Equatable {
     }
 
     static func from(snapshots: [SessionUsageSnapshot], day: Date, isToday: Bool, isYesterday: Bool) -> DayActivitySummary {
-        let mergedApps = SessionUsageHourMerge.mergeAppsHourAware(from: snapshots)
         let sessionElapsed = snapshots.map(\.totalSeconds).reduce(0, +)
-        let screenTimeAppTotal = mergedApps.map(\.durationSeconds).reduce(0, +)
         return DayActivitySummary(
             day: day,
             isToday: isToday,
             isYesterday: isYesterday,
             sessionCount: snapshots.count,
-            mergedApps: mergedApps,
-            totalSeconds: sessionElapsed,
-            screenTimeAppTotalSeconds: screenTimeAppTotal
+            totalSeconds: sessionElapsed
         )
     }
 }
 
-private func persistedUserFacingApps(from rows: [AppUsageRow]) -> [AppUsageRow] {
-    SessionUsageNoiseFilter.userFacingApps(SessionUsageSanitizer.sanitizedApps(rows))
+private enum SessionMarkerPairing {
+    static func completedWindows(
+        markers: [SessionMarker],
+        childId: UUID,
+        day: Date,
+        calendar: Calendar = .current
+    ) -> [SessionWindow] {
+        let childMarkers = markers
+            .filter { $0.childId == childId }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        var windows: [SessionWindow] = []
+        var pendingStart: Date?
+
+        for marker in childMarkers {
+            switch marker.type {
+            case .start:
+                pendingStart = marker.timestamp
+            case .stop:
+                guard let start = pendingStart, start < marker.timestamp else {
+                    pendingStart = nil
+                    continue
+                }
+                if calendar.isDate(marker.timestamp, inSameDayAs: day) {
+                    windows.append(SessionWindow(startAt: start, stopAt: marker.timestamp))
+                }
+                pendingStart = nil
+            }
+        }
+        return windows
+    }
 }
 
 private enum SessionSnapshotMatching {
@@ -77,13 +104,7 @@ private enum SessionSnapshotMatching {
     }
 
     static func preferRicher(_ lhs: SessionUsageSnapshot, _ rhs: SessionUsageSnapshot) -> SessionUsageSnapshot {
-        if lhs.screenTimeAppTotalSeconds != rhs.screenTimeAppTotalSeconds {
-            return lhs.screenTimeAppTotalSeconds > rhs.screenTimeAppTotalSeconds ? lhs : rhs
-        }
-        if lhs.appUsageRows.count != rhs.appUsageRows.count {
-            return lhs.appUsageRows.count > rhs.appUsageRows.count ? lhs : rhs
-        }
-        return lhs.fetchedAt >= rhs.fetchedAt ? lhs : rhs
+        lhs.fetchedAt >= rhs.fetchedAt ? lhs : rhs
     }
 }
 
@@ -97,9 +118,10 @@ protocol SessionRepository {
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
-        plannedDurationSeconds: Int,
-        appUsageRows: [AppUsageRow]
+        plannedDurationSeconds: Int
     ) throws -> SessionUsageSnapshot
+    func completedSessionWindows(for childId: UUID, day: Date) throws -> [SessionWindow]
+    func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot]
     func fetchSnapshots(for childId: UUID, month: String) throws -> [SessionUsageSnapshot]
     func availableMonths(for childId: UUID) throws -> [String]
     func dayActivitySummary(for childId: UUID, referenceDate: Date?) throws -> DayActivitySummary?
@@ -162,19 +184,22 @@ final class SwiftDataSessionRepository: SessionRepository {
         )
     }
 
+    func completedSessionWindows(for childId: UUID, day: Date) throws -> [SessionWindow] {
+        let markers = try fetchMarkers(for: childId)
+        return SessionMarkerPairing.completedWindows(
+            markers: markers,
+            childId: childId,
+            day: day
+        )
+    }
+
     func saveUsageSnapshot(
         childId: UUID,
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
-        plannedDurationSeconds: Int,
-        appUsageRows: [AppUsageRow]
+        plannedDurationSeconds: Int
     ) throws -> SessionUsageSnapshot {
-        let apps = persistedUserFacingApps(from: appUsageRows)
-        let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
-        let jsonData = try JSONEncoder().encode(apps)
-        let json = String(data: jsonData, encoding: .utf8) ?? "[]"
-
         let matching = try fetchAllSnapshots(for: childId).filter {
             SessionSnapshotMatching.matches(snapshot: $0, childId: childId, startAt: startAt, stopAt: stopAt)
         }
@@ -188,12 +213,6 @@ final class SwiftDataSessionRepository: SessionRepository {
             if plannedDurationSeconds > 0 {
                 existing.plannedDurationSeconds = plannedDurationSeconds
             }
-            if !apps.isEmpty || screenTimeAppTotal > existing.screenTimeAppTotalSeconds {
-                existing.screenTimeAppTotalSeconds = screenTimeAppTotal
-                existing.appUsageJSON = json
-            } else if screenTimeAppTotal == 0, existing.screenTimeAppTotalSeconds == 0 {
-                existing.appUsageJSON = json
-            }
             for duplicate in matching where duplicate.id != existing.id {
                 modelContext.delete(duplicate)
             }
@@ -206,9 +225,7 @@ final class SwiftDataSessionRepository: SessionRepository {
             startAt: startAt,
             stopAt: stopAt,
             totalSeconds: totalSeconds,
-            screenTimeAppTotalSeconds: screenTimeAppTotal,
-            plannedDurationSeconds: plannedDurationSeconds,
-            appUsageJSON: json
+            plannedDurationSeconds: plannedDurationSeconds
         )
         modelContext.insert(snapshot)
         try modelContext.save()
@@ -236,6 +253,13 @@ final class SwiftDataSessionRepository: SessionRepository {
 
         if didChange {
             try modelContext.save()
+        }
+    }
+
+    func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot] {
+        let calendar = Calendar.current
+        return try fetchAllSnapshots(for: childId).filter {
+            calendar.isDate($0.stopAt, inSameDayAs: day)
         }
     }
 
@@ -387,19 +411,21 @@ final class InMemorySessionRepository: SessionRepository {
         )
     }
 
+    func completedSessionWindows(for childId: UUID, day: Date) throws -> [SessionWindow] {
+        SessionMarkerPairing.completedWindows(
+            markers: markers,
+            childId: childId,
+            day: day
+        )
+    }
+
     func saveUsageSnapshot(
         childId: UUID,
         startAt: Date,
         stopAt: Date,
         totalSeconds: Int,
-        plannedDurationSeconds: Int,
-        appUsageRows: [AppUsageRow]
+        plannedDurationSeconds: Int
     ) throws -> SessionUsageSnapshot {
-        let apps = persistedUserFacingApps(from: appUsageRows)
-        let screenTimeAppTotal = apps.map(\.durationSeconds).reduce(0, +)
-        let jsonData = try JSONEncoder().encode(apps)
-        let json = String(data: jsonData, encoding: .utf8) ?? "[]"
-
         let matching = snapshots.filter {
             SessionSnapshotMatching.matches(snapshot: $0, childId: childId, startAt: startAt, stopAt: stopAt)
         }
@@ -413,12 +439,6 @@ final class InMemorySessionRepository: SessionRepository {
             if plannedDurationSeconds > 0 {
                 existing.plannedDurationSeconds = plannedDurationSeconds
             }
-            if !apps.isEmpty || screenTimeAppTotal > existing.screenTimeAppTotalSeconds {
-                existing.screenTimeAppTotalSeconds = screenTimeAppTotal
-                existing.appUsageJSON = json
-            } else if screenTimeAppTotal == 0, existing.screenTimeAppTotalSeconds == 0 {
-                existing.appUsageJSON = json
-            }
             snapshots.removeAll { snap in
                 matching.contains(where: { $0.id == snap.id }) && snap.id != existing.id
             }
@@ -430,9 +450,7 @@ final class InMemorySessionRepository: SessionRepository {
             startAt: startAt,
             stopAt: stopAt,
             totalSeconds: totalSeconds,
-            screenTimeAppTotalSeconds: screenTimeAppTotal,
-            plannedDurationSeconds: plannedDurationSeconds,
-            appUsageJSON: json
+            plannedDurationSeconds: plannedDurationSeconds
         )
         snapshots.append(snapshot)
         return snapshot
@@ -448,6 +466,13 @@ final class InMemorySessionRepository: SessionRepository {
             guard apps.count != rows.count else { continue }
             snapshot.appUsageJSON = String(data: try JSONEncoder().encode(apps), encoding: .utf8) ?? "[]"
             snapshot.totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
+        }
+    }
+
+    func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot] {
+        let calendar = Calendar.current
+        return snapshots.filter {
+            $0.childId == childId && calendar.isDate($0.stopAt, inSameDayAs: day)
         }
     }
 

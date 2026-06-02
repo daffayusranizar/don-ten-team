@@ -7,6 +7,10 @@ protocol ScreenTimeUsageProviding {
     func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws
     func stopMonitoring() throws
     func fetchUsage(childId: UUID, startAt: Date, stopAt: Date) async throws -> SessionUsagePayload
+    func fetchHourlyUsageForSessions(
+        childId: UUID,
+        sessions: [SessionWindow]
+    ) async throws -> HourlyChartUsageResult
 }
 
 @MainActor
@@ -143,6 +147,55 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
             ]
         )
         return sanitized
+    }
+
+    func fetchHourlyUsageForSessions(
+        childId: UUID,
+        sessions: [SessionWindow]
+    ) async throws -> HourlyChartUsageResult {
+        DeviceActivityUsageAggregator.refreshAuthorizationStatus()
+
+        AgentDebugLog.log(
+            hypothesisId: "B",
+            location: "ScreenTimeService.fetchHourlyUsageForSessions:start",
+            message: "chart hourly fetch",
+            data: [
+                "childId": childId.uuidString,
+                "sessionCount": String(sessions.count),
+                "hasUsageDataAccess": String(DeviceActivityUsageAggregator.hasRequiredAuthorization()),
+            ]
+        )
+
+        guard DeviceActivityUsageAggregator.hasRequiredAuthorization() else {
+            throw ScreenTimeFetchError.missingUsageDataAccess(
+                status: DeviceActivityUsageAggregator.authorizationStatusLabel()
+            )
+        }
+
+        let result = try await DeviceActivityUsageAggregator.aggregateHourlyForSessions(
+            childId: childId,
+            sessions: sessions
+        )
+
+        let apps = SessionUsageNoiseFilter.userFacingApps(
+            SessionUsageSanitizer.sanitizedApps(result.apps)
+        )
+
+        AgentDebugLog.log(
+            hypothesisId: "D",
+            location: "ScreenTimeService.fetchHourlyUsageForSessions:success",
+            message: "hourly chart payload",
+            data: [
+                "hourlyRowCount": String(result.hourlyApps.count),
+                "appCount": String(apps.count),
+                "appsList": ScreenTimePipelineLogger.formatApps(apps),
+            ]
+        )
+
+        return HourlyChartUsageResult(
+            hourlyApps: result.hourlyApps,
+            apps: apps
+        )
     }
 }
 

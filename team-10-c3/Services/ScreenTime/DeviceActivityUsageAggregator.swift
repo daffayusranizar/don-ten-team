@@ -4,7 +4,7 @@ import Foundation
 import ManagedSettings
 import SwiftUI
 
-/// Aggregates per-app usage for a session window using Apple's official `activityData` API.
+/// Aggregates per-app usage using hourly `activityData` queries.
 enum DeviceActivityUsageAggregator {
     struct LastPayloadSelection: Sendable {
         let filterLabel: String
@@ -51,34 +51,52 @@ enum DeviceActivityUsageAggregator {
         )
     }
 
-    @available(iOS 26.4, *)
-    private static func aggregateFromActivityData(
+    /// Live hourly fetch for chart: union hours across sessions, one query per hour.
+    static func aggregateHourlyForSessions(
         childId: UUID,
-        startAt: Date,
-        stopAt: Date
-    ) async throws -> SessionUsagePayload {
+        sessions: [SessionWindow]
+    ) async throws -> HourlyChartUsageResult {
+        guard #available(iOS 26.4, *) else {
+            return HourlyChartUsageResult(hourlyApps: [], apps: [])
+        }
+        let windows = sessions.map { (startAt: $0.startAt, stopAt: $0.stopAt) }
+        guard !windows.isEmpty else {
+            return HourlyChartUsageResult(hourlyApps: [], apps: [])
+        }
+
         let identity = await ApplicationIdentityResolver.load()
-        let labeledFilters = SessionActivityFilterBuilder.filters(startAt: startAt, stopAt: stopAt)
-        let wallClockSeconds = max(1, Int(stopAt.timeIntervalSince(startAt)))
+        let calendar = Calendar.current
+        let hourStarts = SessionUsageHourMerge.unionHourStarts(sessions: windows, calendar: calendar)
+        let capSeconds = 3600
 
         ScreenTimePipelineLogger.logInput(
             childId: childId,
-            startAt: startAt,
-            stopAt: stopAt,
-            filterLabels: labeledFilters.map(\.label),
-            wallClockSeconds: wallClockSeconds
+            startAt: windows.map(\.startAt).min() ?? Date(),
+            stopAt: windows.map(\.stopAt).max() ?? Date(),
+            filterLabels: hourStarts.map { "hourly+\(ISO8601DateFormatter().string(from: $0))" },
+            wallClockSeconds: capSeconds
         )
 
-        var scoredCandidates: [(payload: SessionUsagePayload, filterLabel: String, policy: String)] = []
+        var mergedHourly: [Date: [String: (name: String, seconds: Int)]] = [:]
+        var lastSelected: ScreenTimePayloadSelector.Candidate?
 
-        for labeled in labeledFilters {
+        for hourStart in hourStarts {
+            guard let labeled = SessionActivityFilterBuilder.filterForHour(
+                hourStart: hourStart,
+                calendar: calendar
+            ) else {
+                continue
+            }
+
+            var hourCandidates: [(payload: SessionUsagePayload, filterLabel: String, policy: String)] = []
+
             for policy in [DeviceActivityData.Policy.live, .cached] {
                 do {
                     let payload = try await load(
                         childId: childId,
-                        startAt: startAt,
-                        stopAt: stopAt,
-                        wallClockSeconds: wallClockSeconds,
+                        sessions: windows,
+                        hourStart: hourStart,
+                        capSeconds: capSeconds,
                         filter: labeled.filter,
                         filterLabel: labeled.label,
                         policy: policy,
@@ -90,7 +108,7 @@ enum DeviceActivityUsageAggregator {
                         apps: payload.apps
                     )
                     if !payload.apps.isEmpty {
-                        scoredCandidates.append((
+                        hourCandidates.append((
                             payload,
                             labeled.label,
                             String(describing: policy)
@@ -99,77 +117,103 @@ enum DeviceActivityUsageAggregator {
                 } catch {
                     AgentDebugLog.log(
                         hypothesisId: "C",
-                        location: "DeviceActivityUsageAggregator.aggregateFromActivityData",
-                        message: "filter attempt failed — trying next",
+                        location: "DeviceActivityUsageAggregator.aggregateHourlyForSessions",
+                        message: "hourly filter attempt failed",
                         data: [
                             "error": String(describing: error),
                             "policy": String(describing: policy),
                             "filterLabel": labeled.label,
-                            "applicationTokenCount": String(labeled.filter.applications.count),
                         ]
                     )
                 }
             }
+
+            guard let hourBest = ScreenTimePayloadSelector.selectBest(
+                from: hourCandidates,
+                wallClockSeconds: capSeconds
+            ) else {
+                continue
+            }
+
+            lastSelected = hourBest
+            var hourBucket = mergedHourly[hourStart] ?? [:]
+            for app in hourBest.payload.apps {
+                guard app.durationSeconds > 0 else { continue }
+                hourBucket[app.bundleIdentifier] = (app.displayName, app.durationSeconds)
+            }
+            mergedHourly[hourStart] = hourBucket
         }
 
-        let selected = ScreenTimePayloadSelector.selectBest(
-            from: scoredCandidates,
-            wallClockSeconds: wallClockSeconds
-        )
+        let hourlyApps = mergedHourly.flatMap { hourStart, bucket -> [HourlyAppUsageRow] in
+            let hour = calendar.component(.hour, from: hourStart)
+            return bucket.map { bundleId, entry in
+                HourlyAppUsageRow(
+                    hour: hour,
+                    displayName: entry.name,
+                    bundleIdentifier: bundleId,
+                    durationSeconds: entry.seconds
+                )
+            }
+        }
 
-        let richestFallback = scoredCandidates.max(by: {
-            let lhs = $0.payload.apps.map(\.durationSeconds).reduce(0, +)
-            let rhs = $1.payload.apps.map(\.durationSeconds).reduce(0, +)
-            if lhs != rhs { return lhs < rhs }
-            return $0.payload.apps.count < $1.payload.apps.count
-        })?.payload
+        let apps = SessionUsageHourMerge.mergedApps(from: hourlyApps)
 
-        let base = selected?.payload
-            ?? richestFallback
-            ?? emptyPayload(childId: childId, startAt: startAt, stopAt: stopAt)
-
-        if let selected {
-            let appSum = selected.payload.apps.map(\.durationSeconds).reduce(0, +)
+        if let lastSelected {
             lastPayloadSelection = LastPayloadSelection(
-                filterLabel: selected.filterLabel,
-                policy: selected.policy,
-                score: selected.score,
-                appCount: selected.payload.apps.count,
-                appSumSeconds: appSum
+                filterLabel: lastSelected.filterLabel,
+                policy: lastSelected.policy,
+                score: lastSelected.score,
+                appCount: apps.count,
+                appSumSeconds: apps.map(\.durationSeconds).reduce(0, +)
             )
             ScreenTimePipelineLogger.logSelected(
-                filterLabel: selected.filterLabel,
-                policy: selected.policy,
-                score: selected.score,
-                apps: selected.payload.apps
-            )
-            AgentDebugLog.log(
-                hypothesisId: "C",
-                location: "DeviceActivityUsageAggregator.aggregate:selected",
-                message: "selected single activityData payload",
-                data: [
-                    "filterLabel": selected.filterLabel,
-                    "policy": selected.policy,
-                    "score": String(selected.score),
-                    "candidateCount": String(scoredCandidates.count),
-                    "appCount": String(selected.payload.apps.count),
-                    "appSumSeconds": String(appSum),
-                    "wallClockSeconds": String(wallClockSeconds),
-                ]
+                filterLabel: "hourly-day(\(hourStarts.count)h)",
+                policy: lastSelected.policy,
+                score: lastSelected.score,
+                apps: apps
             )
         } else {
             lastPayloadSelection = nil
         }
 
-        return base
+        return HourlyChartUsageResult(hourlyApps: hourlyApps, apps: apps)
+    }
+
+    @available(iOS 26.4, *)
+    private static func aggregateFromActivityData(
+        childId: UUID,
+        startAt: Date,
+        stopAt: Date
+    ) async throws -> SessionUsagePayload {
+        let result = try await aggregateHourlyForSessions(
+            childId: childId,
+            sessions: [SessionWindow(startAt: startAt, stopAt: stopAt)]
+        )
+        let wallClockSeconds = max(1, Int(stopAt.timeIntervalSince(startAt)))
+        let apps = result.apps.map { app in
+            AppUsageRow(
+                displayName: app.displayName,
+                bundleIdentifier: app.bundleIdentifier,
+                durationSeconds: min(app.durationSeconds, wallClockSeconds)
+            )
+        }
+        .sorted { $0.durationSeconds > $1.durationSeconds }
+
+        return SessionUsagePayload(
+            childId: childId,
+            startAt: startAt,
+            stopAt: stopAt,
+            totalSeconds: apps.map(\.durationSeconds).reduce(0, +),
+            apps: apps
+        )
     }
 
     @available(iOS 26.4, *)
     private static func load(
         childId: UUID,
-        startAt: Date,
-        stopAt: Date,
-        wallClockSeconds: Int,
+        sessions: [(startAt: Date, stopAt: Date)],
+        hourStart: Date,
+        capSeconds: Int,
         filter: DeviceActivityFilter,
         filterLabel: String,
         policy: DeviceActivityData.Policy,
@@ -184,11 +228,13 @@ enum DeviceActivityUsageAggregator {
             policy: String(describing: policy)
         )
 
-        // bundleId -> (displayName, raw sum in session); cap each app at wall-clock before save.
         var byBundle: [String: (name: String, seconds: Int)] = [:]
         var segmentCount = 0
         var overlappingSegmentCount = 0
         var applicationCount = 0
+
+        let rangeStart = sessions.map(\.startAt).min() ?? hourStart
+        let rangeEnd = sessions.map(\.stopAt).max() ?? hourStart
 
         do {
             for try await activityData in DeviceActivityData.activityData(
@@ -198,10 +244,10 @@ enum DeviceActivityUsageAggregator {
                 for await segment in activityData.activitySegments {
                     segmentCount += 1
                     let segmentInterval = segment.dateInterval
-                    guard SessionUsageHourMerge.overlapsSession(
+                    guard SessionUsageHourMerge.segmentOverlapsAnySession(
                         segmentInterval: segmentInterval,
-                        sessionStart: startAt,
-                        sessionEnd: stopAt
+                        sessions: sessions,
+                        hourStart: hourStart
                     ) else {
                         continue
                     }
@@ -242,14 +288,18 @@ enum DeviceActivityUsageAggregator {
                                     rawSeconds: appSeconds,
                                     segmentStart: segmentInterval.start,
                                     segmentEnd: segmentInterval.end,
-                                    disposition: "dropped-noise"
+                                    disposition: "dropped-noise",
+                                    hourBucketStart: hourStart
                                 )
                                 continue
                             }
 
                             let prior = byBundle[resolved.bundleId]?.seconds ?? 0
-                            let bundleTotal = prior + appSeconds
-                            byBundle[resolved.bundleId] = (resolved.displayName, bundleTotal)
+                            let hourly = SessionUsageHourMerge.maxInHourBucket(
+                                existing: prior,
+                                added: appSeconds
+                            )
+                            byBundle[resolved.bundleId] = (resolved.displayName, hourly)
 
                             ScreenTimePipelineLogger.logRawAPIRow(
                                 bundleId: resolved.bundleId,
@@ -259,9 +309,10 @@ enum DeviceActivityUsageAggregator {
                                 segmentStart: segmentInterval.start,
                                 segmentEnd: segmentInterval.end,
                                 disposition: "kept",
-                                sessionCapSeconds: wallClockSeconds,
-                                bucketSeconds: bundleTotal,
-                                aggregation: bundleTotal > prior ? "sum" : "skip"
+                                hourBucketStart: hourStart,
+                                sessionCapSeconds: capSeconds,
+                                bucketSeconds: hourly,
+                                aggregation: hourly > prior ? "max" : "skip"
                             )
                         }
                     }
@@ -275,7 +326,7 @@ enum DeviceActivityUsageAggregator {
                 data: [
                     "error": String(describing: error),
                     "policy": String(describing: policy),
-                    "applicationTokenCount": String(filter.applications.count),
+                    "filterLabel": filterLabel,
                 ]
             )
             throw error
@@ -285,12 +336,10 @@ enum DeviceActivityUsageAggregator {
             AppUsageRow(
                 displayName: entry.name,
                 bundleIdentifier: bundleId,
-                durationSeconds: min(entry.seconds, wallClockSeconds)
+                durationSeconds: min(entry.seconds, capSeconds)
             )
         }
         .sorted { $0.durationSeconds > $1.durationSeconds }
-
-        let totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
 
         #if DEBUG
         let noiseDropped = SessionUsageNoiseFilter.lastDroppedNoiseCount
@@ -311,9 +360,9 @@ enum DeviceActivityUsageAggregator {
 
         return SessionUsagePayload(
             childId: childId,
-            startAt: startAt,
-            stopAt: stopAt,
-            totalSeconds: totalSeconds,
+            startAt: rangeStart,
+            stopAt: rangeEnd,
+            totalSeconds: apps.map(\.durationSeconds).reduce(0, +),
             apps: apps
         )
     }

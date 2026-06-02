@@ -10,10 +10,11 @@ public final class SessionUsageSnapshot {
     public var fetchedAt: Date
     /// Wall-clock active session time (matches parent timer).
     public var totalSeconds: Int
-    /// Sum of per-app Screen Time seconds saved in `appUsageJSON`.
+    /// Legacy field; app usage is fetched live for charts, not persisted.
     public var screenTimeAppTotalSeconds: Int
     /// Parent-chosen session limit at start (e.g. 30 min). 0 on legacy snapshots.
     public var plannedDurationSeconds: Int
+    /// Legacy JSON; timer-only saves use `[]`.
     public var appUsageJSON: String
 
     public init(
@@ -25,7 +26,7 @@ public final class SessionUsageSnapshot {
         totalSeconds: Int,
         screenTimeAppTotalSeconds: Int = 0,
         plannedDurationSeconds: Int = 0,
-        appUsageJSON: String
+        appUsageJSON: String = "[]"
     ) {
         self.id = id
         self.childId = childId
