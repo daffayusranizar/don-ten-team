@@ -46,12 +46,11 @@ enum ButtonSize {
         }
     }
 
-    /// Secondary outline button — 48pt row uses ~19.29pt regular (Figma hover spec)
     var secondaryFont: Font {
         switch self {
-        case .large: .system(size: 22, weight: .regular)
-        case .medium: .system(size: 19.29, weight: .regular)
-        case .small: .system(size: 14, weight: .regular)
+        case .large: .system(size: 17, weight: .medium)
+        case .medium: .system(size: 15, weight: .medium)
+        case .small: .system(size: 12, weight: .medium)
         }
     }
 }

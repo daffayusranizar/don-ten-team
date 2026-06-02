@@ -56,7 +56,7 @@ struct ProfileFormView: View {
     @State private var childName: String = ""
     @State private var childsBirthday: Date? = nil
     @State private var childIsMale: Bool = true
-    @State private var showConfirmation: Bool = true
+    @State private var showConfirmation: Bool = false
     
     private var formCompleted: Bool {
         !childName.isEmpty && childsBirthday != nil
@@ -147,7 +147,6 @@ struct ProfileFormView: View {
                     isDisabled: !formCompleted,
                     action: {showConfirmation = true}
                 )
-                .frame(maxWidth: .infinity)
             }
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
@@ -162,31 +161,31 @@ struct ProfileFormView: View {
                         showConfirmation = false
                     }
 
-                VStack(spacing: 20) {
+                VStack(spacing: 30) {
                     Text("Save Child Profile")
                         .font(.headline)
 
                     Text("You'll be adding \(childName) to your family. Do you want to continue?")
                         .foregroundStyle(.secondary)
+                        .padding(.top, -20)
 
                     HStack(spacing: 15) {
                         SecondaryButton (
                             title: "Cancel",
-                            size: .medium,
+                            size: .small,
                             action: {showConfirmation = false}
                         )
                         .frame(maxWidth: .infinity)
-                        .buttonStyle(.glass)
 
                         PrimaryButton (
                             title: "Yes, Save",
-                            size: .medium,
+                            size: .small,
                             action: {showConfirmation = false}
                         )
                         .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(30)
+                .padding(20)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 40)
             }
