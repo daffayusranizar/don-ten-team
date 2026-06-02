@@ -73,24 +73,6 @@ private struct ProfileFormScreen: View {
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
-                // top bar
-                ZStack {
-                    HStack {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .padding(20)
-                        }
-                        .glassEffect(in: Circle())
-                        
-                        Spacer()
-                    }
-                    
-                    Text("Child Profile Setup")
-                        .font(.system(size: 20, weight: .bold))
-                }
-                
                 // profile name selection
                 VStack (alignment: .leading) {
                     Text("Child's Name")
@@ -156,8 +138,9 @@ private struct ProfileFormScreen: View {
                     action: viewModel.requestSave
                 )
             }
-            .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle("Child Profile Setup")
+            .navigationBarTitleDisplayMode(.inline)
+          
             .foregroundStyle(.textPrimary)
             .padding(.horizontal, 30)
             .padding(.vertical)

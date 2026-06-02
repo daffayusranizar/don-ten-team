@@ -20,8 +20,6 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                toolbar
-
                 selectedChildSection
 
                 familySection
@@ -35,44 +33,12 @@ struct SettingsView: View {
             .padding(.horizontal, 30)
             .padding(.vertical)
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
+
         .foregroundStyle(.textPrimary)
         .onAppear {
             profileViewModel.loadChildren()
-        }
-    }
-
-    private var toolbar: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .semibold))
-                    .padding()
-                    .background(
-                        Circle()
-                            .fill(.uiSurface)
-                    )
-            }
-
-            Spacer()
-            Text("Settings")
-                .font(.system(size: 25, weight: .bold))
-            Spacer()
-
-            Button {
-                showAddChild = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .padding()
-                    .background(
-                        Circle()
-                            .fill(.uiSurface)
-                    )
-            }
         }
     }
 

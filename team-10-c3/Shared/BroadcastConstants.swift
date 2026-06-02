@@ -20,13 +20,13 @@ enum BroadcastConstants {
     static let recordingFinishedAtKey = "recordingFinishedAt"
     static let broadcastActiveKey = "broadcastActive"
 
-    static let recordingReadyNotification = CFNotificationName(
-        "com.team10.c3.recordingReady" as CFString
-    )
+    static var recordingReadyNotification: CFNotificationName {
+        CFNotificationName("\(appGroupID).recordingReady" as CFString)
+    }
 
-    static let stopBroadcastNotification = CFNotificationName(
-        "com.team10.c3.stopBroadcast" as CFString
-    )
+    static var stopBroadcastNotification: CFNotificationName {
+        CFNotificationName("\(appGroupID).stopBroadcast" as CFString)
+    }
 
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.

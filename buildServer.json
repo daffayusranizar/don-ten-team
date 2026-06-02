@@ -1,0 +1,19 @@
+{
+	"name": "xcode build server",
+	"version": "1.3.0",
+	"bspVersion": "2.2.0",
+	"languages": [
+		"c",
+		"cpp",
+		"objective-c",
+		"objective-cpp",
+		"swift"
+	],
+	"argv": [
+		"/opt/homebrew/bin/xcode-build-server"
+	],
+	"workspace": "/Users/abui/@code/don-ten-team/team-10-c3.xcodeproj/project.xcworkspace",
+	"build_root": "/Users/abui/Library/Developer/Xcode/DerivedData/team-10-c3-cueliqceogfexwcymobpxtnyoepv",
+	"scheme": "team-10-c3",
+	"kind": "xcode"
+}
