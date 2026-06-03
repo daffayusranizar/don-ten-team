@@ -14,7 +14,7 @@ struct ParentsAccessView: View {
     @State var showScreenTimeDebug: Bool = false
     #endif
     @State private var showScreenTimeAuthAlert = false
-    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
 
     @Environment(\.dismiss) private var dismiss
     

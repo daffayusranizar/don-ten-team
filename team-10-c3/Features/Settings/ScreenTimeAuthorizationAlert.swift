@@ -65,7 +65,7 @@ struct ScreenTimePermissionBanner: View {
 }
 
 private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
-    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
     @Binding var isPresented: Bool
     var onAuthorized: (() -> Void)?
     var onDismissWithoutAuth: (() -> Void)?

@@ -14,7 +14,7 @@ struct DashboardView: View {
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.sessionCoordinator) private var sessionCoordinator
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
-    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
     @State var showSettings: Bool = false
     @State var showAddChild: Bool = false
     @State var showKidSession: Bool = false
@@ -345,10 +345,14 @@ func latestSummary(
 // MARK: 24-hour stacked app usage
 @ViewBuilder
 func hourlyStackedAppChart(segments: [HourlyStackedChartSegment]) -> some View {
-    let appNames = Array(Set(segments.map(\.appDisplayName))).sorted()
-    let colorScale = Dictionary(
-        uniqueKeysWithValues: segments.map { ($0.appDisplayName, $0.color) }
+    let legendApps = Dictionary(
+        segments.map { ($0.bundleIdentifier, $0) },
+        uniquingKeysWith: { first, _ in first }
     )
+    .values
+    .sorted { $0.appDisplayName.localizedCaseInsensitiveCompare($1.appDisplayName) == .orderedAscending }
+    let appNames = legendApps.map(\.appDisplayName)
+    let legendColors = legendApps.map(\.color)
 
     Chart(segments) { segment in
         BarMark(
@@ -357,10 +361,7 @@ func hourlyStackedAppChart(segments: [HourlyStackedChartSegment]) -> some View {
         )
         .foregroundStyle(hourlyBarForegroundStyle(segment))
     }
-    .chartForegroundStyleScale(
-        domain: appNames,
-        range: appNames.compactMap { colorScale[$0] }
-    )
+    .chartForegroundStyleScale(domain: appNames, range: legendColors)
     .chartXScale(domain: 0...23)
     .chartXAxis {
         AxisMarks(values: [0, 6, 12, 18]) { value in

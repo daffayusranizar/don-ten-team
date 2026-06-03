@@ -11,7 +11,7 @@ import SwiftUI
 struct KidSessionSetupView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     @Environment(\.profileViewModel) private var profileViewModel
-    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
     @Environment(\.dismiss) private var dismiss
     @State private var showScreenTimeAuthAlert = false
     private var genderLabel: String {

@@ -3,7 +3,7 @@ import SwiftUI
 import FamilyControls
 
 struct ScreenTimeDebugView: View {
-    @Environment(FamilyControlsAuthService.self) private var familyControlsAuth
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
     @State private var status = AgentDebugLog.pipelineStatus(screenTimeAuthorized: false)
     @State private var showRawLog = false
     @State private var copiedToast = false
@@ -439,7 +439,6 @@ struct ScreenTimeDebugView: View {
 #Preview {
     NavigationStack {
         ScreenTimeDebugView()
-            .environment(FamilyControlsAuthService())
     }
 }
 #endif
