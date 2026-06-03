@@ -15,6 +15,7 @@ final class AppContainer {
     let modelContainer: ModelContainer
     let childRepository: ChildRepository
     let profileViewModel: ProfileViewModel
+    let kidSessionViewModel: KidSessionViewModel
 
     init(
         featureFlags: FeatureFlagService,
@@ -31,6 +32,7 @@ final class AppContainer {
             childRepository: self.childRepository
         )
         self.profileViewModel.loadChildren()
+        self.kidSessionViewModel = KidSessionViewModel()
     }
 
     convenience init() {

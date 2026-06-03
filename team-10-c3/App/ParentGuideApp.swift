@@ -19,6 +19,7 @@ struct ParentGuideApp: App {
                 .environment(\.featureFlags, container.featureFlags)
                 .environment(\.childRepository, container.childRepository)
                 .environment(\.profileViewModel, container.profileViewModel)
+                .environment(\.kidSessionViewModel, container.kidSessionViewModel)
         }
         .modelContainer(container.modelContainer)
     }

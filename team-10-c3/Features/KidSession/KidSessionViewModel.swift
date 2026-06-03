@@ -65,8 +65,16 @@ final class KidSessionViewModel {
 
     func endSessionEarly() {
         timerTask?.cancel()
-        isSessionActive = false
-        remainingSeconds = 0
+        postStopNotification()
+        completeSession()
+    }
+
+    private func postStopNotification() {
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            BroadcastConstants.stopBroadcastNotification,
+            nil, nil, true
+        )
     }
 
     func completeSession() {
