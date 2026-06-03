@@ -11,11 +11,52 @@ import SwiftUI
 // MARK: - Session Result View
 
 struct SessionResultView: View {
+    let isAnalyzing: Bool
     let result: PipelineResult?
     let errorMessage: String?
+    let showsRecordingHint: Bool
     let onStartNew: () -> Void
 
+    init(
+        isAnalyzing: Bool = false,
+        result: PipelineResult?,
+        errorMessage: String?,
+        showsRecordingHint: Bool = false,
+        onStartNew: @escaping () -> Void
+    ) {
+        self.isAnalyzing = isAnalyzing
+        self.result = result
+        self.errorMessage = errorMessage
+        self.showsRecordingHint = showsRecordingHint
+        self.onStartNew = onStartNew
+    }
+
     var body: some View {
+        Group {
+            if isAnalyzing {
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text("Analyzing session…")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("This can take a minute while we process the recording.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                resultsScrollContent
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .background(Color.uiBackground.ignoresSafeArea())
+        .foregroundStyle(.textPrimary)
+    }
+
+    private var resultsScrollContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 // Header
@@ -33,6 +74,15 @@ struct SessionResultView: View {
                 }
                 .padding(.top, 40)
                 .padding(.bottom, 8)
+
+                if showsRecordingHint, result == nil, errorMessage == nil {
+                    SessionResultCard(
+                        icon: "record.circle",
+                        iconColor: .primaryMediumBlue,
+                        title: "No session analysis",
+                        content: "Turn on \"Record your screen\" before starting the next session to get AI insights from the broadcast recording."
+                    )
+                }
 
                 // Error state
                 if let error = errorMessage {
@@ -101,10 +151,6 @@ struct SessionResultView: View {
             }
             .padding(.horizontal, 24)
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .background(Color.uiBackground.ignoresSafeArea())
-        .foregroundStyle(.textPrimary)
     }
 }
 

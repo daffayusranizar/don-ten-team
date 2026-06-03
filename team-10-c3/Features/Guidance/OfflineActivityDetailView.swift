@@ -80,5 +80,12 @@ struct OfflineActivityDetailView: View {
 }
 
 #Preview {
-    OfflineActivityDetailView(activity: OfflineActivity.footballGame)
+    OfflineActivityDetailView(
+        activity: OfflineActivity(
+            title: "2 Person Football Game",
+            description: "Play short football passing challenges together.",
+            overview: "Stand a few steps apart and pass the ball back and forth.",
+            steps: ["Stand 3–5 meters apart.", "Pass the ball gently.", "Count successful passes together."]
+        )
+    )
 }

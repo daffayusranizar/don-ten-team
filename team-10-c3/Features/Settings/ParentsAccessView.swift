@@ -10,7 +10,12 @@ import SwiftUI
 struct ParentsAccessView: View {
     @State var changePassword: Bool = false
     @State var setFaceID: Bool = false
-    
+    #if DEBUG
+    @State var showScreenTimeDebug: Bool = false
+    #endif
+    @State private var showScreenTimeAuthAlert = false
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
+
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -63,7 +68,40 @@ struct ParentsAccessView: View {
                     .fill(.primarySoftPurple)
                     .opacity(0.2)
             )
-            
+
+            FamilyActivityPickerSection()
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(.primarySoftPurple)
+                        .opacity(0.2)
+                )
+
+            if familyControlsAuth.needsPermissionPrompt {
+                ScreenTimePermissionBanner(
+                    gaps: familyControlsAuth.missingPermissions,
+                    statusDescription: familyControlsAuth.authorizationStatusDescription,
+                    onEnable: { showScreenTimeAuthAlert = true }
+                )
+            } else {
+                Label("Screen Time ready", systemImage: "checkmark.shield.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.green)
+                Text("Status: \(familyControlsAuth.authorizationStatusDescription)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            #if DEBUG
+            NavLink(
+                icon: "ladybug.fill",
+                title: "Screen Time Debugger",
+                changePage: $showScreenTimeDebug
+            ) {
+                ScreenTimeDebugView()
+            }
+            #endif
+
             Spacer()
         }
         .navigationBarBackButtonHidden(true)
@@ -71,6 +109,10 @@ struct ParentsAccessView: View {
         .padding(.horizontal, 30)
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
+        .onAppear {
+            familyControlsAuth.refreshAuthorizationStatus()
+        }
+        .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert)
     }
 }
 

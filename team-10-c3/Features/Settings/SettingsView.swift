@@ -22,8 +22,6 @@ struct SettingsView: View {
             VStack(spacing: 18) {
                 selectedChildSection
 
-                familySection
-
                 screenTimeSection
 
                 notificationSection
@@ -39,6 +37,11 @@ struct SettingsView: View {
         .foregroundStyle(.textPrimary)
         .onAppear {
             profileViewModel.loadChildren()
+        }
+        .navigationDestination(isPresented: $showAddChild) {
+            ProfileFormView { child in
+                profileViewModel.handleChildSaved(child)
+            }
         }
     }
 
@@ -78,34 +81,6 @@ struct SettingsView: View {
             }
             .padding(.vertical, 12)
         }
-    }
-
-    private var familySection: some View {
-        VStack(alignment: .leading) {
-            Text("Family")
-                .font(.system(size: 20, weight: .semibold))
-
-            NavLink(icon: "plus.circle.fill", title: "Add Child", changePage: $showAddChild) {
-                ProfileFormView { child in
-                    profileViewModel.handleChildSaved(child)
-                }
-            }
-
-            if !profileViewModel.children.isEmpty {
-                Divider()
-
-                Text("\(profileViewModel.children.count) child profile\(profileViewModel.children.count == 1 ? "" : "ren") saved")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 15)
-                .fill(.primarySoftPurple)
-                .opacity(0.2)
-        )
     }
 
     private var screenTimeSection: some View {

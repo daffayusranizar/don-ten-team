@@ -29,24 +29,6 @@ struct OfflineActivity: Identifiable, Hashable {
         self.overview = overview
         self.steps = steps
     }
-
-    static let footballGame = OfflineActivity(
-        title: "2 Person Football Game",
-        description: "Play short football passing challenges together to build teamwork, focus, and connection.",
-        overview: """
-            Grab a ball and stand a few steps apart with your child. Take turns passing, controlling, and kicking the ball back while counting your successful passes together. Keep the game light, fun, and encouraging to build teamwork, confidence, and quality bonding time.
-            """,
-        steps: [
-            "Stand 3–5 meters apart facing each other.",
-            "Use a soft football suitable for children.",
-            "Parent passes the ball gently to the child.",
-            "Child controls the ball, then passes it back.",
-            "Count successful passes together without dropping the ball.",
-            "After every 5 passes, take one step farther apart.",
-            "Add fun challenges like one-touch passes or weaker-foot kicks.",
-            "Encourage and celebrate every successful teamwork moment together."
-        ]
-    )
 }
 
 struct ActivityCategory: Identifiable {
@@ -54,22 +36,6 @@ struct ActivityCategory: Identifiable {
     let name: String
     let activities: [OfflineActivity]
 }
-
-private func footballGameInstances(count: Int) -> [OfflineActivity] {
-    (0..<count).map { _ in
-        OfflineActivity(
-            title: OfflineActivity.footballGame.title,
-            description: OfflineActivity.footballGame.description,
-            overview: OfflineActivity.footballGame.overview,
-            steps: OfflineActivity.footballGame.steps
-        )
-    }
-}
-
-private let mockCategories: [ActivityCategory] = [
-    ActivityCategory(name: "Sports", activities: footballGameInstances(count: 2)),
-    ActivityCategory(name: "Board Games", activities: footballGameInstances(count: 2))
-]
 
 // MARK: - View
 
@@ -81,29 +47,7 @@ struct OfflineActivityView: View {
         VStack(spacing: 0) {
             toolbar
 
-            List {
-                ForEach(mockCategories) { category in
-                    Section {
-                        ForEach(category.activities) { activity in
-                            OfflineActivityCard(
-                                title: activity.title,
-                                description: activity.description,
-                                onTryTapped: { selectedActivity = activity }
-                            )
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                        }
-                    } header: {
-                        Text(category.name)
-                            .font(.heading6)
-                            .foregroundStyle(.textPrimary)
-                            .textCase(nil)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+            offlineActivityEmptyState
         }
         .padding(.horizontal, 30)
         .background(.uiBackground)
@@ -114,6 +58,27 @@ struct OfflineActivityView: View {
             OfflineActivityDetailView(activity: activity)
                 .presentationDetents([.large])
         }
+    }
+
+    private var offlineActivityEmptyState: some View {
+        VStack(spacing: 16) {
+            Spacer(minLength: 40)
+
+            Image(systemName: "figure.play")
+                .font(.system(size: 48))
+                .foregroundStyle(.primaryMediumBlue)
+
+            Text("No offline activities yet")
+                .font(.system(size: 22, weight: .semibold))
+
+            Text("Suggested offline activities will appear here after guidance sessions.")
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 40)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var toolbar: some View {

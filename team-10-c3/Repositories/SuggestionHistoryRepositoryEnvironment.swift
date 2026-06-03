@@ -6,5 +6,6 @@
 import SwiftUI
 
 extension EnvironmentValues {
-    @Entry var suggestionHistoryRepository: SuggestionHistoryRepository = InMemorySuggestionHistoryRepository()
+    @Entry var suggestionHistoryRepository: SuggestionHistoryRepository =
+        InMemorySuggestionHistoryRepository()
 }

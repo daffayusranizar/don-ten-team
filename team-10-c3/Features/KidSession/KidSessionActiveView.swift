@@ -2,9 +2,6 @@
 //  KidSessionActiveView.swift
 //  team-10-c3
 //
-//  Created by Huy Tran on 26/05/26.
-//
-// [P1] Child sees countdown (friendly UI)
 
 import SwiftUI
 
@@ -16,8 +13,7 @@ struct KidSessionActiveView: View {
         VStack(spacing: 32) {
             HStack {
                 Button {
-                    kidSessionViewModel.endSessionEarly()
-                    dismiss()
+                    endSession()
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .semibold))
@@ -51,10 +47,7 @@ struct KidSessionActiveView: View {
             SecondaryButton(
                 title: "End Session Early",
                 size: .medium,
-                action: {
-                    kidSessionViewModel.endSessionEarly()
-                    dismiss()
-                }
+                action: endSession
             )
         }
         .padding(.horizontal, 30)
@@ -63,9 +56,7 @@ struct KidSessionActiveView: View {
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
         .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
-            if isComplete {
-                dismiss()
-            }
+            if isComplete { dismiss() }
         }
         .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
             if !isActive, !kidSessionViewModel.isSessionComplete {
@@ -73,21 +64,9 @@ struct KidSessionActiveView: View {
             }
         }
     }
-}
 
-#Preview {
-    NavigationStack {
-        KidSessionActiveView()
-            .environment(\.kidSessionViewModel, {
-                let viewModel = KidSessionViewModel()
-                viewModel.selectedChild = Child(
-                    name: "Raka",
-                    dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date()) ?? Date(),
-                    gender: .boy
-                )
-                viewModel.remainingSeconds = 900
-                viewModel.isSessionActive = true
-                return viewModel
-            }())
+    private func endSession() {
+        kidSessionViewModel.endSessionEarly()
+        dismiss()
     }
 }

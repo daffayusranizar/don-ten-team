@@ -8,84 +8,27 @@
 import SwiftUI
 
 struct ApprovedAppsView: View {
-    @State var youtubeAllowed: Bool = false
-    @State var tiktokAllowed: Bool = false
-    @State var instagramAllowed: Bool = false
-    
-    @State var mobileLegendsAllowed: Bool = false
-    @State var candyCrushAllowed: Bool = false
-    @State var pubgAllowed: Bool = false
+    @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         VStack(spacing: 18) {
-            // tool bar
-            ZStack {
-                HStack {
-                    // back button
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .semibold))
-                            .padding()
-                            .background(
-                                Circle()
-                                    .fill(.uiSurface)
-                            )
-                    }
-                    
-                    Spacer()
-                }
-                
-                Text("Approved Apps")
-                    .font(.system(size: 25, weight: .bold))
+            toolbar
+
+            if let child = profileViewModel.selectedChild {
+                Text("Choose which apps \(child.name) can use during sessions. App selection will be available when Screen Time controls are connected.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            } else {
+                Text("Select a child on the dashboard to manage approved apps.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
             }
-            
-            Text("Only the approved apps will be accessible for Raka to use.")
-            
-            VStack(alignment: .leading) {
-                Text("Entertainment")
-                    .font(.system(size: 20, weight: .semibold))
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "YouTube", isOn: $youtubeAllowed)
-                
-                Divider()
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "TikTok", isOn: $tiktokAllowed)
-                
-                Divider()
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "Instagram", isOn: $instagramAllowed)
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(.primarySoftPurple)
-                    .opacity(0.2)
-            )
-            
-            VStack(alignment: .leading) {
-                Text("Games")
-                    .font(.system(size: 20, weight: .semibold))
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "Mobile Legends", isOn: $mobileLegendsAllowed)
-            
-                Divider()
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "Candy Crush", isOn: $candyCrushAllowed)
-                
-                Divider()
-                
-                NotificationToggle(icon: "bell.circle.fill", title: "PUBG Mobile", isOn: $pubgAllowed)
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(.primarySoftPurple)
-                    .opacity(0.2)
-            )
-            
+
+            approvedAppsEmptyState
+
             Spacer()
         }
         .navigationBarBackButtonHidden(true)
@@ -94,10 +37,57 @@ struct ApprovedAppsView: View {
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
     }
+
+    private var toolbar: some View {
+        ZStack {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .semibold))
+                        .padding()
+                        .background(
+                            Circle()
+                                .fill(.uiSurface)
+                        )
+                }
+
+                Spacer()
+            }
+
+            Text("Approved Apps")
+                .font(.system(size: 25, weight: .bold))
+        }
+    }
+
+    private var approvedAppsEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "apps.iphone")
+                .font(.system(size: 40))
+                .foregroundStyle(.primaryMediumBlue)
+
+            Text("No approved apps configured")
+                .font(.system(size: 18, weight: .semibold))
+
+            Text("Family Controls app picking is not set up yet. Until then, all monitored device usage is reported without per-app allowlists.")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 15)
+                .fill(.primarySoftPurple)
+                .opacity(0.2)
+        )
+    }
 }
 
 #Preview {
     NavigationStack {
         ApprovedAppsView()
+            .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
     }
 }

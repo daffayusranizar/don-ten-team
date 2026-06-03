@@ -17,8 +17,11 @@ enum AppTab: Int {
 
 struct RootView: View {
     @SceneStorage("selectedTab") private var selectedTab = AppTab.dashboard.rawValue
+    @Environment(\.sessionCoordinator) private var sessionCoordinator
 
     var body: some View {
+        @Bindable var sessionCoordinator = sessionCoordinator
+
         NavigationStack {
             TabView(selection: $selectedTab) {
                 Tab("Dashboard", systemImage: "house.fill", value: AppTab.dashboard.rawValue) {
@@ -29,7 +32,10 @@ struct RootView: View {
 //                    GuidanceView()
                 }
                 Tab("Session", systemImage: "record.circle", value: AppTab.session.rawValue, role: .search) {
-                    SessionSetupView()
+                    SessionSetupView(
+                        showsBackButton: false,
+                        onSessionStarted: { selectedTab = AppTab.dashboard.rawValue }
+                    )
                 }
             }
             .tabViewStyle(.sidebarAdaptable)

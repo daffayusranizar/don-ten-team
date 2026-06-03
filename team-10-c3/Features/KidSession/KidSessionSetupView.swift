@@ -9,11 +9,14 @@
 import SwiftUI
 
 struct KidSessionSetupView: View {
+    var showsBackButton: Bool = true
+    var onSessionStarted: (() -> Void)?
+
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     @Environment(\.profileViewModel) private var profileViewModel
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
     @Environment(\.dismiss) private var dismiss
-    @State private var showActiveSession = false
-
+    @State private var showScreenTimeAuthAlert = false
     private var genderLabel: String {
         guard let gender = kidSessionViewModel.selectedChild?.gender else { return "" }
         switch gender {
@@ -78,6 +81,11 @@ struct KidSessionSetupView: View {
                             .opacity(0.2)
                     )
 
+                    Text("Only TikTok and YouTube can be opened during the session. Other apps will be blocked.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
                     PrimaryButton(
                         title: "Start Session",
                         size: .large,
@@ -96,36 +104,29 @@ struct KidSessionSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
         .onAppear {
+            familyControlsAuth.refreshAuthorizationStatus()
             kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         }
-        .navigationDestination(isPresented: $showActiveSession) {
-            KidSessionActiveView()
-        }
-        .navigationDestination(isPresented: Binding(
-            get: { kidSessionViewModel.isSessionComplete },
-            set: { isPresented in
-                if !isPresented {
-                    kidSessionViewModel.resetAfterEndScreen()
-                }
-            }
-        )) {
-            KidSessionEndView()
+        .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
+            startSessionAfterAuthorization()
         }
     }
 
     private var toolbar: some View {
         ZStack {
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
-                        .padding()
-                        .background(Circle().fill(.uiSurface))
-                }
+            if showsBackButton {
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .padding()
+                            .background(Circle().fill(.uiSurface))
+                    }
 
-                Spacer()
+                    Spacer()
+                }
             }
 
             Text("Kid Session")
@@ -148,14 +149,31 @@ struct KidSessionSetupView: View {
     }
 
     private func startSession() {
+        ScreenTimePermissionGate.runIfAuthorized(
+            auth: familyControlsAuth,
+            showAlert: { showScreenTimeAuthAlert = true },
+            onAuthorized: { startSessionAfterAuthorization() }
+        )
+    }
+
+    private func startSessionAfterAuthorization() {
         kidSessionViewModel.startSession()
-        showActiveSession = true
+        onSessionStarted?()
+        if showsBackButton {
+            dismiss()
+        }
     }
 }
 
 #Preview {
     NavigationStack {
         KidSessionSetupView()
-            .environment(\.kidSessionViewModel, KidSessionViewModel())
+            .environment(\.kidSessionViewModel, KidSessionViewModel(
+                sessionCoordinator: SessionCoordinator(
+                    sessionRepository: InMemorySessionRepository(),
+                    screenTimeService: ScreenTimeService(),
+                    familyControlsAuth: PreviewFamilyControlsAuthService()
+                )
+            ))
     }
 }

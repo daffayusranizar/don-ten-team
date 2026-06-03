@@ -16,10 +16,15 @@ struct ParentGuideApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .preferredColorScheme(.light)
                 .environment(\.featureFlags, container.featureFlags)
                 .environment(\.childRepository, container.childRepository)
+                .environment(\.sessionRepository, container.sessionRepository)
                 .environment(\.profileViewModel, container.profileViewModel)
+                .environment(\.sessionCoordinator, container.sessionCoordinator)
                 .environment(\.kidSessionViewModel, container.kidSessionViewModel)
+                .environment(\.suggestionHistoryRepository, container.suggestionHistoryRepository)
+                .environment(\.familyControlsAuth, container.familyControlsAuth)
         }
         .modelContainer(container.modelContainer)
     }

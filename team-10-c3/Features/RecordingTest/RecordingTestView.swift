@@ -10,19 +10,14 @@ enum SessionStep {
     case results     // Show results
 }
 
-// MARK: - Dummy child store (replace with real data store later)
-private let dummyChildren: [Child] = [
-    Child(name: "Aiden", dateOfBirth: Calendar.current.date(byAdding: .year, value: -8, to: Date())!, gender: .boy),
-    Child(name: "Sophia", dateOfBirth: Calendar.current.date(byAdding: .year, value: -11, to: Date())!, gender: .girl)
-]
-
 struct RecordingTestView: View {
 
+    @Environment(\.profileViewModel) private var profileViewModel
     @StateObject private var recordingManager = RecordingManager.shared
 
     // Session State
     @State private var step: SessionStep = .setup
-    @State private var selectedChild: Child? = dummyChildren.first
+    @State private var selectedChild: Child?
     @State private var sessionMinutes: Int = 1
 
     // Countdown
@@ -56,6 +51,10 @@ struct RecordingTestView: View {
         }
         .onAppear {
             RecordingReadyBridge.startListening()
+            profileViewModel.loadChildren()
+            if selectedChild == nil {
+                selectedChild = profileViewModel.selectedChild ?? profileViewModel.children.first
+            }
         }
     }
 
@@ -63,9 +62,15 @@ struct RecordingTestView: View {
     private var setupView: some View {
         Form {
             Section("Child") {
-                Picker("Select Child", selection: $selectedChild) {
-                    ForEach(dummyChildren) { child in
-                        Text("\(child.name) (age \(child.currentAge))").tag(Optional(child))
+                if profileViewModel.children.isEmpty {
+                    Text("Add a child profile in Settings before running a test session.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Select Child", selection: $selectedChild) {
+                        ForEach(profileViewModel.children) { child in
+                            Text("\(child.name) (age \(child.currentAge))").tag(Optional(child))
+                        }
                     }
                 }
             }
@@ -124,7 +129,7 @@ struct RecordingTestView: View {
                     } else if timeRemaining == 1 {
                         timeRemaining = 0
                         // Signal the extension to stop via Darwin notification
-                        postStopNotification()
+                        recordingManager.postStopBroadcast()
                     }
                 }
 
@@ -243,57 +248,8 @@ struct RecordingTestView: View {
         step = .results
     }
     
-    /// Tries the UserDefaults path first, then scans the App Group container for any .mp4
     private func findRecordingFile() -> URL? {
-        let fm = FileManager.default
-        
-        // 1. Try the stored path first
-        if let path = recordingManager.fetchLatestRecordedVideoPath() {
-            let url = URL(fileURLWithPath: path)
-            if fm.fileExists(atPath: url.path) {
-                print("✅ Found recording at stored path: \(url.lastPathComponent)")
-                return url
-            }
-            print("⚠️ Stored path doesn't exist: \(url.path)")
-        }
-        
-        // 2. Scan the App Group container for the most recent .mp4
-        guard let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: recordingManager.appGroupIdentifier) else {
-            print("❌ Cannot access App Group container")
-            return nil
-        }
-        
-        print("🔍 Scanning App Group container: \(containerURL.path)")
-        let files = (try? fm.contentsOfDirectory(at: containerURL, includingPropertiesForKeys: [.contentModificationDateKey], options: [])) ?? []
-        let mp4s = files
-            .filter { $0.pathExtension == "mp4" }
-            .filter { url in
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                return size > 1000 // Ignore 0-byte or broken files (< 1KB)
-            }
-            .sorted {
-                let d1 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let d2 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return d1 > d2
-            }
-        
-        if let latest = mp4s.first {
-            print("✅ Found .mp4 via scan: \(latest.lastPathComponent)")
-            return latest
-        }
-        
-        print("❌ No .mp4 files found in container. All files: \(files.map(\.lastPathComponent))")
-        return nil
-    }
-
-    // MARK: - Helpers
-    private func postStopNotification() {
-        print("📡 Posting Darwin stop notification to extension.")
-        CFNotificationCenterPostNotification(
-            CFNotificationCenterGetDarwinNotifyCenter(),
-            BroadcastConstants.stopBroadcastNotification,
-            nil, nil, true
-        )
+        recordingManager.findLatestRecordingURL()
     }
 
     private func timeString(from interval: TimeInterval) -> String {
@@ -314,30 +270,7 @@ struct BroadcastPickerView: UIViewRepresentable {
     func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {}
 }
 
-// MARK: - Darwin Notification Bridge
-// CFNotificationCenter callbacks must be C function pointers (no context capture).
-// This bridge re-fires the Darwin notification as a regular NotificationCenter event
-// so SwiftUI views can observe it normally with .onReceive.
-enum RecordingReadyBridge {
-    static let notification = Notification.Name("RecordingReadyInternalNotification")
-
-    static func startListening() {
-        let appGroupID = BroadcastConstants.appGroupID
-        CFNotificationCenterAddObserver(
-            CFNotificationCenterGetDarwinNotifyCenter(),
-            nil, // no observer context needed — we use the global NotificationCenter
-            { _, _, _, _, _ in
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: RecordingReadyBridge.notification, object: nil)
-                }
-            },
-            "\(appGroupID).recordingReady" as CFString,
-            nil,
-            .deliverImmediately
-        )
-    }
-}
-
 #Preview {
     RecordingTestView()
+        .environment(\.profileViewModel, ProfileViewModel(childRepository: InMemoryChildRepository()))
 }

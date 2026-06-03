@@ -2,98 +2,75 @@
 //  SessionSetupView.swift
 //  team-10-c3
 //
-//  Created by Huy Tran on 02/06/26.
-//
 
 import SwiftUI
-import Combine
 import ReplayKit
 
-// MARK: - Session Setup View
-
 struct SessionSetupView: View {
-    @State var hours = 0
-    @State var minutes = 25 // defaults to 25 minutes
-    @State var seconds = 0
+    var showsBackButton: Bool = true
+    var onSessionStarted: (() -> Void)?
 
-    var totalSeconds: Int {
-        hours * 3600 + minutes * 60 + seconds
-    }
-
-    @State var recordScreen: Bool = false
+    @State private var hours = 0
+    @State private var minutes = 25
+    @State private var seconds = 0
+    @State private var recordScreen = false
+    @State private var showScreenTimeAuthAlert = false
+    @State private var showActiveSession = false
+    @State private var showResult = false
 
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
-
-    // MARK: Recording + Pipeline State
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var recordingManager = RecordingManager.shared
-    @State private var showActiveSession = false
-    @State private var pipelineResult: PipelineResult? = nil
-    @State private var errorMessage: String? = nil
-    @State private var showResult = false
-    @State private var isProcessing = false
+
+    private var totalSeconds: Int {
+        hours * 3600 + minutes * 60 + seconds
+    }
+
+    private var canStartSession: Bool {
+        profileViewModel.selectedChild != nil && kidSessionViewModel.canStartSession
+    }
 
     var body: some View {
         @Bindable var profileViewModel = profileViewModel
 
         setupContent(profileViewModel: profileViewModel)
-            // Navigate to KidSessionActiveView when recording starts
             .navigationDestination(isPresented: $showActiveSession) {
                 KidSessionActiveView()
             }
-            // Navigate to KidSessionEndView when session completes
-            .navigationDestination(isPresented: Binding(
-                get: { kidSessionViewModel.isSessionComplete && !showResult },
-                set: { if !$0 { kidSessionViewModel.resetAfterEndScreen() } }
-            )) {
-                KidSessionEndView()
-            }
-            // Navigate to result view after pipeline finishes
             .navigationDestination(isPresented: $showResult) {
                 SessionResultView(
-                    result: pipelineResult,
-                    errorMessage: errorMessage
+                    isAnalyzing: kidSessionViewModel.isAnalyzingSession,
+                    result: kidSessionViewModel.sessionAnalysisResult,
+                    errorMessage: kidSessionViewModel.sessionAnalysisError,
+                    showsRecordingHint: !kidSessionViewModel.sessionIncludedScreenRecording
                 ) {
-                    pipelineResult = nil
-                    errorMessage = nil
                     showResult = false
                     kidSessionViewModel.resetAfterEndScreen()
                 }
             }
-            // Sync duration with the broadcast extension and KidSessionViewModel
             .onChange(of: totalSeconds) { _, newValue in
-                recordingManager.setSessionDuration(minutes: newValue / 60)
-                kidSessionViewModel.durationMinutes = max(1, newValue / 60)
+                syncDuration(to: newValue)
             }
-            // Detect iOS screen capture start/stop
             .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
                 handleCaptureChange()
             }
-            // Darwin signal from extension when recording file is ready
-            .onReceive(NotificationCenter.default.publisher(for: RecordingReadyBridge.notification)) { _ in
-                guard isProcessing else { return }
-                Task { await runPipeline() }
-            }
-            // When session completes, kick off the AI pipeline
             .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
                 if isComplete {
-                    isProcessing = true
-                    // Fallback: if Darwin signal doesn't fire within 10s, run pipeline anyway
-                    Task {
-                        try? await Task.sleep(for: .seconds(10))
-                        if isProcessing { await runPipeline() }
-                    }
+                    showResult = true
                 }
             }
             .onAppear {
                 RecordingReadyBridge.startListening()
-                recordingManager.setSessionDuration(minutes: totalSeconds / 60)
-                kidSessionViewModel.durationMinutes = max(1, totalSeconds / 60)
+                familyControlsAuth.refreshAuthorizationStatus()
+                syncDuration(to: totalSeconds)
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
             }
+            .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
+                beginSessionAfterAuthorization()
+            }
     }
-
-    // MARK: - Setup Step (layout unchanged)
 
     @ViewBuilder
     private func setupContent(profileViewModel: ProfileViewModel) -> some View {
@@ -102,7 +79,7 @@ struct SessionSetupView: View {
                 Color.clear
                     .frame(height: 210)
 
-                durationSection(hours: $hours, minutes: $minutes, seconds: $seconds)
+                sessionDurationSection
 
                 NotificationToggle(
                     title: "Record your screen",
@@ -113,18 +90,10 @@ struct SessionSetupView: View {
 
                 Spacer()
 
-                // ZStack: PrimaryButton provides the visual design; StartSessionPickerView
-                // sits on top and handles all touches to trigger the system broadcast picker.
-                ZStack {
-                    PrimaryButton(title: "Start Session", size: .large) {}
-                        .allowsHitTesting(false)
-                    StartSessionPickerView()
-                        .opacity(0.011)
-                }
-                .frame(maxWidth: .infinity)
+                startSessionControl
             }
 
-            toolBar()
+            sessionToolbar
                 .zIndex(1001)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -147,138 +116,132 @@ struct SessionSetupView: View {
         .foregroundStyle(.textPrimary)
     }
 
-    // MARK: - Capture Detection
+    @ViewBuilder
+    private var startSessionControl: some View {
+        ZStack {
+            PrimaryButton(
+                title: "Start Session",
+                size: .large,
+                isDisabled: !canStartSession,
+                action: {}
+            )
+            .allowsHitTesting(false)
 
-    private func handleCaptureChange() {
-        if UIScreen.main.isCaptured {
-            // Recording started — sync child + duration into KidSessionViewModel, start timer, push view
-            kidSessionViewModel.syncSelectedChild(from: profileViewModel)
-            kidSessionViewModel.durationMinutes = max(1, totalSeconds / 60)
-            kidSessionViewModel.startSession()
-            showActiveSession = true
-        }
-        // Recording stopped: extension is writing the file.
-        // Pipeline is triggered by Darwin "recordingReady" signal or the 10s fallback
-        // in onChange(kidSessionViewModel.isSessionComplete).
-    }
-
-    // MARK: - AI Pipeline
-
-    @MainActor
-    private func runPipeline() async {
-        guard isProcessing else { return }
-        isProcessing = false
-
-        guard let videoURL = findRecordingFile() else {
-            errorMessage = "No recording found in App Group '\(recordingManager.appGroupIdentifier)'."
-            showResult = true
-            return
-        }
-        do {
-            let orchestrator = PipelineOrchestrator()
-            let output = try await orchestrator.processSession(videoURL: videoURL)
-            pipelineResult = PipelineResult(from: output)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        showResult = true
-    }
-
-    private func findRecordingFile() -> URL? {
-        let fm = FileManager.default
-        if let path = recordingManager.fetchLatestRecordedVideoPath() {
-            let url = URL(fileURLWithPath: path)
-            if fm.fileExists(atPath: url.path) { return url }
-        }
-        guard let container = fm.containerURL(forSecurityApplicationGroupIdentifier: recordingManager.appGroupIdentifier) else { return nil }
-        let files = (try? fm.contentsOfDirectory(at: container, includingPropertiesForKeys: [.contentModificationDateKey], options: [])) ?? []
-        return files
-            .filter { $0.pathExtension == "mp4" }
-            .filter { (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0 > 1000 }
-            .sorted {
-                let d1 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let d2 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return d1 > d2
-            }
-            .first
-    }
-
-    // MARK: - Helpers
-
-    private func postStopNotification() {
-        CFNotificationCenterPostNotification(
-            CFNotificationCenterGetDarwinNotifyCenter(),
-            BroadcastConstants.stopBroadcastNotification,
-            nil, nil, true
-        )
-    }
-}
-
-// MARK: - Toolbar (unchanged)
-func toolBar() -> some View {
-    @Environment(\.dismiss) var dismiss
-    return ZStack {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .semibold))
-                    .padding()
-                    .background(Circle().fill(.uiSurface))
-            }
-            Spacer()
-        }
-        Text("Screen Time")
-            .font(.system(size: 25, weight: .bold))
-    }
-}
-
-// MARK: - Duration Section (unchanged)
-func durationSection(hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding<Int>) -> some View {
-    return VStack(alignment: .leading) {
-        Text("Duration")
-            .font(.system(size: 17, weight: .semibold))
-        timeSelection(hours: hours, minutes: minutes, seconds: seconds)
-    }
-}
-
-// MARK: - Time Selection (unchanged)
-func timeSelection(hours: Binding<Int>, minutes: Binding<Int>, seconds: Binding<Int>) -> some View {
-    return VStack(alignment: .center) {
-        HStack {
-            Picker("Hours", selection: hours) {
-                ForEach(0..<24) { hour in Text("\(hour) h").tag(hour) }
-            }
-            Picker("Minutes", selection: minutes) {
-                ForEach(0..<60) { minute in Text("\(minute) m").tag(minute) }
-            }
-            Picker("Seconds", selection: seconds) {
-                ForEach(0..<60) { second in Text("\(second) s").tag(second) }
+            if recordScreen {
+                StartSessionPickerView()
+                    .opacity(0.011)
+                    .allowsHitTesting(canStartSession)
+            } else {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard canStartSession else { return }
+                        requestSessionStart()
+                    }
             }
         }
-        .pickerStyle(.wheel)
-
-        VStack(alignment: .leading) {
-            Text("Quick Select")
-                .font(.system(size: 17, weight: .semibold))
-            HStack {
-                PrimaryButton(title: "1 hour", size: .small) { withAnimation { hours.wrappedValue = 1 } }
-                Spacer()
-                PrimaryButton(title: "2 hour", size: .small) { withAnimation { hours.wrappedValue = 2 } }
-                Spacer()
-                PrimaryButton(title: "3 hour", size: .small) { withAnimation { hours.wrappedValue = 3 } }
-            }
-        }
-        .padding(.top, 10)
         .frame(maxWidth: .infinity)
     }
+
+    private var sessionToolbar: some View {
+        ZStack {
+            if showsBackButton {
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .padding()
+                            .background(Circle().fill(.uiSurface))
+                    }
+                    Spacer()
+                }
+            }
+
+            Text("Screen Time")
+                .font(.system(size: 25, weight: .bold))
+        }
+    }
+
+    private var sessionDurationSection: some View {
+        VStack(alignment: .leading) {
+            Text("Duration")
+                .font(.system(size: 17, weight: .semibold))
+            VStack(alignment: .center) {
+                HStack {
+                    Picker("Hours", selection: $hours) {
+                        ForEach(0..<24) { hour in Text("\(hour) h").tag(hour) }
+                    }
+                    Picker("Minutes", selection: $minutes) {
+                        ForEach(0..<60) { minute in Text("\(minute) m").tag(minute) }
+                    }
+                    Picker("Seconds", selection: $seconds) {
+                        ForEach(0..<60) { second in Text("\(second) s").tag(second) }
+                    }
+                }
+                .pickerStyle(.wheel)
+
+                VStack(alignment: .leading) {
+                    Text("Quick Select")
+                        .font(.system(size: 17, weight: .semibold))
+                    HStack {
+                        PrimaryButton(title: "1 hour", size: .small) { withAnimation { hours = 1 } }
+                        Spacer()
+                        PrimaryButton(title: "2 hour", size: .small) { withAnimation { hours = 2 } }
+                        Spacer()
+                        PrimaryButton(title: "3 hour", size: .small) { withAnimation { hours = 3 } }
+                    }
+                }
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func syncDuration(to total: Int) {
+        recordingManager.setSessionDuration(minutes: max(1, total / 60))
+        kidSessionViewModel.durationMinutes = max(1, total / 60)
+    }
+
+    private func requestSessionStart() {
+        ScreenTimePermissionGate.runIfAuthorized(
+            auth: familyControlsAuth,
+            showAlert: { showScreenTimeAuthAlert = true },
+            onAuthorized: { beginSessionAfterAuthorization() }
+        )
+    }
+
+    private func beginSessionAfterAuthorization() {
+        guard profileViewModel.selectedChild != nil else { return }
+        kidSessionViewModel.syncSelectedChild(from: profileViewModel)
+        syncDuration(to: totalSeconds)
+        kidSessionViewModel.startSession(includesScreenRecording: recordScreen)
+        onSessionStarted?()
+        if showsBackButton {
+            dismiss()
+        }
+    }
+
+    private func handleCaptureChange() {
+        guard recordScreen else { return }
+        if UIScreen.main.isCaptured {
+            guard canStartSession else { return }
+            ScreenTimePermissionGate.runIfAuthorized(
+                auth: familyControlsAuth,
+                showAlert: { showScreenTimeAuthAlert = true },
+                onAuthorized: {
+                    kidSessionViewModel.syncSelectedChild(from: profileViewModel)
+                    syncDuration(to: totalSeconds)
+                    kidSessionViewModel.startSession(includesScreenRecording: true)
+                    showActiveSession = true
+                }
+            )
+        }
+    }
+
 }
 
-// MARK: - Broadcast Picker (local, full-frame hit area)
-
-/// Wraps RPSystemBroadcastPickerView and stretches its internal UIButton to fill
-/// the entire SwiftUI frame — so the whole "Start Session" button area is tappable.
 private struct StartSessionPickerView: UIViewRepresentable {
     func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
         let picker = RPSystemBroadcastPickerView()
