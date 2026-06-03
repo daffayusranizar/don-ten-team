@@ -43,9 +43,7 @@ final class KidSessionViewModel {
     }
 
     var formattedRemainingTime: String {
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        sessionCoordinator.formattedRemainingTime
     }
 
     var canStartSession: Bool {

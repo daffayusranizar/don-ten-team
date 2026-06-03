@@ -16,6 +16,8 @@
 		8FDB9C622FCD3C47006D4D7E /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FB02FC930A2001AF248 /* UIKit.framework */; };
 		8FDB9C692FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8FDB9C6C2FCD3C47006D4D7E /* ScreenRecorderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8FDACT112FC94010001AF248 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */; };
+		8FDACT122FC94010001AF248 /* DeviceActivityMonitorExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +41,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 8FDB9C552FCD3C46006D4D7E;
 			remoteInfo = ScreenRecorderExtension;
+		};
+		8FDACT132FC94010001AF248 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8FDACT0F2FC94010001AF248;
+			remoteInfo = DeviceActivityMonitorExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -66,6 +75,7 @@
 		8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeviceActivityMonitorExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenRecorderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenRecorderExtensionSetupUI.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeviceActivityMonitorExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FTEAM012FC94000001AF248 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		8FTEAM022FC94000001AF248 /* Signing.local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -134,6 +144,14 @@
 			path = ScreenRecorderExtensionSetupUI;
 			sourceTree = "<group>";
 		};
+		8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8FDACT142FC94010001AF248 /* Exceptions for "DeviceActivityMonitorExtension" folder in "DeviceActivityMonitorExtension" target */,
+			);
+			path = DeviceActivityMonitorExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +186,14 @@
 			files = (
 				8FDB9C612FCD3C47006D4D7E /* ReplayKit.framework in Frameworks */,
 				8FDB9C622FCD3C47006D4D7E /* UIKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FDACT162FC94010001AF248 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FDACT112FC94010001AF248 /* DeviceActivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +339,28 @@
 			productReference = 8FDB9C602FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		8FDACT0F2FC94010001AF248 /* DeviceActivityMonitorExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FDACT1A2FC94010001AF248 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitorExtension" */;
+			buildPhases = (
+				8FDACT182FC94010001AF248 /* Sources */,
+				8FDACT162FC94010001AF248 /* Frameworks */,
+				8FDACT192FC94010001AF248 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */,
+			);
+			name = DeviceActivityMonitorExtension;
+			packageProductDependencies = (
+			);
+			productName = DeviceActivityMonitorExtension;
+			productReference = 8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -333,6 +381,9 @@
 						CreatedOnToolsVersion = 26.5;
 					};
 					8FDB9C5F2FCD3C47006D4D7E = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					8FDACT0F2FC94010001AF248 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -391,6 +442,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8FDACT192FC94010001AF248 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -422,6 +480,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8FDACT182FC94010001AF248 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -439,6 +504,11 @@
 			isa = PBXTargetDependency;
 			target = 8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */;
 			targetProxy = 8FDB9C6A2FCD3C47006D4D7E /* PBXContainerItemProxy */;
+		};
+		8FDACT172FC94010001AF248 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8FDACT0F2FC94010001AF248 /* DeviceActivityMonitorExtension */;
+			targetProxy = 8FDACT132FC94010001AF248 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -820,6 +890,66 @@
 			};
 			name = Release;
 		};
+		8FDACT1B2FC94010001AF248 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "$(DEVICE_ACTIVITY_MONITOR_ENTITLEMENTS)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DeviceActivityMonitorExtension/Info.plist;
+				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
+				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitorExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(DEVICE_ACTIVITY_MONITOR_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8FDACT1C2FC94010001AF248 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "$(DEVICE_ACTIVITY_MONITOR_ENTITLEMENTS)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DeviceActivityMonitorExtension/Info.plist;
+				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
+				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitorExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(DEVICE_ACTIVITY_MONITOR_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -864,6 +994,15 @@
 			buildConfigurations = (
 				8FDB9C732FCD3C47006D4D7E /* Debug */,
 				8FDB9C742FCD3C47006D4D7E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8FDACT1A2FC94010001AF248 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitorExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FDACT1B2FC94010001AF248 /* Debug */,
+				8FDACT1C2FC94010001AF248 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
