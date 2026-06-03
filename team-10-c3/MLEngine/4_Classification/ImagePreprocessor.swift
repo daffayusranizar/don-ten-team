@@ -7,6 +7,12 @@ struct ModelInputPreviews {
     let bottomCrop: UIImage?
 }
 
+/// UI-sized captures from a sampled recording frame (for timeline / screen breakdown).
+struct FrameDisplayImages {
+    let thumbnail: UIImage?
+    let bottomCropThumbnail: UIImage?
+}
+
 enum ImagePreprocessor {
     private static let modelInputSize = 256
     private static let screenshotAspectThreshold: CGFloat = 1.6
@@ -38,6 +44,40 @@ enum ImagePreprocessor {
     nonisolated(unsafe) static func uiImage(from pixelBuffer: CVPixelBuffer) -> UIImage? {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         guard let cgImage = renderContext.createCGImage(ciImage, from: ciImage.extent) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+
+    /// Full-frame screenshot plus optional caption-area crop for tall phone recordings.
+    nonisolated(unsafe) static func frameDisplayImages(from source: CVPixelBuffer) -> FrameDisplayImages {
+        let thumbnail = uiImage(from: source)
+        let previews = modelInputPreviews(from: source)
+        let bottomCrop: UIImage?
+        if isTallScreenshot(source) {
+            bottomCrop = captionAreaThumbnail(from: CIImage(cvPixelBuffer: source))
+        } else {
+            bottomCrop = previews.bottomCrop
+        }
+        return FrameDisplayImages(thumbnail: thumbnail, bottomCropThumbnail: bottomCrop)
+    }
+
+    /// Bottom portion of a tall screenshot, scaled for on-screen preview (not model input size).
+    nonisolated(unsafe) private static func captionAreaThumbnail(from image: CIImage, maxWidth: CGFloat = 400) -> UIImage? {
+        let extent = image.extent.integral
+        guard extent.width > 0, extent.height > 0 else { return nil }
+
+        let cropHeight = extent.height * screenshotBottomCropFraction
+        let cropRect = CGRect(
+            x: extent.minX,
+            y: extent.minY,
+            width: extent.width,
+            height: cropHeight
+        )
+        let cropped = image.cropped(to: cropRect)
+        let scale = min(1, maxWidth / cropped.extent.width)
+        let scaled = cropped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let cgImage = renderContext.createCGImage(scaled, from: scaled.extent) else {
             return nil
         }
         return UIImage(cgImage: cgImage)

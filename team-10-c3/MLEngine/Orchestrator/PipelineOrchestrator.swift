@@ -5,8 +5,18 @@ public actor PipelineOrchestrator {
     public init() {}
     
     /// The main entry point for the UI team to call
-    public func processSession(videoURL: URL, child: Child? = nil) async throws -> SessionAnalysisResult {
+    public func processSession(
+        videoURL: URL,
+        child: Child? = nil,
+        onProgress: SessionAnalysisProgressHandler? = nil
+    ) async throws -> SessionAnalysisResult {
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🚀 Starting PipelineOrchestrator.processSession...")
+
+        func report(_ phase: SessionAnalysisProgress.Phase, _ fraction: Double, _ detail: String? = nil) {
+            onProgress?(SessionAnalysisProgress(phase: phase, fraction: min(1, max(0, fraction)), detail: detail))
+        }
+
+        report(.preparingModels, 0.12, "Loading on-device models…")
         
         // 1. Boot up the engines (This happens in the background)
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⚙️ Step 1: Booting up engines...")
@@ -21,13 +31,18 @@ public actor PipelineOrchestrator {
         let visionAnalyzer = VisionFrameContentAnalyzer()
         let handleExtractor = CreatorHandleExtractor()
         let sentimentAnalyzer = ScreenRecordingSentimentAnalyzer()
+
+        let metadata = try await frameExtractor.loadMetadata(from: videoURL)
+        let estimatedFrameCount = max(1, metadata.estimatedFrameCount)
         
         // 2. Extract Audio First
+        report(.extractingAudio, 0.18, "Pulling audio from the recording…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🔊 Step 2: Extracting audio windows and full audio track...")
         let audioSegments = try await audioExtractor.exportClassificationWindows(from: videoURL)
         let fullAudioURL = try await audioExtractor.exportFullAudio(from: videoURL)
         
         // 3. Process Audio (Full Transcript + Parallel Tones)
+        report(.transcribing, 0.28, "Listening with on-device speech recognition…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing full audio transcript and \(audioSegments.count) tones...")
         var audioResults: [TimeInterval: (transcript: String, tone: String)] = [:]
         
@@ -55,6 +70,7 @@ public actor PipelineOrchestrator {
         }
         
         // 4. Process Video Frames
+        report(.analyzingScreens, 0.38, "Starting screen analysis…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🎞️ Step 4: Processing video frames in parallel batches...")
         typealias RawFrameType = (
             timestamp: TimeInterval,
@@ -109,6 +125,8 @@ public actor PipelineOrchestrator {
                             temperature: 100,
                             topK: 5
                         )
+
+                        let frameImages = ImagePreprocessor.frameDisplayImages(from: frame.pixelBuffer)
                         
                         // Format the text summary for this specific frame
                         let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
@@ -122,8 +140,8 @@ public actor PipelineOrchestrator {
                         return (
                             timestamp: timestamp,
                             matches: clip.categories,
-                            thumbnail: nil, 
-                            bottomCropThumbnail: nil,
+                            thumbnail: frameImages.thumbnail,
+                            bottomCropThumbnail: frameImages.bottomCropThumbnail,
                             audioTranscript: audioInfo.transcript,
                             audioTone: audioInfo.tone,
                             audioLabel: nil, 
@@ -150,12 +168,24 @@ public actor PipelineOrchestrator {
                 let results = try await processBatch(frameBatch)
                 rawFrames.append(contentsOf: results)
                 frameBatch.removeAll()
+                let screenFraction = 0.38 + (0.42 * Double(rawFrames.count) / Double(estimatedFrameCount))
+                report(
+                    .analyzingScreens,
+                    screenFraction,
+                    "Screen \(min(rawFrames.count, estimatedFrameCount)) of \(estimatedFrameCount)"
+                )
             }
         }
         
         if !frameBatch.isEmpty {
             let results = try await processBatch(frameBatch)
             rawFrames.append(contentsOf: results)
+            let screenFraction = 0.38 + (0.42 * Double(rawFrames.count) / Double(estimatedFrameCount))
+            report(
+                .analyzingScreens,
+                screenFraction,
+                "Screen \(min(rawFrames.count, estimatedFrameCount)) of \(estimatedFrameCount)"
+            )
         }
         
         // Ensure chronological order after parallel execution
@@ -168,21 +198,34 @@ public actor PipelineOrchestrator {
                 rawFrames[i].videoMatchedPrompt = rawFrames[i-1].videoMatchedPrompt
                 rawFrames[i].contentSummary = rawFrames[i-1].contentSummary
                 rawFrames[i].creatorHandle = rawFrames[i-1].creatorHandle
+                rawFrames[i].thumbnail = rawFrames[i-1].thumbnail
+                rawFrames[i].bottomCropThumbnail = rawFrames[i-1].bottomCropThumbnail
             }
         }
         
         // 5. Aggregate Timeline (Fuse Audio and Video mathematically)
+        report(.generatingSummary, 0.82, "Grouping results by time…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⏱️ Step 5: Aggregating timeline (Fusion)...")
         let timeline = await aggregator.timeline(frames: rawFrames, fps: 1.0, intervalSeconds: 3)
         
         // 6. Generate the Final AI Summary
+        report(.generatingSummary, 0.88, "Writing parent-friendly summary…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🧠 Step 6: Generating AI Summary...")
         let dominantCategory = timeline.first?.label ?? "Mixed content"
-        let aiProseSummary = try await summarizer.summarizeRecording(
-            timeline: timeline,
-            overallCategory: dominantCategory,
-            child: child
-        )
+        let aiProseSummary: String
+        do {
+            aiProseSummary = try await summarizer.summarizeRecording(
+                timeline: timeline,
+                overallCategory: dominantCategory,
+                child: child
+            )
+        } catch {
+            print("⚠️ LLM summary failed, using fallback: \(error)")
+            aiProseSummary = Self.fallbackProseSummary(
+                timeline: timeline,
+                dominantCategory: dominantCategory
+            )
+        }
         
         // 7. Extract Top Creators
         print("[\(Date().formatted(date: .omitted, time: .standard))] 👤 Step 7: Extracting top creators...")
@@ -191,6 +234,7 @@ public actor PipelineOrchestrator {
         let topCreators = handleCounts.sorted { $0.value > $1.value }.prefix(3).map { $0.key }
         
         // 8. Generate Guidance
+        report(.finalizing, 0.94, "Preparing conversation starters…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 💡 Step 8: Generating insights and guidance...")
         let guidanceEngine = GuidanceEngine()
         let insights = await guidanceEngine.generateInsights(
@@ -211,6 +255,7 @@ public actor PipelineOrchestrator {
             ))
         }
         
+        report(.finalizing, 1.0, "Almost done…")
         // 9. Cleanup & Return the beautiful result to the UI!
         print("[\(Date().formatted(date: .omitted, time: .standard))] ✅ Pipeline complete! Returning results.")
         
@@ -232,5 +277,20 @@ public actor PipelineOrchestrator {
             guidance: insights.guidance,
             timeline: timeline
         )
+    }
+
+    private static func fallbackProseSummary(
+        timeline: [FrameClassificationSummary],
+        dominantCategory: String
+    ) -> String {
+        let segmentCount = timeline.count
+        guard segmentCount > 0 else {
+            return "We analyzed the recording but could not generate a detailed summary."
+        }
+        let sample = timeline.prefix(3).compactMap(\.contentSummary).joined(separator: " ")
+        if sample.isEmpty {
+            return "The session was mostly \(dominantCategory) across \(segmentCount) analyzed segments."
+        }
+        return "The session was mostly \(dominantCategory). Highlights: \(sample)"
     }
 }

@@ -11,52 +11,50 @@ import SwiftUI
 // MARK: - Session Result View
 
 struct SessionResultView: View {
-    let isAnalyzing: Bool
-    let result: PipelineResult?
-    let errorMessage: String?
-    let showsRecordingHint: Bool
+    @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     let onStartNew: () -> Void
 
-    init(
-        isAnalyzing: Bool = false,
-        result: PipelineResult?,
-        errorMessage: String?,
-        showsRecordingHint: Bool = false,
-        onStartNew: @escaping () -> Void
-    ) {
-        self.isAnalyzing = isAnalyzing
-        self.result = result
-        self.errorMessage = errorMessage
-        self.showsRecordingHint = showsRecordingHint
-        self.onStartNew = onStartNew
+    @State private var showScreenBreakdown = false
+    @State private var breakdownScreens: [ScreenBreakdownItem] = []
+
+    private var showsRecordingHint: Bool {
+        !kidSessionViewModel.sessionIncludedScreenRecording
     }
 
     var body: some View {
+        @Bindable var viewModel = kidSessionViewModel
+
         Group {
-            if isAnalyzing {
-                VStack(spacing: 16) {
-                    ProgressView()
-                    Text("Analyzing session…")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text("This can take a minute while we process the recording.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if viewModel.isAnalyzingSession {
+                analyzingContent(viewModel: viewModel)
             } else {
-                resultsScrollContent
+                resultsScrollContent(
+                    result: viewModel.sessionAnalysisResult,
+                    errorMessage: viewModel.sessionAnalysisError
+                )
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .background(Color.uiBackground.ignoresSafeArea())
         .foregroundStyle(.textPrimary)
+        .navigationDestination(isPresented: $showScreenBreakdown) {
+            SessionScreenBreakdownView(screens: breakdownScreens)
+        }
     }
 
-    private var resultsScrollContent: some View {
+    @ViewBuilder
+    private func analyzingContent(viewModel: KidSessionViewModel) -> some View {
+        SessionAnalysisLoadingView(
+            progress: viewModel.analysisProgress,
+            onSkip: { viewModel.cancelSessionAnalysis() }
+        )
+    }
+
+    private func resultsScrollContent(
+        result: PipelineResult?,
+        errorMessage: String?
+    ) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 // Header
@@ -141,6 +139,18 @@ struct SessionResultView: View {
                         title: "Offline Activity",
                         content: result.offlineActivity
                     )
+
+                    if !result.screens.isEmpty {
+                        SecondaryButton(
+                            title: "View screen-by-screen breakdown (\(result.screens.count))",
+                            size: .large,
+                            systemImage: "rectangle.stack"
+                        ) {
+                            breakdownScreens = result.screens
+                            showScreenBreakdown = true
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                 }
 
                 // Start new session button
@@ -190,11 +200,24 @@ struct SessionResultCard: View {
 
 // MARK: - Preview
 
-#Preview {
-    NavigationStack {
-        SessionResultView(
-            result: nil,
-            errorMessage: "Preview: No recording file found."
-        ) {}
+#Preview("With breakdown") {
+    let coordinator = SessionCoordinator(
+        sessionRepository: InMemorySessionRepository(),
+        screenTimeService: ScreenTimeService(),
+        familyControlsAuth: PreviewFamilyControlsAuthService()
+    )
+    let vm = KidSessionViewModel(sessionCoordinator: coordinator)
+    vm.sessionAnalysisResult = PipelineResult(
+        category: "Educational",
+        summary: "Mostly learning content.",
+        creators: ["@Example"],
+        signals: [],
+        conversationStarter: "What did you learn?",
+        offlineActivity: "Draw what you learned.",
+        screens: [.preview]
+    )
+    return NavigationStack {
+        SessionResultView(onStartNew: {})
+            .environment(\.kidSessionViewModel, vm)
     }
 }

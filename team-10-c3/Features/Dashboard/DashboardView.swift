@@ -141,12 +141,7 @@ struct DashboardView: View {
                 }
         }
         .navigationDestination(isPresented: $showSessionEnd) {
-            SessionResultView(
-                isAnalyzing: kidSessionViewModel.isAnalyzingSession,
-                result: kidSessionViewModel.sessionAnalysisResult,
-                errorMessage: kidSessionViewModel.sessionAnalysisError,
-                showsRecordingHint: !kidSessionViewModel.sessionIncludedScreenRecording
-            ) {
+            SessionResultView {
                 showSessionEnd = false
                 kidSessionViewModel.resetAfterEndScreen()
             }

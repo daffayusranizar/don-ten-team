@@ -109,19 +109,19 @@ struct MainViewTest: View {
 
                         // Timeline
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("🎞️ Timeline (\(result.timelineItems.count) segments)")
+                            Text("🎞️ Timeline (\(result.screens.count) segments)")
                                 .font(.headline)
                                 .padding(.horizontal)
-                            ForEach(result.timelineItems, id: \.timestamp) { item in
+                            ForEach(result.screens) { item in
                                 HStack(alignment: .top) {
-                                    Text(item.timestamp)
+                                    Text(item.timestampLabel)
                                         .font(.caption.monospacedDigit())
                                         .foregroundColor(.secondary)
                                         .frame(width: 44, alignment: .leading)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.label)
+                                        Text(item.categoryLabel)
                                             .font(.caption.bold())
-                                        if let summary = item.summary {
+                                        if let summary = item.contentSummary {
                                             Text(summary)
                                                 .font(.caption2)
                                                 .foregroundColor(.secondary)
@@ -187,42 +187,6 @@ struct MainViewTest: View {
                     self.isRunning = false
                 }
             }
-        }
-    }
-}
-
-// MARK: - View Model
-
-struct PipelineResult {
-    let category: String
-    let summary: String
-    let creators: [String]
-    let signals: [String]
-    let conversationStarter: String
-    let offlineActivity: String
-    let timelineItems: [TimelineItem]
-
-    struct TimelineItem {
-        let timestamp: String
-        let label: String
-        let summary: String?
-    }
-
-    init(from result: SessionAnalysisResult) {
-        self.category = result.dominantCategory.name
-        self.summary = result.aiProseSummary
-        self.creators = result.topCreatorsSeen
-        self.signals = result.concernSignals.map { "[\($0.severity)] \($0.title): \($0.description)" }
-        self.conversationStarter = result.guidance.conversationStarters.first ?? "—"
-        self.offlineActivity = result.guidance.offlineActivity
-        self.timelineItems = result.timeline.map { frame in
-            let mins = Int(frame.timestamp) / 60
-            let secs = Int(frame.timestamp) % 60
-            return TimelineItem(
-                timestamp: String(format: "%d:%02d", mins, secs),
-                label: frame.label,
-                summary: frame.contentSummary
-            )
         }
     }
 }

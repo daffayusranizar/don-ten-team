@@ -20,6 +20,7 @@ final class KidSessionViewModel {
     var sessionIncludedScreenRecording = false
 
     var isAnalyzingSession = false
+    var analysisProgress = SessionAnalysisProgress.initial
     var sessionAnalysisResult: PipelineResult?
     var sessionAnalysisError: String?
 
@@ -92,7 +93,7 @@ final class KidSessionViewModel {
     }
 
     func resetAfterEndScreen() {
-        analysisTask?.cancel()
+        cancelSessionAnalysis()
         isSessionComplete = false
         sessionIncludedScreenRecording = false
         clearAnalysisState()
@@ -133,14 +134,32 @@ final class KidSessionViewModel {
 
     private func runSessionAnalysis() async {
         isAnalyzingSession = true
+        analysisProgress = .initial
         sessionAnalysisResult = nil
         sessionAnalysisError = nil
+        defer { isAnalyzingSession = false }
+
+        guard !Task.isCancelled else { return }
 
         RecordingReadyBridge.startListening()
+        setAnalysisProgress(phase: .waitingForRecording, fraction: 0.02, detail: "Waiting for broadcast to finish…")
         _ = await waitForRecordingReady(timeoutSeconds: 10)
-        await executePipeline()
 
-        isAnalyzingSession = false
+        guard !Task.isCancelled else { return }
+
+        await executePipeline()
+    }
+
+    private func setAnalysisProgress(
+        phase: SessionAnalysisProgress.Phase,
+        fraction: Double,
+        detail: String? = nil
+    ) {
+        analysisProgress = SessionAnalysisProgress(
+            phase: phase,
+            fraction: min(1, max(0, fraction)),
+            detail: detail
+        )
     }
 
     private func waitForRecordingReady(timeoutSeconds: Int) async -> Bool {
@@ -174,23 +193,74 @@ final class KidSessionViewModel {
 
     private func executePipeline() async {
         let recordingManager = RecordingManager.shared
-        guard let videoURL = recordingManager.findLatestRecordingURL() else {
+        let child = selectedChild
+
+        setAnalysisProgress(phase: .loadingRecording, fraction: 0.06, detail: "Looking for the saved video…")
+
+        guard let videoURL = await waitForRecordingFileWithProgress(recordingManager: recordingManager) else {
             sessionAnalysisError =
                 "No recording found in App Group '\(recordingManager.appGroupIdentifier)'. " +
                 "Make sure you started the ScreenRecorder broadcast and kept it running during the session."
             return
         }
+
+        guard !Task.isCancelled else { return }
+
         do {
-            let orchestrator = PipelineOrchestrator()
-            let output = try await orchestrator.processSession(videoURL: videoURL)
+            let output = try await SessionAnalysisRunner.runPipeline(
+                videoURL: videoURL,
+                child: child,
+                onProgress: { [weak self] progress in
+                    Task { @MainActor in
+                        self?.analysisProgress = progress
+                    }
+                }
+            )
+            guard !Task.isCancelled else { return }
             sessionAnalysisResult = PipelineResult(from: output)
+        } catch is CancellationError {
+            return
         } catch {
             sessionAnalysisError = error.localizedDescription
         }
     }
 
+    /// Stops analysis UI and cancels in-flight pipeline work.
+    func cancelSessionAnalysis() {
+        analysisTask?.cancel()
+        analysisTask = nil
+        isAnalyzingSession = false
+        analysisProgress = .initial
+    }
+
+    @MainActor
+    private func waitForRecordingFileWithProgress(
+        recordingManager: RecordingManager
+    ) async -> URL? {
+        let maxAttempts = SessionAnalysisRunner.recordingFilePollAttempts
+        for attempt in 0..<maxAttempts {
+            if Task.isCancelled { return nil }
+            if let url = recordingManager.findLatestRecordingURL() {
+                setAnalysisProgress(phase: .loadingRecording, fraction: 0.1, detail: "Recording found")
+                return url
+            }
+            let pollFraction = 0.06 + (0.04 * Double(attempt + 1) / Double(maxAttempts))
+            setAnalysisProgress(
+                phase: .loadingRecording,
+                fraction: pollFraction,
+                detail: "Waiting for file… (\(attempt + 1)/\(maxAttempts))"
+            )
+            if attempt < maxAttempts - 1 {
+                try? await Task.sleep(for: .seconds(SessionAnalysisRunner.recordingFilePollIntervalSeconds))
+            }
+        }
+        return recordingManager.findLatestRecordingURL()
+    }
+
+    /// Clears in-memory AI results; screen-by-screen breakdown is only available until this runs.
     private func clearAnalysisState() {
         isAnalyzingSession = false
+        analysisProgress = .initial
         sessionAnalysisResult = nil
         sessionAnalysisError = nil
     }

@@ -40,12 +40,7 @@ struct SessionSetupView: View {
                 KidSessionActiveView()
             }
             .navigationDestination(isPresented: $showResult) {
-                SessionResultView(
-                    isAnalyzing: kidSessionViewModel.isAnalyzingSession,
-                    result: kidSessionViewModel.sessionAnalysisResult,
-                    errorMessage: kidSessionViewModel.sessionAnalysisError,
-                    showsRecordingHint: !kidSessionViewModel.sessionIncludedScreenRecording
-                ) {
+                SessionResultView {
                     showResult = false
                     kidSessionViewModel.resetAfterEndScreen()
                 }
