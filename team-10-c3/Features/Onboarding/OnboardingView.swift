@@ -17,6 +17,10 @@ struct OnboardingData {
 
     // step 4 data
     var selectedGoals: [ParentGoal] = []
+    
+    // step 5 data
+    var weeklySuggestions: Bool = false
+    var weeklyCheckIns: Bool = false
 }
 
 struct OnboardingView: View {
@@ -24,7 +28,7 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            StepThreeView(data: $data)
+            StepFiveView(data: $data)
         }
     }
 }

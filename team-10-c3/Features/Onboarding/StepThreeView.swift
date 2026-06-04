@@ -27,7 +27,6 @@ struct StepThreeView: View {
                     )
 
                 Text("We'll use this to personalise the guidance")
-                    .fontWeight(.light)
                     .foregroundStyle(.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,5 +148,11 @@ struct StepThreeView: View {
         .navigationDestination(isPresented: $goToStepFour) {
             StepFourView(data: $data)
         }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        OnboardingView()
     }
 }

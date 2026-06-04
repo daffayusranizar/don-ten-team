@@ -53,7 +53,7 @@ struct CheckBoxRow: View {
                                 .fill(.white)
                                 .frame(width: 8, height: 8)
                             Circle()
-                                .fill(.primarySoftPurple.opacity(0.2))
+                                .fill(.primaryMediumBlue.opacity(0.2))
                                 .frame(width: 8, height: 8)
                         }
                     }
@@ -66,10 +66,10 @@ struct CheckBoxRow: View {
             RoundedRectangle(cornerRadius: 15)
                 .fill(
                     isSelected
-                    ? .primarySoftPurple.opacity(0.2)
+                    ? .primaryMediumBlue.opacity(0.2)
                     : .white
                 )
-                .stroke(.primarySoftPurple, lineWidth: isSelected ? 2 : 0)
+                .stroke(.primaryMediumBlue, lineWidth: isSelected ? 2 : 0)
                 .shadow(
                     color: .black.opacity(0.13),
                     radius: 8,
@@ -158,7 +158,7 @@ struct StepFourView: View {
                     .font(.system(size: 20, weight: .semibold))
 
                 Text("Pick up to 2. This shapes the weekly suggestions we give you.")
-                    .font(.system(size: 15, weight: .light))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,5 +200,11 @@ struct StepFourView: View {
         .navigationDestination(isPresented: $goToStepFive) {
             StepFiveView(data: $data)
         }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        OnboardingView()
     }
 }
