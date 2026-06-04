@@ -60,11 +60,11 @@ public actor PipelineOrchestrator {
                 let segmentStart = result.0
                 let segmentEnd = segmentStart + 3.0
                 
-                let matchedTexts = fullTranscripts.filter { t in 
+                let matchedTexts = fullTranscripts.filter { t in
                     max(t.start, segmentStart) < min(t.end, segmentEnd)
-                }.map { $0.text }
-                
-                let transcript = matchedTexts.joined(separator: " ")
+                }.map(\.text)
+
+                let transcript = TranscriptSanitizer.sanitize(matchedTexts.joined(separator: " "))
                 audioResults[segmentStart] = (transcript, result.1)
             }
         }
@@ -221,7 +221,9 @@ public actor PipelineOrchestrator {
             )
         } catch {
             print("⚠️ LLM summary failed, using fallback: \(error)")
-            aiProseSummary = Self.fallbackProseSummary(
+            aiProseSummary = ScreenContentSummaryBuilder.recordingSummary(
+                from: timeline.compactMap(\.contentSummary)
+            ) ?? Self.fallbackProseSummary(
                 timeline: timeline,
                 dominantCategory: dominantCategory
             )
@@ -244,13 +246,23 @@ public actor PipelineOrchestrator {
         )
         
         var concernSignals = insights.signals
-        let fullTranscriptString = fullTranscripts.map { $0.text }.joined(separator: " ")
+        let fullTranscriptString = TranscriptSanitizer.sanitize(
+            fullTranscripts.map(\.text).joined(separator: " ")
+        )
         let sentimentResult = await sentimentAnalyzer.analyze(transcript: fullTranscriptString)
         if sentimentResult.isHighlyNegative {
-            let snippet = sentimentResult.mostNegativeSnippet ?? "the spoken audio"
+            let description: String
+            if let snippet = sentimentResult.mostNegativeSnippet,
+               TranscriptSanitizer.isQuotableSnippet(snippet) {
+                description = """
+                Highly negative sentiment was detected in the video's audio. For example: "\(snippet)"
+                """
+            } else {
+                description = "Highly negative sentiment was detected in the video's audio."
+            }
             concernSignals.append(ConcernSignal(
                 title: "Negative Audio Detected",
-                description: "Highly negative sentiment was detected in the video's audio. For example: \"\(snippet.trimmingCharacters(in: .whitespacesAndNewlines))\"",
+                description: description,
                 severity: .high
             ))
         }

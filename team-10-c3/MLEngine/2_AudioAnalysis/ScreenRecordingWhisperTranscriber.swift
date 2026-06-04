@@ -26,6 +26,11 @@ public enum WhisperTranscriberError: LocalizedError {
 public actor ScreenRecordingWhisperTranscriber {
     private let sharedModelName = "base"
     private let whisperKit: WhisperKit
+    private let decodeOptions = DecodingOptions(
+        task: .transcribe,
+        skipSpecialTokens: true,
+        withoutTimestamps: true
+    )
 
     public init() async throws {
         do {
@@ -44,11 +49,15 @@ public actor ScreenRecordingWhisperTranscriber {
         }
 
         do {
-            let results = try await whisperKit.transcribe(audioPath: path)
-            return results
-                .compactMap(\.text)
-                .joined(separator: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let results = try await whisperKit.transcribe(
+                audioPath: path,
+                decodeOptions: decodeOptions
+            )
+            return TranscriptSanitizer.sanitize(
+                results
+                    .compactMap(\.text)
+                    .joined(separator: " ")
+            )
         } catch {
             throw WhisperTranscriberError.transcriptionFailed(error.localizedDescription)
         }
@@ -61,13 +70,18 @@ public actor ScreenRecordingWhisperTranscriber {
         }
 
         do {
-            let results = try await whisperKit.transcribe(audioPath: path)
+            let results = try await whisperKit.transcribe(
+                audioPath: path,
+                decodeOptions: decodeOptions
+            )
             return results.flatMap { result in
-                result.segments.map { segment in
-                    SegmentedTranscript(
+                result.segments.compactMap { segment in
+                    let text = TranscriptSanitizer.sanitize(segment.text)
+                    guard TranscriptSanitizer.isMeaningful(text) else { return nil }
+                    return SegmentedTranscript(
                         start: TimeInterval(segment.start),
                         end: TimeInterval(segment.end),
-                        text: segment.text
+                        text: text
                     )
                 }
             }

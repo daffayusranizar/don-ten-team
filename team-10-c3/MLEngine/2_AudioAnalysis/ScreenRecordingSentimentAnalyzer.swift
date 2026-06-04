@@ -19,8 +19,8 @@ public actor ScreenRecordingSentimentAnalyzer {
     
     /// Analyzes the sentiment of a transcript and returns a score between -1.0 (most negative) and 1.0 (most positive).
     public func analyze(transcript: String) -> SentimentAnalysisResult {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let trimmed = TranscriptSanitizer.sanitize(transcript)
+        guard TranscriptSanitizer.isMeaningful(trimmed) else {
             return SentimentAnalysisResult(score: 0.0, isHighlyNegative: false)
         }
         
@@ -37,9 +37,11 @@ public actor ScreenRecordingSentimentAnalyzer {
         
         tagger.enumerateTags(in: trimmed.startIndex..<trimmed.endIndex, unit: .sentence, scheme: .sentimentScore, options: []) { tag, tokenRange in
             if let tag = tag, let score = Double(tag.rawValue) {
+                let sentence = TranscriptSanitizer.sanitize(String(trimmed[tokenRange]))
+                guard TranscriptSanitizer.isQuotableSnippet(sentence) else { return true }
                 if score < mostNegativeScore {
                     mostNegativeScore = score
-                    mostNegativeSentence = String(trimmed[tokenRange])
+                    mostNegativeSentence = sentence
                 }
             }
             return true

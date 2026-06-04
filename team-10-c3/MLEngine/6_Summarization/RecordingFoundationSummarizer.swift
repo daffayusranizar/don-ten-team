@@ -231,8 +231,11 @@ public actor LLMSummarizer {
             }
 
             var parts: [String] = [entry.label]
-            if let transcript = entry.audioTranscript?.trimmingCharacters(in: .whitespacesAndNewlines), !transcript.isEmpty {
-                parts.append("spoken: \(truncate(transcript, limit: 120))")
+            if let transcript = entry.audioTranscript {
+                let spoken = TranscriptSanitizer.sanitize(transcript)
+                if TranscriptSanitizer.isMeaningful(spoken) {
+                    parts.append("spoken: \(truncate(spoken, limit: 120))")
+                }
             }
             if let prompt = entry.videoMatchedPrompt ?? entry.matchedPrompt {
                 parts.append("visual: \(truncate(prompt, limit: 100))")

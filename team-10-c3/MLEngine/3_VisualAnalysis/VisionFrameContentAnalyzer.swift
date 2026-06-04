@@ -96,8 +96,8 @@ public enum ScreenContentSummaryBuilder {
             parts.append("On screen: \(truncate(screen, limit: 160))")
         }
 
-        let spoken = transcript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !spoken.isEmpty {
+        let spoken = TranscriptSanitizer.sanitize(transcript ?? "")
+        if TranscriptSanitizer.isMeaningful(spoken) {
             parts.append("Spoken: \(truncate(spoken, limit: 160))")
         } else if let audioTone {
             let trimmedTone = audioTone.trimmingCharacters(in: .whitespacesAndNewlines)
