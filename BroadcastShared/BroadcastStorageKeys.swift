@@ -16,8 +16,11 @@ public enum BroadcastStorageKeys {
     /// Set when the extension finishes writing the MP4 for that session id.
     public static let recordingCompletedSessionId = "RecordingCompletedSessionId"
 
-    /// Session duration in minutes, read by the extension for its auto-stop timer.
+    /// Session duration in minutes (legacy); prefer `targetSessionDurationSeconds`.
     public static let targetSessionDurationMinutes = "TargetSessionDurationMinutes"
+
+    /// Exact session length in seconds for the extension auto-stop timer.
+    public static let targetSessionDurationSeconds = "TargetSessionDurationSeconds"
 
     /// Set to `true` when the extension starts, `false` when it finishes.
     public static let broadcastActive = "broadcastActive"

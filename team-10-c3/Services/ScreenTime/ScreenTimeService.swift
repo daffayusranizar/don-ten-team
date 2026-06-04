@@ -32,14 +32,23 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
     }
 
     func startMonitoring(childId: UUID, startAt: Date, plannedEndAt: Date) throws {
+        let monitoringEnd = monitoringIntervalEnd(startAt: startAt, plannedEndAt: plannedEndAt)
         let schedule = DeviceActivitySchedule(
             intervalStart: DateComponents.from(date: startAt),
-            intervalEnd: DateComponents.from(date: plannedEndAt),
+            intervalEnd: DateComponents.from(date: monitoringEnd),
             repeats: false
         )
 
         try center.startMonitoring(activityName, during: schedule)
         SessionShieldStore.applyFromAppGroupIfActive()
+    }
+
+    /// Apple requires ≥15 minutes on the activity schedule; the parent timer may still end sooner.
+    private func monitoringIntervalEnd(startAt: Date, plannedEndAt: Date) -> Date {
+        let minimumEnd = startAt.addingTimeInterval(
+            TimeInterval(SessionDurationLimits.minimumMonitoringSeconds)
+        )
+        return max(plannedEndAt, minimumEnd)
     }
 
     func stopMonitoring() throws {

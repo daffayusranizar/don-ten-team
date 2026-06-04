@@ -284,9 +284,16 @@ class SampleHandler: RPBroadcastSampleHandler {
     // MARK: - Auto-stop timer
 
     private func scheduleAutoStop(defaults: UserDefaults?) {
-        let targetMinutes = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationMinutes) ?? 0
-        guard targetMinutes > 0 else { return }
-        let delay = Double(targetMinutes * 60)
+        let targetSeconds = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationSeconds) ?? 0
+        let delay: Double
+        if targetSeconds > 0 {
+            delay = Double(targetSeconds)
+        } else {
+            let targetMinutes = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationMinutes) ?? 0
+            guard targetMinutes > 0 else { return }
+            delay = Double(targetMinutes * 60)
+        }
+        guard delay > 0 else { return }
         log("⏱ Auto-stop in \(Int(delay))s")
         let item = DispatchWorkItem { [weak self] in
             self?.log("⏱ GCD auto-stop timer fired")

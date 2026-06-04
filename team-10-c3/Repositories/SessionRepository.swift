@@ -57,6 +57,29 @@ struct DayActivitySummary: Sendable, Equatable {
 }
 
 private enum SessionMarkerPairing {
+    /// Latest unpaired `.start` per child (no later `.stop` for that start).
+    static func unpairedActiveSessions(markers: [SessionMarker]) -> [ActiveSessionInfo] {
+        let byChild = Dictionary(grouping: markers) { $0.childId }
+        var actives: [ActiveSessionInfo] = []
+
+        for (childId, childMarkers) in byChild {
+            let sorted = childMarkers.sorted { $0.timestamp < $1.timestamp }
+            guard let lastStart = sorted.last(where: { $0.type == .start }) else { continue }
+            let hasStopAfterStart = sorted.contains {
+                $0.type == .stop && $0.timestamp > lastStart.timestamp
+            }
+            guard !hasStopAfterStart else { continue }
+            actives.append(
+                ActiveSessionInfo(
+                    childId: childId,
+                    startedAt: lastStart.timestamp,
+                    startMarkerId: lastStart.id
+                )
+            )
+        }
+        return actives
+    }
+
     static func completedWindows(
         markers: [SessionMarker],
         childId: UUID,
@@ -116,6 +139,8 @@ protocol SessionRepository {
         timestamp: Date,
         id: UUID
     ) throws -> SessionMarker
+    /// Unpaired start markers across all children; keeps the newest and stops older orphans.
+    func resolveGlobalActiveSession() throws -> ActiveSessionInfo?
     func activeSession(for childId: UUID) throws -> ActiveSessionInfo?
     func lastCompletedSession(for childId: UUID) throws -> CompletedSessionInfo?
     func saveUsageSnapshot(
@@ -158,20 +183,26 @@ final class SwiftDataSessionRepository: SessionRepository {
         return marker
     }
 
+    func resolveGlobalActiveSession() throws -> ActiveSessionInfo? {
+        let markers = try fetchAllMarkers()
+        let actives = SessionMarkerPairing.unpairedActiveSessions(markers: markers)
+        guard let primary = actives.max(by: { $0.startedAt < $1.startedAt }) else { return nil }
+
+        let stopAt = Date()
+        for orphan in actives where orphan.startMarkerId != primary.startMarkerId {
+            _ = try recordMarker(
+                childId: orphan.childId,
+                type: .stop,
+                timestamp: stopAt,
+                id: UUID()
+            )
+        }
+        return primary
+    }
+
     func activeSession(for childId: UUID) throws -> ActiveSessionInfo? {
         let markers = try fetchMarkers(for: childId)
-        guard let lastStart = markers.last(where: { $0.type == .start }) else { return nil }
-
-        let hasStopAfterStart = markers.contains {
-            $0.type == .stop && $0.timestamp > lastStart.timestamp
-        }
-        guard !hasStopAfterStart else { return nil }
-
-        return ActiveSessionInfo(
-            childId: childId,
-            startedAt: lastStart.timestamp,
-            startMarkerId: lastStart.id
-        )
+        return SessionMarkerPairing.unpairedActiveSessions(markers: markers).first
     }
 
     func lastCompletedSession(for childId: UUID) throws -> CompletedSessionInfo? {
@@ -357,6 +388,13 @@ final class SwiftDataSessionRepository: SessionRepository {
         )
     }
 
+    private func fetchAllMarkers() throws -> [SessionMarker] {
+        var descriptor = FetchDescriptor<SessionMarker>(
+            sortBy: [SortDescriptor(\.timestamp, order: .forward)]
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
     private func fetchMarkers(for childId: UUID) throws -> [SessionMarker] {
         let childIdValue = childId
         var descriptor = FetchDescriptor<SessionMarker>(
@@ -402,12 +440,25 @@ final class InMemorySessionRepository: SessionRepository {
         return marker
     }
 
+    func resolveGlobalActiveSession() throws -> ActiveSessionInfo? {
+        let actives = SessionMarkerPairing.unpairedActiveSessions(markers: markers)
+        guard let primary = actives.max(by: { $0.startedAt < $1.startedAt }) else { return nil }
+
+        let stopAt = Date()
+        for orphan in actives where orphan.startMarkerId != primary.startMarkerId {
+            _ = try recordMarker(
+                childId: orphan.childId,
+                type: .stop,
+                timestamp: stopAt,
+                id: UUID()
+            )
+        }
+        return primary
+    }
+
     func activeSession(for childId: UUID) throws -> ActiveSessionInfo? {
-        let childMarkers = markers.filter { $0.childId == childId }.sorted { $0.timestamp < $1.timestamp }
-        guard let lastStart = childMarkers.last(where: { $0.type == .start }) else { return nil }
-        let hasStop = childMarkers.contains { $0.type == .stop && $0.timestamp > lastStart.timestamp }
-        guard !hasStop else { return nil }
-        return ActiveSessionInfo(childId: childId, startedAt: lastStart.timestamp, startMarkerId: lastStart.id)
+        let childMarkers = markers.filter { $0.childId == childId }
+        return SessionMarkerPairing.unpairedActiveSessions(markers: childMarkers).first
     }
 
     func lastCompletedSession(for childId: UUID) throws -> CompletedSessionInfo? {

@@ -50,7 +50,7 @@ struct KidSessionSetupView: View {
                         HStack(spacing: 12) {
                             ForEach(kidSessionViewModel.durationOptions, id: \.self) { minutes in
                                 Button {
-                                    kidSessionViewModel.durationMinutes = minutes
+                                    kidSessionViewModel.setPlannedDuration(seconds: minutes * 60)
                                 } label: {
                                     Text("\(minutes)m")
                                         .font(.system(size: 16, weight: .semibold))

@@ -104,6 +104,7 @@ struct PrimaryDropdown: View {
     @State private var isExpanded = false
     @State private var showAddChild: Bool = false
     @Binding var selectedChild: Child?
+    var allowsSelection: Bool = true
     var size: DropdownSize = .medium
     var iconOption: String = "person.crop.circle.fill"
 
@@ -114,6 +115,7 @@ struct PrimaryDropdown: View {
     var body: some View {
         // Dropdown Button
         Button {
+            guard allowsSelection else { return }
             withAnimation(.snappy) {
                 isExpanded.toggle()
             }
@@ -148,13 +150,16 @@ struct PrimaryDropdown: View {
             )
         }
         .buttonStyle(.plain)
+        .disabled(!allowsSelection)
+        .opacity(allowsSelection ? 1 : 0.65)
 
         // Dropdown Options
         .overlay(alignment: .topLeading) {
-            if isExpanded {
+            if isExpanded, allowsSelection {
                 VStack(spacing: size.optionSpacing) {
                     ForEach(profileViewModel.children) { child in
                         Button {
+                            guard allowsSelection else { return }
                             profileViewModel.selectChild(child)
                             selectedChild = child
 

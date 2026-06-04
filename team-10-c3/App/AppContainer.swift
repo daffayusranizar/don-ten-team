@@ -68,6 +68,7 @@ final class AppContainer {
         self.screenTimeService.deactivateSessionRestrictions()
 
         self.profileViewModel.loadChildren()
+        self.kidSessionViewModel.reconcilePersistedSession(profileViewModel: self.profileViewModel)
     }
 
     convenience init() {

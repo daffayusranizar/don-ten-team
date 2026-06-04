@@ -88,14 +88,22 @@ public class RecordingManager: ObservableObject {
 
     // MARK: - Auto-Stop Session Logic
 
-    public func setSessionDuration(minutes: Int) {
+    public func setSessionDuration(seconds: Int) {
+        let clamped = max(SessionDurationLimits.minimumSeconds, seconds)
         let defaults = UserDefaults(suiteName: appGroupIdentifier)
-        defaults?.set(minutes, forKey: BroadcastStorageKeys.targetSessionDurationMinutes)
+        defaults?.set(clamped, forKey: BroadcastStorageKeys.targetSessionDurationSeconds)
+        defaults?.set(max(1, (clamped + 59) / 60), forKey: BroadcastStorageKeys.targetSessionDurationMinutes)
         defaults?.synchronize()
+    }
+
+    /// Legacy minute-based API; prefer `setSessionDuration(seconds:)`.
+    public func setSessionDuration(minutes: Int) {
+        setSessionDuration(seconds: max(SessionDurationLimits.minimumSeconds, minutes * 60))
     }
 
     public func clearSessionDuration() {
         let defaults = UserDefaults(suiteName: appGroupIdentifier)
+        defaults?.removeObject(forKey: BroadcastStorageKeys.targetSessionDurationSeconds)
         defaults?.removeObject(forKey: BroadcastStorageKeys.targetSessionDurationMinutes)
         defaults?.synchronize()
     }

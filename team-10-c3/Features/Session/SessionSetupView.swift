@@ -15,6 +15,7 @@ struct SessionSetupView: View {
     @State private var seconds = 0
     @State private var recordScreen = false
     @State private var showScreenTimeAuthAlert = false
+    @State private var showSessionStartErrorAlert = false
     @State private var showActiveSession = false
     @State private var showResult = false
     @State private var broadcastObserverTask: Task<Void, Never>?
@@ -34,7 +35,9 @@ struct SessionSetupView: View {
     }
 
     private var canStartSession: Bool {
-        profileViewModel.selectedChild != nil && kidSessionViewModel.canStartSession
+        profileViewModel.selectedChild != nil
+            && kidSessionViewModel.canStartSession
+            && totalSeconds >= SessionDurationLimits.minimumSeconds
     }
 
     var body: some View {
@@ -51,7 +54,7 @@ struct SessionSetupView: View {
                 }
             }
             .onChange(of: totalSeconds) { _, newValue in
-                syncDuration(to: newValue)
+                syncPlannedDurationWhenValid(totalSeconds: newValue)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
                 if recordScreen, BroadcastCaptureStatus.isBroadcastConfirmedForSessionStart {
@@ -74,27 +77,36 @@ struct SessionSetupView: View {
                     stopBroadcastObserver()
                 }
             }
-            .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
-                if isActive {
+            .onChange(of: kidSessionViewModel.phase) { _, newPhase in
+                switch newPhase {
+                case .idle:
+                    showActiveSession = false
+                    showResult = false
+                case .active:
+                    showResult = false
                     showActiveSession = true
-                }
-            }
-            .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
-                if isComplete {
+                case .finished:
+                    showActiveSession = false
                     showResult = true
                 }
             }
             .onAppear {
                 RecordingReadyBridge.startListening()
                 familyControlsAuth.refreshAuthorizationStatus()
-                syncDuration(to: totalSeconds)
+                loadDurationPickersFromViewModel()
+                kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
                 prepareForRecordingMode()
                 if recordScreen {
                     startBroadcastObserver()
                 }
-                if kidSessionViewModel.isSessionActive {
+                switch kidSessionViewModel.phase {
+                case .active:
                     showActiveSession = true
+                case .finished:
+                    showResult = true
+                case .idle:
+                    break
                 }
             }
             .onDisappear {
@@ -110,6 +122,19 @@ struct SessionSetupView: View {
                     }
                 }
             )
+            .onChange(of: kidSessionViewModel.sessionStartError) { _, error in
+                showSessionStartErrorAlert = error != nil
+            }
+            .alert(
+                "Could not start session",
+                isPresented: $showSessionStartErrorAlert
+            ) {
+                Button("OK", role: .cancel) {
+                    kidSessionViewModel.sessionStartError = nil
+                }
+            } message: {
+                Text(kidSessionViewModel.sessionStartError ?? "")
+            }
     }
 
     @ViewBuilder
@@ -151,8 +176,12 @@ struct SessionSetupView: View {
                 PrimaryDropdown(
                     selectedChild: Binding(
                         get: { profileViewModel.selectedChild },
-                        set: { profileViewModel.selectedChild = $0 }
-                    )
+                        set: { newChild in
+                            guard !kidSessionViewModel.locksChildSelection else { return }
+                            profileViewModel.selectedChild = newChild
+                        }
+                    ),
+                    allowsSelection: !kidSessionViewModel.locksChildSelection
                 )
             }
             .padding(.top, 110)
@@ -166,32 +195,34 @@ struct SessionSetupView: View {
 
     @ViewBuilder
     private var startSessionControl: some View {
-        ZStack {
+        if recordScreen {
+            ZStack {
+                PrimaryButton(
+                    title: "Start Session",
+                    size: .large,
+                    isDisabled: !canStartSession,
+                    action: {}
+                )
+                .allowsHitTesting(false)
+
+                StartSessionPickerView {
+                    broadcastStartArmed = true
+                    RecordingManager.shared.stageRecordingSessionId(UUID())
+                    recordingManager.setSessionDuration(seconds: totalSeconds)
+                }
+                .opacity(0.011)
+                .allowsHitTesting(canStartSession)
+            }
+            .frame(maxWidth: .infinity)
+        } else {
             PrimaryButton(
                 title: "Start Session",
                 size: .large,
                 isDisabled: !canStartSession,
-                action: {}
+                action: requestSessionStart
             )
-            .allowsHitTesting(false)
-
-            if recordScreen {
-                StartSessionPickerView {
-                    broadcastStartArmed = true
-                    RecordingManager.shared.stageRecordingSessionId(UUID())
-                }
-                .opacity(0.011)
-                .allowsHitTesting(canStartSession)
-            } else {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard canStartSession else { return }
-                        requestSessionStart()
-                    }
-            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var sessionToolbar: some View {
@@ -233,15 +264,28 @@ struct SessionSetupView: View {
                 }
                 .pickerStyle(.wheel)
 
+                if totalSeconds < SessionDurationLimits.minimumSeconds {
+                    Text("Minimum session length is \(SessionDurationLimits.minimumSeconds) seconds.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                }
+
                 VStack(alignment: .leading) {
                     Text("Quick Select")
                         .font(.system(size: 17, weight: .semibold))
                     HStack {
-                        PrimaryButton(title: "1 hour", size: .small) { withAnimation { hours = 1 } }
+                        PrimaryButton(title: "15 min", size: .small) {
+                            withAnimation { applyDuration(totalSeconds: 15 * 60) }
+                        }
                         Spacer()
-                        PrimaryButton(title: "2 hour", size: .small) { withAnimation { hours = 2 } }
+                        PrimaryButton(title: "30 min", size: .small) {
+                            withAnimation { applyDuration(totalSeconds: 30 * 60) }
+                        }
                         Spacer()
-                        PrimaryButton(title: "3 hour", size: .small) { withAnimation { hours = 3 } }
+                        PrimaryButton(title: "1 hour", size: .small) {
+                            withAnimation { applyDuration(totalSeconds: 60 * 60) }
+                        }
                     }
                 }
                 .padding(.top, 10)
@@ -250,9 +294,23 @@ struct SessionSetupView: View {
         }
     }
 
-    private func syncDuration(to total: Int) {
-        recordingManager.setSessionDuration(minutes: max(1, total / 60))
-        kidSessionViewModel.durationMinutes = max(1, total / 60)
+    private func loadDurationPickersFromViewModel() {
+        applyDuration(totalSeconds: kidSessionViewModel.plannedDurationSeconds)
+    }
+
+    private func applyDuration(totalSeconds: Int) {
+        let clamped = max(SessionDurationLimits.minimumSeconds, totalSeconds)
+        hours = clamped / 3600
+        minutes = (clamped % 3600) / 60
+        seconds = clamped % 60
+        kidSessionViewModel.setPlannedDuration(seconds: clamped)
+        recordingManager.setSessionDuration(seconds: clamped)
+    }
+
+    private func syncPlannedDurationWhenValid(totalSeconds: Int) {
+        guard totalSeconds >= SessionDurationLimits.minimumSeconds else { return }
+        kidSessionViewModel.setPlannedDuration(seconds: totalSeconds)
+        recordingManager.setSessionDuration(seconds: totalSeconds)
     }
 
     private func requestSessionStart() {
@@ -267,9 +325,11 @@ struct SessionSetupView: View {
     private func beginSessionAfterAuthorization() {
         guard profileViewModel.selectedChild != nil else { return }
         kidSessionViewModel.syncSelectedChild(from: profileViewModel)
-        syncDuration(to: totalSeconds)
-        kidSessionViewModel.startSession(includesScreenRecording: false)
-        showActiveSession = true
+        applyDuration(totalSeconds: totalSeconds)
+        kidSessionViewModel.startSession(
+            includesScreenRecording: false,
+            plannedDurationSeconds: totalSeconds
+        )
         onSessionStarted?()
     }
 
@@ -282,6 +342,7 @@ struct SessionSetupView: View {
     /// Starts the session only after the user tapped Start Session and ReplayKit confirmed broadcast.
     private func evaluateBroadcastAndMaybeStartSession() {
         guard recordScreen, broadcastStartArmed else { return }
+        guard totalSeconds >= SessionDurationLimits.minimumSeconds else { return }
 
         if kidSessionViewModel.isSessionActive {
             showActiveSession = true
@@ -312,12 +373,12 @@ struct SessionSetupView: View {
     private func beginSessionFromBroadcast() {
         guard BroadcastCaptureStatus.isBroadcastConfirmedForSessionStart else { return }
         kidSessionViewModel.syncSelectedChild(from: profileViewModel)
-        syncDuration(to: totalSeconds)
+        applyDuration(totalSeconds: totalSeconds)
         kidSessionViewModel.startSession(
             includesScreenRecording: true,
-            recordingBroadcastConfirmed: true
+            recordingBroadcastConfirmed: true,
+            plannedDurationSeconds: totalSeconds
         )
-        showActiveSession = true
     }
 
     /// Polls for external-display capture and extension start after the user confirms broadcast.

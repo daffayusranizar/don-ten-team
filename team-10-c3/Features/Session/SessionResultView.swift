@@ -21,11 +21,21 @@ struct SessionResultView: View {
         !kidSessionViewModel.sessionIncludedScreenRecording
     }
 
+    private var isDisplayingFinishedSession: Bool {
+        guard let displayId = kidSessionViewModel.displaySessionId,
+              let finishedId = kidSessionViewModel.completedSessionId else {
+            return false
+        }
+        return displayId == finishedId
+    }
+
     var body: some View {
         @Bindable var viewModel = kidSessionViewModel
 
         Group {
-            if viewModel.isAnalyzingSession {
+            if !isDisplayingFinishedSession {
+                ProgressView("Starting new session…")
+            } else if viewModel.isAnalyzingSession {
                 analyzingContent(viewModel: viewModel)
             } else {
                 resultsScrollContent(
@@ -33,6 +43,9 @@ struct SessionResultView: View {
                     errorMessage: viewModel.sessionAnalysisError
                 )
             }
+        }
+        .task(id: viewModel.displaySessionId) {
+            viewModel.runPostSessionAnalysisIfNeeded()
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -192,23 +205,35 @@ struct SessionResultCard: View {
 // MARK: - Preview
 
 #Preview("With breakdown") {
-    let coordinator = SessionCoordinator(
-        sessionRepository: InMemorySessionRepository(),
-        screenTimeService: ScreenTimeService(),
-        familyControlsAuth: PreviewFamilyControlsAuthService()
-    )
-    let vm = KidSessionViewModel(sessionCoordinator: coordinator)
-    vm.sessionAnalysisResult = PipelineResult(
-        category: "Educational",
-        summary: "Mostly learning content.",
-        creators: ["@Example"],
-        signals: [],
-        conversationStarter: "What did you learn?",
-        offlineActivity: "Draw what you learned.",
-        screens: [.preview]
-    )
-    return NavigationStack {
+    NavigationStack {
         SessionResultView(onStartNew: {})
-            .environment(\.kidSessionViewModel, vm)
+            .environment(\.kidSessionViewModel, SessionResultView_Previews.viewModel)
     }
 }
+
+#if DEBUG
+private enum SessionResultView_Previews {
+    @MainActor static var viewModel: KidSessionViewModel {
+        let coordinator = SessionCoordinator(
+            sessionRepository: InMemorySessionRepository(),
+            screenTimeService: ScreenTimeService(),
+            familyControlsAuth: PreviewFamilyControlsAuthService()
+        )
+        let vm = KidSessionViewModel(sessionCoordinator: coordinator)
+        let id = UUID()
+        vm.configureForPreview(
+            sessionId: id,
+            result: PipelineResult(
+                category: "Educational",
+                summary: "Mostly learning content.",
+                creators: ["@Example"],
+                signals: [],
+                conversationStarter: "What did you learn?",
+                offlineActivity: "Draw what you learned.",
+                screens: [.preview]
+            )
+        )
+        return vm
+    }
+}
+#endif

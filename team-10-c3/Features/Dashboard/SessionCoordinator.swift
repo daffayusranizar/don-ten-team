@@ -26,6 +26,9 @@ private struct ChildDashboardDisplayState {
 @Observable
 @MainActor
 final class SessionCoordinator {
+    /// Grace period after planned end before an unpaired start is auto-finished on restore.
+    private static let staleSessionGraceSeconds: TimeInterval = 15 * 60
+
     private let sessionRepository: SessionRepository
     private let screenTimeService: ScreenTimeUsageProviding
     private let familyControlsAuth: FamilyControlsAuthProviding
@@ -150,11 +153,12 @@ final class SessionCoordinator {
     }
 
     var sessionProgress: Double {
-        let limit = max(1, durationMinutes * 60)
         if isSessionActive {
+            let limit = max(1, plannedDurationSecondsForActiveSession())
             return min(1, Double(elapsedSeconds) / Double(limit))
         }
         guard latestTotalSeconds > 0 else { return 0 }
+        let limit = max(1, latestSessionLimitSeconds)
         return min(1, Double(latestTotalSeconds) / Double(limit))
     }
 
@@ -263,8 +267,11 @@ final class SessionCoordinator {
             let snapshotCount = (try? sessionRepository.fetchSnapshots(for: child.id, month: currentMonthKey()))?
                 .count ?? -1
             if let active = try sessionRepository.activeSession(for: child.id) {
-                applyActiveSession(childId: child.id, startedAt: active.startedAt)
-                try? await screenTimeService.activateSessionRestrictions()
+                currentSessionId = active.startMarkerId
+                if isSessionActive, activeChildId == child.id {
+                    sessionStartAt = active.startedAt
+                    try? await screenTimeService.activateSessionRestrictions()
+                }
             } else if !(isSessionActive && activeChildId == child.id), !isStoppingSession {
                 clearActiveSessionState()
             }
@@ -324,18 +331,64 @@ final class SessionCoordinator {
         return formatter.string(from: Date())
     }
 
+    /// Loads the single persisted active session (if any), finishes stale/orphan rows, and mounts in memory.
+    @discardableResult
+    func reconcilePersistedActiveSession() async -> ActiveSessionInfo? {
+        guard !isStoppingSession else { return nil }
+
+        do {
+            guard let active = try sessionRepository.resolveGlobalActiveSession() else {
+                if !isSessionActive {
+                    clearActiveSessionState()
+                }
+                return nil
+            }
+
+            if isPersistedSessionStale(active) {
+                await forceCompletePersistedSession(active)
+                return nil
+            }
+
+            mountPersistedActiveSession(active)
+            try? await screenTimeService.activateSessionRestrictions()
+            return active
+        } catch {
+            loadError = error.localizedDescription
+            return nil
+        }
+    }
+
     /// Screen Time shields, monitoring, and start marker — no coordinator timer (branch drives countdown).
     @discardableResult
-    func prepareSession(child: Child, durationMinutes: Int) async -> Bool {
+    func prepareSession(child: Child, plannedDurationSeconds: Int) async -> Bool {
         guard !isSessionActive else { return false }
-        return await prepareSessionAuthorized(child: child, durationMinutes: durationMinutes)
+
+        let durationMinutes = Self.durationMinutes(from: plannedDurationSeconds)
+
+        if let persisted = try? sessionRepository.resolveGlobalActiveSession() {
+            if persisted.childId == child.id {
+                mountPersistedActiveSession(persisted, durationMinutes: durationMinutes)
+                return true
+            }
+            loadError = "Finish the current session before starting a new one."
+            return false
+        }
+
+        return await prepareSessionAuthorized(
+            child: child,
+            plannedDurationSeconds: plannedDurationSeconds
+        )
+    }
+
+    private static func durationMinutes(from plannedDurationSeconds: Int) -> Int {
+        max(1, (max(SessionDurationLimits.minimumSeconds, plannedDurationSeconds) + 59) / 60)
     }
 
     func syncRemainingSeconds(_ seconds: Int) {
         remainingSeconds = max(0, seconds)
     }
 
-    private func prepareSessionAuthorized(child: Child, durationMinutes: Int) async -> Bool {
+    private func prepareSessionAuthorized(child: Child, plannedDurationSeconds: Int) async -> Bool {
         guard !isSessionActive else { return false }
 
         do {
@@ -348,9 +401,10 @@ final class SessionCoordinator {
             return false
         }
 
-        self.durationMinutes = durationMinutes
+        let seconds = max(SessionDurationLimits.minimumSeconds, plannedDurationSeconds)
+        durationMinutes = Self.durationMinutes(from: seconds)
         let startAt = Date()
-        let plannedEnd = startAt.addingTimeInterval(TimeInterval(durationMinutes * 60))
+        let plannedEnd = startAt.addingTimeInterval(TimeInterval(seconds))
         plannedEndAt = plannedEnd
         resetPauseState()
 
@@ -368,7 +422,12 @@ final class SessionCoordinator {
                 startAt: startAt,
                 plannedEndAt: plannedEnd
             )
-            applyActiveSession(childId: child.id, startedAt: startAt, startCoordinatorTimer: false)
+            applyActiveSession(
+                childId: child.id,
+                startedAt: startAt,
+                plannedDurationSeconds: seconds,
+                startCoordinatorTimer: false
+            )
             isSessionComplete = false
             loadError = nil
             return true
@@ -378,7 +437,12 @@ final class SessionCoordinator {
         }
     }
 
-    func stopSession() async {
+    /// Wall-clock planned cap for the active session (matches setup countdown).
+    func activePlannedDurationSeconds() -> Int {
+        plannedDurationSecondsForActiveSession()
+    }
+
+    func stopSession(recordedElapsedSeconds: Int? = nil) async {
         guard isSessionActive,
               let childId = activeChildId,
               let startAt = sessionStartAt else { return }
@@ -388,12 +452,16 @@ final class SessionCoordinator {
         defer { isStoppingSession = false }
 
         let stopAt = Date()
-        let elapsedSeconds = wallClockElapsedSeconds(from: startAt, to: stopAt)
+        let plannedSeconds = plannedDurationSecondsForActiveSession()
+        let wallClock = wallClockElapsedSeconds(from: startAt, to: stopAt)
+        let elapsedSeconds: Int = if let recorded = recordedElapsedSeconds {
+            max(0, min(recorded, plannedSeconds))
+        } else {
+            wallClock
+        }
 
         timerTask?.cancel()
         resetPauseState()
-
-        let plannedSeconds = durationMinutes * 60
 
         do {
             _ = try sessionRepository.recordMarker(
@@ -525,12 +593,92 @@ final class SessionCoordinator {
 
     func resetAfterEndScreen() {
         isSessionComplete = false
+        isSessionActive = false
         currentSessionId = nil
+        activeChildId = nil
+        sessionStartAt = nil
+        plannedEndAt = nil
+        remainingSeconds = 0
+        timerTask?.cancel()
+        resetPauseState()
+    }
+
+    private func mountPersistedActiveSession(
+        _ active: ActiveSessionInfo,
+        durationMinutes overrideMinutes: Int? = nil
+    ) {
+        if let overrideMinutes {
+            durationMinutes = overrideMinutes
+        }
+        currentSessionId = active.startMarkerId
+        applyActiveSession(
+            childId: active.childId,
+            startedAt: active.startedAt,
+            startCoordinatorTimer: false
+        )
+    }
+
+    private func isPersistedSessionStale(_ active: ActiveSessionInfo) -> Bool {
+        let plannedEnd = active.startedAt.addingTimeInterval(TimeInterval(durationMinutes * 60))
+        return Date() > plannedEnd.addingTimeInterval(Self.staleSessionGraceSeconds)
+    }
+
+    private func forceCompletePersistedSession(_ active: ActiveSessionInfo) async {
+        guard !isStoppingSession else { return }
+
+        isStoppingSession = true
+        defer { isStoppingSession = false }
+
+        let stopAt = Date()
+        let elapsedSeconds = max(0, Int(stopAt.timeIntervalSince(active.startedAt)))
+        let plannedSeconds = max(
+            SessionDurationLimits.minimumSeconds,
+            durationMinutes * 60
+        )
+
+        do {
+            _ = try sessionRepository.recordMarker(
+                childId: active.childId,
+                type: .stop,
+                timestamp: stopAt,
+                id: UUID()
+            )
+            try? screenTimeService.stopMonitoring()
+            screenTimeService.deactivateSessionRestrictions()
+
+            let snapshot = try sessionRepository.saveUsageSnapshot(
+                childId: active.childId,
+                startAt: active.startedAt,
+                stopAt: stopAt,
+                totalSeconds: elapsedSeconds,
+                plannedDurationSeconds: plannedSeconds
+            )
+            applyCompletedDisplay(
+                childId: active.childId,
+                startAt: active.startedAt,
+                stopAt: stopAt,
+                snapshot: snapshot,
+                screenTimeSeconds: nil
+            )
+        } catch {
+            loadError = error.localizedDescription
+        }
+
+        isSessionActive = false
+        isSessionComplete = true
+        activeChildId = nil
+        sessionStartAt = nil
+        plannedEndAt = nil
+        currentSessionId = nil
+        remainingSeconds = 0
+        timerTask?.cancel()
+        resetPauseState()
     }
 
     private func applyActiveSession(
         childId: UUID,
         startedAt: Date,
+        plannedDurationSeconds explicitSeconds: Int? = nil,
         startCoordinatorTimer: Bool = true
     ) {
         activeChildId = childId
@@ -538,10 +686,15 @@ final class SessionCoordinator {
         isSessionActive = true
         isSessionComplete = false
 
-        if plannedEndAt == nil {
-            plannedEndAt = startedAt.addingTimeInterval(TimeInterval(durationMinutes * 60))
+        if let explicitSeconds {
+            let seconds = max(SessionDurationLimits.minimumSeconds, explicitSeconds)
+            plannedEndAt = startedAt.addingTimeInterval(TimeInterval(seconds))
+        } else if plannedEndAt == nil {
+            plannedEndAt = startedAt.addingTimeInterval(
+                TimeInterval(max(SessionDurationLimits.minimumSeconds, durationMinutes * 60))
+            )
         }
-        remainingSeconds = max(0, Int((plannedEndAt ?? startedAt).timeIntervalSinceNow))
+        remainingSeconds = max(0, Int(plannedEndAt!.timeIntervalSinceNow))
 
         if startCoordinatorTimer {
             startTimer()
@@ -607,12 +760,15 @@ final class SessionCoordinator {
     }
 
     private func refreshScreenTimeFromAPI(for childId: UUID, epoch: UInt64) async {
-        if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
-            hasTodayActivity = true
-            currentDayTotalSeconds = today.totalSeconds
-        } else {
-            hasTodayActivity = false
-            currentDayTotalSeconds = 0
+        let publish = isActiveRefresh(childId: childId, epoch: epoch)
+        mutateChildDisplayState(for: childId, publish: publish) { state in
+            if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
+                state.hasTodayActivity = true
+                state.currentDayTotalSeconds = today.totalSeconds
+            } else {
+                state.hasTodayActivity = false
+                state.currentDayTotalSeconds = 0
+            }
         }
         await refreshLatestScreenTimeFromAPI(for: childId, epoch: epoch)
     }
@@ -684,7 +840,7 @@ final class SessionCoordinator {
             ?? max(0, Int(completed.stoppedAt.timeIntervalSince(completed.startedAt)))
         let screen = screenTimeSeconds ?? completed.snapshot?.resolvedScreenTimeSeconds ?? 0
         state.latestScreenTimeAppTotalSeconds = screen
-        state.latestTotalSeconds = max(state.latestTotalSeconds, wallClock)
+        state.latestTotalSeconds = wallClock
         state.latestBannerTotalSeconds = wallClock
     }
 
@@ -856,7 +1012,6 @@ final class SessionCoordinator {
                 state.summaryHourlyChartSegments = segments
             }
             if appliesToUI {
-                latestScreenTimeAppTotalSeconds = result.apps.map(\.durationSeconds).reduce(0, +)
                 loadError = nil
             }
         } catch {
@@ -941,12 +1096,21 @@ final class SessionCoordinator {
             applyLastSessionBanner(
                 completed: completed,
                 screenTimeSeconds: screenTimeSeconds,
-                plannedLimitSeconds: durationMinutes * 60,
                 into: &state
             )
         }
         publishChildDisplayState(for: childId)
         loadSummaryActivity(for: childId)
+    }
+
+    private func plannedDurationSecondsForActiveSession() -> Int {
+        if let plannedEndAt, let sessionStartAt {
+            return max(
+                SessionDurationLimits.minimumSeconds,
+                Int(plannedEndAt.timeIntervalSince(sessionStartAt))
+            )
+        }
+        return max(SessionDurationLimits.minimumSeconds, durationMinutes * 60)
     }
 
     private func wallClockElapsedSeconds(from startAt: Date, to stopAt: Date) -> Int {

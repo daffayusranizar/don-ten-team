@@ -40,7 +40,7 @@ struct DashboardView: View {
                             hasChildren: !profileViewModel.children.isEmpty,
                             onAddChild: { showAddChild = true }
                         )
-                    } else if sessionCoordinator.isSessionActive {
+                    } else if sessionCoordinator.isSessionActive, kidSessionViewModel.isSessionActive {
                         currentScreenTimeView(
                             coordinator: sessionCoordinator,
                             addingTime: $addingTime,
@@ -106,7 +106,14 @@ struct DashboardView: View {
 
                 HStack {
                     PrimaryDropdown(
-                        selectedChild: $profileViewModel.selectedChild
+                        selectedChild: Binding(
+                            get: { profileViewModel.selectedChild },
+                            set: { newChild in
+                                guard !kidSessionViewModel.locksChildSelection else { return }
+                                profileViewModel.selectedChild = newChild
+                            }
+                        ),
+                        allowsSelection: !kidSessionViewModel.locksChildSelection
                     )
 
                     Button {
@@ -153,12 +160,14 @@ struct DashboardView: View {
         .onAppear {
             familyControlsAuth.refreshAuthorizationStatus()
             profileViewModel.loadChildren()
+            kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
             sessionCoordinator.refresh(for: profileViewModel.selectedChild)
             presentScreenTimePromptIfNeeded()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             familyControlsAuth.refreshAuthorizationStatus()
+            kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
             sessionCoordinator.refresh(for: profileViewModel.selectedChild)
         }
         .onChange(of: profileViewModel.children.count) { _, _ in
@@ -176,6 +185,7 @@ struct DashboardView: View {
             }
         )
         .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
+            guard !kidSessionViewModel.locksChildSelection else { return }
             AgentDebugLog.relayAppGroupLogsToIngest()
             sessionCoordinator.refresh(for: profileViewModel.selectedChild)
         }
@@ -185,12 +195,19 @@ struct DashboardView: View {
                 sessionCoordinator.refresh(for: profileViewModel.selectedChild)
             }
         }
-        .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
-            showKidSessionActive = isActive
-        }
-        .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
-            if isComplete {
+        .onChange(of: kidSessionViewModel.phase) { _, newPhase in
+            switch newPhase {
+            case .idle:
+                showKidSessionActive = false
+                showSessionEnd = false
+                sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+            case .active:
+                showSessionEnd = false
+                showKidSessionActive = true
+            case .finished:
+                showKidSessionActive = false
                 showSessionEnd = true
+                sessionCoordinator.refresh(for: profileViewModel.selectedChild)
             }
         }
         .sheet(isPresented: $addingTime) {
