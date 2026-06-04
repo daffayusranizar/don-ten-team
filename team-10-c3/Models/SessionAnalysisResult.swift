@@ -19,14 +19,18 @@ public struct SessionAnalysisResult: Sendable {
     
     /// The full chronological breakdown of what happened every 3 seconds.
     public let timeline: [FrameClassificationSummary]
-    
+
+    /// Full-session speech excerpt when per-window transcripts are mostly empty but Whisper succeeded on the full track.
+    public let sessionTranscriptExcerpt: String?
+
     public init(
         dominantCategory: ClassificationCategory,
         aiProseSummary: String,
         topCreatorsSeen: [String],
         concernSignals: [ConcernSignal],
         guidance: GuidanceSuggestion,
-        timeline: [FrameClassificationSummary]
+        timeline: [FrameClassificationSummary],
+        sessionTranscriptExcerpt: String? = nil
     ) {
         self.dominantCategory = dominantCategory
         self.aiProseSummary = aiProseSummary
@@ -34,6 +38,7 @@ public struct SessionAnalysisResult: Sendable {
         self.concernSignals = concernSignals
         self.guidance = guidance
         self.timeline = timeline
+        self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
     }
 }
 

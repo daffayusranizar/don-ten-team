@@ -12,9 +12,15 @@ struct PipelineResult {
     let summary: String
     let creators: [String]
     let signals: [String]
-    let conversationStarter: String
+    let conversationStarters: [String]
     let offlineActivity: String
+    let sessionTranscriptExcerpt: String?
     let screens: [ScreenBreakdownItem]
+
+    /// First starter for older call sites.
+    var conversationStarter: String {
+        conversationStarters.first ?? "—"
+    }
 
     /// Kept for older call sites; prefer `screens`.
     var timelineItems: [ScreenBreakdownItem] { screens }
@@ -24,8 +30,10 @@ struct PipelineResult {
         self.summary = result.aiProseSummary
         self.creators = result.topCreatorsSeen
         self.signals = result.concernSignals.map { "[\($0.severity)] \($0.title): \($0.description)" }
-        self.conversationStarter = result.guidance.conversationStarters.first ?? "—"
+        let starters = result.guidance.conversationStarters
+        self.conversationStarters = Array(starters.prefix(3))
         self.offlineActivity = result.guidance.offlineActivity
+        self.sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         self.screens = result.timeline.map { ScreenBreakdownItem(frame: $0) }
     }
 
@@ -34,8 +42,9 @@ struct PipelineResult {
         summary = stored.summary
         creators = stored.creators
         signals = stored.signals
-        conversationStarter = stored.conversationStarter
+        conversationStarters = stored.resolvedConversationStarters
         offlineActivity = stored.offlineActivity
+        sessionTranscriptExcerpt = stored.sessionTranscriptExcerpt
         screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
     }
 }
@@ -118,11 +127,22 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         return "\(Int((confidence * 100).rounded()))% confidence"
     }
 
+    var meaningfulAudioTranscript: String? {
+        TranscriptSanitizer.meaningfulForStorage(audioTranscript ?? "")
+    }
+
+    var isSilentOrUnreadableTone: Bool {
+        AudioToneLabels.isSilentDescription(audioTone ?? "")
+    }
+
     var hasAudioDetails: Bool {
-        let transcript = audioTranscript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if meaningfulAudioTranscript != nil { return true }
+        if let label = audioLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            return true
+        }
         let tone = audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let label = audioLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return !transcript.isEmpty || !tone.isEmpty || !label.isEmpty
+        guard !tone.isEmpty else { return false }
+        return !isSilentOrUnreadableTone
     }
 
     var hasScreenshots: Bool {
@@ -153,14 +173,16 @@ extension PipelineResult {
         signals: [String],
         conversationStarter: String,
         offlineActivity: String,
-        screens: [ScreenBreakdownItem]
+        screens: [ScreenBreakdownItem],
+        sessionTranscriptExcerpt: String? = nil
     ) {
         self.category = category
         self.summary = summary
         self.creators = creators
         self.signals = signals
-        self.conversationStarter = conversationStarter
+        self.conversationStarters = [conversationStarter]
         self.offlineActivity = offlineActivity
+        self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
         self.screens = screens
     }
 }

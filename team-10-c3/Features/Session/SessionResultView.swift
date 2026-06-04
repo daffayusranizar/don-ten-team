@@ -133,9 +133,23 @@ struct SessionResultView: View {
                     SessionResultCard(
                         icon: "bubble.left.and.bubble.right.fill",
                         iconColor: .decorativeSunnyYellow,
-                        title: "Conversation Starter",
-                        content: result.conversationStarter
+                        title: result.conversationStarters.count > 1
+                            ? "Conversation Starters"
+                            : "Conversation Starter",
+                        content: result.conversationStarters
+                            .map { "• \($0)" }
+                            .joined(separator: "\n\n")
                     )
+
+                    if let excerpt = result.sessionTranscriptExcerpt,
+                       TranscriptSanitizer.isMeaningful(excerpt) {
+                        SessionResultCard(
+                            icon: "waveform",
+                            iconColor: .primaryMediumBlue,
+                            title: "What we heard (session)",
+                            content: excerpt
+                        )
+                    }
 
                     SessionResultCard(
                         icon: "leaf.fill",

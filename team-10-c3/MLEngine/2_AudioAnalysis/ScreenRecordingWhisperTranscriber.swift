@@ -26,10 +26,16 @@ public enum WhisperTranscriberError: LocalizedError {
 public actor ScreenRecordingWhisperTranscriber {
     private let sharedModelName = "base"
     private let whisperKit: WhisperKit
-    private let decodeOptions = DecodingOptions(
+    private let windowDecodeOptions = DecodingOptions(
         task: .transcribe,
         skipSpecialTokens: true,
         withoutTimestamps: true
+    )
+
+    private let fullTrackDecodeOptions = DecodingOptions(
+        task: .transcribe,
+        skipSpecialTokens: true,
+        withoutTimestamps: false
     )
 
     public init() async throws {
@@ -51,7 +57,7 @@ public actor ScreenRecordingWhisperTranscriber {
         do {
             let results = try await whisperKit.transcribe(
                 audioPath: path,
-                decodeOptions: decodeOptions
+                decodeOptions: windowDecodeOptions
             )
             return TranscriptSanitizer.sanitize(
                 results
@@ -72,7 +78,7 @@ public actor ScreenRecordingWhisperTranscriber {
         do {
             let results = try await whisperKit.transcribe(
                 audioPath: path,
-                decodeOptions: decodeOptions
+                decodeOptions: fullTrackDecodeOptions
             )
             return results.flatMap { result in
                 result.segments.compactMap { segment in

@@ -1,4 +1,5 @@
 import Accelerate
+import AVFoundation
 import Foundation
 
 public struct AudioToneAnalysis: Sendable {
@@ -6,7 +7,7 @@ public struct AudioToneAnalysis: Sendable {
     public let energy: String
     public let character: String
     public let pace: String?
-    
+
     public init(description: String, energy: String, character: String, pace: String?) {
         self.description = description
         self.energy = energy
@@ -15,23 +16,33 @@ public struct AudioToneAnalysis: Sendable {
     }
 }
 
+public enum AudioToneLabels {
+    public static let silentDescription = "silent or unreadable audio"
+
+    public static func isSilentDescription(_ description: String) -> Bool {
+        let lower = description.lowercased()
+        return lower.contains("silent") || lower.contains("unreadable")
+    }
+}
+
 public actor ScreenRecordingAudioToneAnalyzer {
-    
+
     public init() {}
-    
+
     public func analyze(
         wavURL: URL,
         transcript: String = "",
-        // Defaulting to 3.0 to remove the BroadcastConstants dependency for better isolation
         durationSeconds: TimeInterval = 3.0
     ) -> AudioToneAnalysis {
+        let sanitizedTranscript = TranscriptSanitizer.sanitize(transcript)
+        let hasMeaningfulTranscript = TranscriptSanitizer.isMeaningful(sanitizedTranscript)
+            && !TranscriptSanitizer.isLikelyHallucination(sanitizedTranscript)
+
         guard let samples = loadPCMSamples(from: wavURL), !samples.isEmpty else {
-            return AudioToneAnalysis(
-                description: "silent or unreadable audio",
-                energy: "silent",
-                character: "silent",
-                pace: nil
-            )
+            if hasMeaningfulTranscript {
+                return inferredSpokenAnalysis(transcript: sanitizedTranscript, durationSeconds: durationSeconds)
+            }
+            return silentAnalysis()
         }
 
         let rms = rootMeanSquare(samples)
@@ -39,41 +50,97 @@ public actor ScreenRecordingAudioToneAnalyzer {
         let brightness = highFrequencyEnergy(samples)
 
         let energy = energyLabel(rms: rms)
-        let character = characterLabel(rms: rms, zcr: zcr, brightness: brightness, hasTranscript: !transcript.isEmpty)
-        let pace = paceLabel(transcript: transcript, durationSeconds: durationSeconds)
+        let character = characterLabel(
+            rms: rms,
+            zcr: zcr,
+            brightness: brightness,
+            hasTranscript: hasMeaningfulTranscript
+        )
+        let pace = paceLabel(transcript: sanitizedTranscript, durationSeconds: durationSeconds)
 
         var parts = ["\(energy) \(character) audio"]
         if let pace {
             parts.append(pace)
         }
-        if !transcript.isEmpty {
+        if hasMeaningfulTranscript {
             parts.append("with spoken words")
         } else if character.contains("music") {
             parts.append("without clear speech")
         }
 
+        let description = parts.joined(separator: ", ")
+
+        if AudioToneLabels.isSilentDescription(description), hasMeaningfulTranscript {
+            return inferredSpokenAnalysis(transcript: sanitizedTranscript, durationSeconds: durationSeconds)
+        }
+
         return AudioToneAnalysis(
-            description: parts.joined(separator: ", "),
+            description: description,
             energy: energy,
             character: character,
             pace: pace
         )
     }
 
-    private func loadPCMSamples(from wavURL: URL) -> [Float]? {
-        guard let data = try? Data(contentsOf: wavURL), data.count > 44 else { return nil }
+    private func silentAnalysis() -> AudioToneAnalysis {
+        AudioToneAnalysis(
+            description: AudioToneLabels.silentDescription,
+            energy: "silent",
+            character: "silent",
+            pace: nil
+        )
+    }
 
-        let headerSize = 44
-        let pcmData = data.subdata(in: headerSize ..< data.count)
-        let sampleCount = pcmData.count / MemoryLayout<Int16>.size
-        guard sampleCount > 0 else { return nil }
-
-        return pcmData.withUnsafeBytes { rawBuffer in
-            let int16Buffer = rawBuffer.bindMemory(to: Int16.self)
-            return (0 ..< sampleCount).map { index in
-                Float(int16Buffer[index]) / Float(Int16.max)
-            }
+    private func inferredSpokenAnalysis(
+        transcript: String,
+        durationSeconds: TimeInterval
+    ) -> AudioToneAnalysis {
+        let pace = paceLabel(transcript: transcript, durationSeconds: durationSeconds)
+        var parts = ["calm spoken audio", "with spoken words"]
+        if let pace {
+            parts.append(pace)
         }
+        return AudioToneAnalysis(
+            description: parts.joined(separator: ", "),
+            energy: "calm",
+            character: "spoken",
+            pace: pace
+        )
+    }
+
+    private func loadPCMSamples(from wavURL: URL) -> [Float]? {
+        do {
+            let file = try AVAudioFile(forReading: wavURL)
+            let format = file.processingFormat
+            let frameCapacity = AVAudioFrameCount(file.length)
+            guard frameCapacity > 0,
+                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else {
+                return nil
+            }
+            try file.read(into: buffer)
+
+            let frameLength = Int(buffer.frameLength)
+            guard frameLength > 0 else { return nil }
+
+            let samples: [Float]
+            if let floatChannel = buffer.floatChannelData?[0] {
+                samples = Array(UnsafeBufferPointer(start: floatChannel, count: frameLength))
+            } else if let int16Channel = buffer.int16ChannelData?[0] {
+                samples = (0 ..< frameLength).map { Float(int16Channel[$0]) / Float(Int16.max) }
+            } else {
+                return nil
+            }
+
+            return peakNormalize(samples)
+        } catch {
+            return nil
+        }
+    }
+
+    private func peakNormalize(_ samples: [Float]) -> [Float] {
+        guard let peak = samples.map({ abs($0) }).max(), peak > 1e-6 else { return samples }
+        let scale = min(1.0 / peak, 10.0)
+        return samples.map { $0 * scale }
     }
 
     private func rootMeanSquare(_ samples: [Float]) -> Float {
@@ -109,9 +176,9 @@ public actor ScreenRecordingAudioToneAnalyzer {
 
     private func energyLabel(rms: Float) -> String {
         switch rms {
-        case ..<0.015:
+        case ..<0.008:
             return "quiet"
-        case ..<0.05:
+        case ..<0.04:
             return "calm"
         case ..<0.12:
             return "moderate-energy"
@@ -126,7 +193,7 @@ public actor ScreenRecordingAudioToneAnalyzer {
         brightness: Float,
         hasTranscript: Bool
     ) -> String {
-        if rms < 0.015 {
+        if rms < 0.008, !hasTranscript {
             return "silent"
         }
 

@@ -40,34 +40,66 @@ public actor PipelineOrchestrator {
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🔊 Step 2: Extracting audio windows and full audio track...")
         let audioSegments = try await audioExtractor.exportClassificationWindows(from: videoURL)
         let fullAudioURL = try await audioExtractor.exportFullAudio(from: videoURL)
-        
-        // 3. Process Audio (Full Transcript + Parallel Tones)
+        let hasAudioTrack = await audioExtractor.hasAudioTrack(in: videoURL)
+
+        // 3. Process Audio (Full Transcript + per-window tone/transcript)
         report(.transcribing, 0.28, "Listening with on-device speech recognition…")
-        print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing full audio transcript and \(audioSegments.count) tones...")
-        var audioResults: [TimeInterval: (transcript: String, tone: String)] = [:]
-        
-        let fullTranscripts = fullAudioURL != nil ? try await whisper.transcribeFull(wavURL: fullAudioURL!) : []
-        
-        // Process tones in parallel
-        try await withThrowingTaskGroup(of: (TimeInterval, String).self) { group in
+        print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing audio (\(audioSegments.count) windows, hasAudioTrack=\(hasAudioTrack))...")
+        let windowDuration: TimeInterval = 3.0
+        let fullTranscripts: [SegmentedTranscript]
+        if let fullAudioURL {
+            fullTranscripts = try await whisper.transcribeFull(wavURL: fullAudioURL)
+        } else {
+            fullTranscripts = []
+        }
+
+        var audioResults: [TimeInterval: (transcript: String, pcmTone: String)] = [:]
+
+        try await withThrowingTaskGroup(
+            of: (TimeInterval, String, String).self
+        ) { group in
             for segment in audioSegments {
                 group.addTask {
-                    let tone = await toneAnalyzer.analyze(wavURL: segment.wavURL).description
-                    return (segment.timestamp, tone)
+                    let segmentStart = segment.timestamp
+                    let segmentEnd = segmentStart + windowDuration
+
+                    var matchedTexts = fullTranscripts.filter { entry in
+                        max(entry.start, segmentStart) < min(entry.end, segmentEnd)
+                    }.map(\.text)
+                    var rawTranscript = TranscriptSanitizer.sanitize(matchedTexts.joined(separator: " "))
+
+                    if rawTranscript.isEmpty || !TranscriptSanitizer.isMeaningful(rawTranscript) {
+                        if let fallback = try? await whisper.transcribe(wavURL: segment.wavURL),
+                           !fallback.isEmpty {
+                            rawTranscript = fallback
+                        }
+                    }
+
+                    let storedTranscript = AudioToneResolver.storageTranscript(rawTranscript) ?? ""
+                    let analysis = await toneAnalyzer.analyze(
+                        wavURL: segment.wavURL,
+                        transcript: storedTranscript,
+                        durationSeconds: windowDuration
+                    )
+                    return (segmentStart, storedTranscript, analysis.description)
                 }
             }
-            for try await result in group {
-                let segmentStart = result.0
-                let segmentEnd = segmentStart + 3.0
-                
-                let matchedTexts = fullTranscripts.filter { t in
-                    max(t.start, segmentStart) < min(t.end, segmentEnd)
-                }.map(\.text)
 
-                let transcript = TranscriptSanitizer.sanitize(matchedTexts.joined(separator: " "))
-                audioResults[segmentStart] = (transcript, result.1)
+            for try await item in group {
+                audioResults[item.0] = (transcript: item.1, pcmTone: item.2)
             }
         }
+
+        let windowsWithTranscript = audioResults.values.filter { !$0.transcript.isEmpty }.count
+        print(
+            "[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Audio: \(windowsWithTranscript)/\(audioSegments.count) windows with transcript, full segments=\(fullTranscripts.count)"
+        )
+
+        let sessionTranscriptExcerpt = Self.sessionTranscriptExcerpt(
+            fullTranscripts: fullTranscripts,
+            audioResults: audioResults,
+            windowsWithTranscript: windowsWithTranscript
+        )
         
         // 4. Process Video Frames
         report(.analyzingScreens, 0.38, "Starting screen analysis…")
@@ -96,17 +128,23 @@ public actor PipelineOrchestrator {
                 for frame in batch {
                     group.addTask {
                         let timestamp = frame.timestamp
-                        let audioInfo = audioResults[timestamp] ?? ("", "silent")
+                        let audioInfo = audioResults[timestamp] ?? (transcript: "", pcmTone: AudioToneLabels.silentDescription)
                         
                         if frame.isDuplicateOfPrevious {
+                            let displayTone = AudioToneResolver.resolveDisplayTone(
+                                pcmDescription: audioInfo.pcmTone,
+                                transcript: audioInfo.transcript,
+                                categoryLabel: nil,
+                                contentSummary: nil
+                            )
                             print("[\(Date().formatted(date: .omitted, time: .standard))]      ⚡️ Skipped ML for duplicate frame at \(timestamp)s")
                             return (
                                 timestamp: timestamp,
                                 matches: [],
                                 thumbnail: nil,
                                 bottomCropThumbnail: nil,
-                                audioTranscript: audioInfo.transcript,
-                                audioTone: audioInfo.tone,
+                                audioTranscript: audioInfo.transcript.isEmpty ? nil : audioInfo.transcript,
+                                audioTone: displayTone,
                                 audioLabel: nil,
                                 videoMatchedPrompt: nil,
                                 audioMatchedPrompt: nil,
@@ -127,14 +165,25 @@ public actor PipelineOrchestrator {
                         )
 
                         let frameImages = ImagePreprocessor.frameDisplayImages(from: frame.pixelBuffer)
-                        
-                        // Format the text summary for this specific frame
+                        let categoryLabel = clip.categories.first?.label
+                        let displayTone = AudioToneResolver.resolveDisplayTone(
+                            pcmDescription: audioInfo.pcmTone,
+                            transcript: audioInfo.transcript,
+                            categoryLabel: categoryLabel,
+                            contentSummary: nil
+                        )
                         let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
-                            label: clip.categories.first?.label ?? "Unknown",
+                            label: categoryLabel ?? "Unknown",
                             onScreenText: vision.onScreenText,
                             sceneHints: vision.sceneHints,
                             transcript: audioInfo.transcript,
-                            audioTone: audioInfo.tone
+                            audioTone: displayTone
+                        )
+                        let resolvedTone = AudioToneResolver.resolveDisplayTone(
+                            pcmDescription: audioInfo.pcmTone,
+                            transcript: audioInfo.transcript,
+                            categoryLabel: categoryLabel,
+                            contentSummary: contentSummary
                         )
                         
                         return (
@@ -142,8 +191,8 @@ public actor PipelineOrchestrator {
                             matches: clip.categories,
                             thumbnail: frameImages.thumbnail,
                             bottomCropThumbnail: frameImages.bottomCropThumbnail,
-                            audioTranscript: audioInfo.transcript,
-                            audioTone: audioInfo.tone,
+                            audioTranscript: audioInfo.transcript.isEmpty ? nil : audioInfo.transcript,
+                            audioTone: resolvedTone,
                             audioLabel: nil, 
                             videoMatchedPrompt: clip.prompts.first?.matchedPrompt,
                             audioMatchedPrompt: nil,
@@ -200,6 +249,9 @@ public actor PipelineOrchestrator {
                 rawFrames[i].creatorHandle = rawFrames[i-1].creatorHandle
                 rawFrames[i].thumbnail = rawFrames[i-1].thumbnail
                 rawFrames[i].bottomCropThumbnail = rawFrames[i-1].bottomCropThumbnail
+                rawFrames[i].audioTranscript = rawFrames[i-1].audioTranscript
+                rawFrames[i].audioTone = rawFrames[i-1].audioTone
+                rawFrames[i].audioLabel = rawFrames[i-1].audioLabel
             }
         }
         
@@ -258,8 +310,24 @@ public actor PipelineOrchestrator {
         let fullTranscriptString = TranscriptSanitizer.sanitize(
             fullTranscripts.map(\.text).joined(separator: " ")
         )
-        let sentimentResult = await sentimentAnalyzer.analyze(transcript: fullTranscriptString)
-        if sentimentResult.isHighlyNegative {
+        let sentimentInput: String
+        if TranscriptSanitizer.isSubstantialForSentiment(fullTranscriptString) {
+            sentimentInput = fullTranscriptString
+        } else if let excerpt = sessionTranscriptExcerpt,
+                  TranscriptSanitizer.isSubstantialForSentiment(excerpt) {
+            sentimentInput = excerpt
+        } else {
+            sentimentInput = ""
+        }
+        let silentFrameCount = timeline.filter {
+            AudioToneLabels.isSilentDescription($0.audioTone ?? "")
+        }.count
+        let silentMajority = !timeline.isEmpty && silentFrameCount > timeline.count / 2
+
+        let sentimentResult = await sentimentAnalyzer.analyze(transcript: sentimentInput)
+        if sentimentResult.isHighlyNegative,
+           !sentimentInput.isEmpty,
+           !silentMajority {
             let description: String
             if let snippet = sentimentResult.mostNegativeSnippet,
                TranscriptSanitizer.isQuotableSnippet(snippet) {
@@ -291,13 +359,33 @@ public actor PipelineOrchestrator {
         }
         
         return SessionAnalysisResult(
-            dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []), 
+            dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []),
             aiProseSummary: aiProseSummary,
             topCreatorsSeen: topCreators,
             concernSignals: concernSignals,
             guidance: insights.guidance,
-            timeline: timeline
+            timeline: timeline,
+            sessionTranscriptExcerpt: sessionTranscriptExcerpt
         )
+    }
+
+    /// When per-window alignment is sparse but full-track Whisper succeeded, surface a short excerpt on the result screen.
+    private static func sessionTranscriptExcerpt(
+        fullTranscripts: [SegmentedTranscript],
+        audioResults: [TimeInterval: (transcript: String, pcmTone: String)],
+        windowsWithTranscript: Int
+    ) -> String? {
+        let joined = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
+        guard TranscriptSanitizer.isMeaningful(joined) else { return nil }
+        if windowsWithTranscript >= max(2, audioResults.count / 4) {
+            return nil
+        }
+        let maxLen = 280
+        if joined.count <= maxLen {
+            return joined
+        }
+        let end = joined.index(joined.startIndex, offsetBy: maxLen)
+        return String(joined[..<end]).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 
     /// Detects the old fallback format (newline-joined segment OCR) mistakenly shown as AI Summary.

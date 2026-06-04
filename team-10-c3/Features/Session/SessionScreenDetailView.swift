@@ -69,13 +69,22 @@ struct SessionScreenDetailView: View {
         if let label = screen.audioLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
             lines.append("Label: \(label)")
         }
-        if let tone = screen.audioTone?.trimmingCharacters(in: .whitespacesAndNewlines), !tone.isEmpty {
+
+        let transcript = screen.meaningfulAudioTranscript
+        let tone = screen.audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if screen.isSilentOrUnreadableTone, transcript == nil {
+            lines.append(
+                "App audio wasn’t clear in this clip (Screen Time captures app sound only, not the microphone)."
+            )
+        } else if !tone.isEmpty {
             lines.append("Tone: \(tone)")
         }
-        if let raw = screen.audioTranscript?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !raw.isEmpty {
-            lines.append("Transcript: \(raw)")
+
+        if let transcript {
+            lines.append("Transcript: \(transcript)")
         }
+
         return lines.joined(separator: "\n\n")
     }
 
