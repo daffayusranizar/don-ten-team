@@ -18,6 +18,8 @@ final class KidSessionViewModel {
     var remainingSeconds = 0
     /// Set when the session was started with screen recording enabled.
     var sessionIncludedScreenRecording = false
+    /// True when ReplayKit broadcast was active when the recorded session began.
+    var recordingBroadcastConfirmed = false
 
     var isAnalyzingSession = false
     var analysisProgress = SessionAnalysisProgress.initial
@@ -55,11 +57,15 @@ final class KidSessionViewModel {
     }
 
     /// Branch runtime: local countdown + recording stop signal; Screen Time prep without coordinator timer.
-    func startSession(includesScreenRecording: Bool = false) {
+    func startSession(
+        includesScreenRecording: Bool = false,
+        recordingBroadcastConfirmed: Bool = false
+    ) {
         guard let child = selectedChild else { return }
         guard !isSessionActive else { return }
 
         sessionIncludedScreenRecording = includesScreenRecording
+        self.recordingBroadcastConfirmed = includesScreenRecording && recordingBroadcastConfirmed
         clearAnalysisState()
         timerTask?.cancel()
         let plannedSeconds = durationMinutes * 60
@@ -84,18 +90,28 @@ final class KidSessionViewModel {
 
     func endSessionEarly() {
         timerTask?.cancel()
-        if UIScreen.main.isCaptured {
-            RecordingManager.shared.postStopBroadcast()
+        guard isSessionActive || sessionCoordinator.isSessionActive else { return }
+
+        isSessionActive = false
+        remainingSeconds = 0
+        sessionCoordinator.syncRemainingSeconds(0)
+
+        Task {
+            if sessionIncludedScreenRecording {
+                RecordingManager.shared.postStopBroadcast()
+            }
+            await finishAndPersistSession(requireActive: false)
         }
-        Task { await finishAndPersistSession() }
     }
 
     func resetAfterEndScreen() {
         cancelSessionAnalysis()
         isSessionComplete = false
         sessionIncludedScreenRecording = false
+        recordingBroadcastConfirmed = false
         clearAnalysisState()
         sessionCoordinator.resetAfterEndScreen()
+        RecordingManager.shared.clearBroadcastActiveFlag()
     }
 
     private func startBranchTimer() {
@@ -114,21 +130,38 @@ final class KidSessionViewModel {
     }
 
     /// Main persistence: markers, timer snapshot, Screen Time enrichment; then AI analysis if recorded.
-    private func finishAndPersistSession() async {
-        guard isSessionActive else { return }
+    private func finishAndPersistSession(requireActive: Bool = true) async {
+        if requireActive {
+            guard isSessionActive else { return }
+        }
         timerTask?.cancel()
         isSessionActive = false
         remainingSeconds = 0
         sessionCoordinator.syncRemainingSeconds(0)
 
-        await sessionCoordinator.stopSession()
+        if sessionCoordinator.isSessionActive {
+            await sessionCoordinator.stopSession()
+        }
+
+        if sessionIncludedScreenRecording {
+            await RecordingManager.shared.waitForBroadcastEnded()
+        }
+
         isSessionComplete = true
 
         if sessionIncludedScreenRecording {
-            analysisTask?.cancel()
-            analysisTask = Task { await runSessionAnalysis() }
+            if recordingBroadcastConfirmed || BroadcastCaptureStatus.isReplayKitBroadcastActive {
+                analysisTask?.cancel()
+                analysisTask = Task { await runSessionAnalysis() }
+            } else {
+                sessionAnalysisError = Self.recordingNeverStartedMessage
+            }
         }
     }
+
+    private static let recordingNeverStartedMessage =
+        "Screen recording did not start. Tap Start Session, confirm the system screen recording dialog, " +
+        "then run the session before ending."
 
     private func runSessionAnalysis() async {
         isAnalyzingSession = true
@@ -139,9 +172,23 @@ final class KidSessionViewModel {
 
         guard !Task.isCancelled else { return }
 
+        if !recordingBroadcastConfirmed, !BroadcastCaptureStatus.isCaptureInProgress {
+            if RecordingManager.shared.findLatestRecordingURL() == nil {
+                sessionAnalysisError = Self.recordingNeverStartedMessage
+                return
+            }
+        }
+
+        // If the broadcast is still live (e.g. user ended session while capturing), wait for
+        // the extension to finish writing before we start polling for the recording file.
+        if BroadcastCaptureStatus.isReplayKitBroadcastActive {
+            setAnalysisProgress(phase: .waitingForRecording, fraction: 0.01, detail: "Waiting for broadcast to stop…")
+            await RecordingManager.shared.waitForBroadcastEnded()
+        }
+
         RecordingReadyBridge.startListening()
         setAnalysisProgress(phase: .waitingForRecording, fraction: 0.02, detail: "Waiting for broadcast to finish…")
-        _ = await waitForRecordingReady(timeoutSeconds: 10)
+        _ = await waitForRecordingReady(timeoutSeconds: 20)
 
         guard !Task.isCancelled else { return }
 

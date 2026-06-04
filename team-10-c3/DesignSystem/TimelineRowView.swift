@@ -32,12 +32,7 @@ struct TimelineRowView: View {
                         .lineLimit(2)
                 }
 
-                if let creator = item.creatorHandle, !creator.isEmpty {
-                    Text(creator)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.primaryMediumBlue)
-                        .lineLimit(1)
-                }
+
             }
 
             Spacer(minLength: 0)

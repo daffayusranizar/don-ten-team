@@ -34,15 +34,6 @@ struct SessionScreenDetailView: View {
                     )
                 }
 
-                if let creator = screen.creatorHandle, !creator.isEmpty {
-                    SessionResultCard(
-                        icon: "person.wave.2.fill",
-                        iconColor: .decorativeMintGreen,
-                        title: "Creator",
-                        content: creator
-                    )
-                }
-
                 if screen.hasScreenshots {
                     screenshotsSection
                 }

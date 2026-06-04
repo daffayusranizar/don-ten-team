@@ -108,15 +108,6 @@ struct SessionResultView: View {
                         content: result.summary
                     )
 
-                    if !result.creators.isEmpty {
-                        SessionResultCard(
-                            icon: "person.wave.2.fill",
-                            iconColor: .decorativeMintGreen,
-                            title: "Creators Seen",
-                            content: result.creators.joined(separator: ", ")
-                        )
-                    }
-
                     if !result.signals.isEmpty {
                         SessionResultCard(
                             icon: "exclamationmark.circle.fill",

@@ -214,15 +214,24 @@ public actor PipelineOrchestrator {
         let dominantCategory = timeline.first?.label ?? "Mixed content"
         let aiProseSummary: String
         do {
-            aiProseSummary = try await summarizer.summarizeRecording(
+            var llmSummary = try await summarizer.summarizeRecording(
                 timeline: timeline,
                 overallCategory: dominantCategory,
                 child: child
             )
+            if Self.looksLikeRawSegmentDump(llmSummary) {
+                print("⚠️ LLM summary looked like raw segments; using structured fallback")
+                llmSummary = ScreenContentSummaryBuilder.parentFacingRecordingSummary(
+                    timeline: timeline,
+                    dominantCategory: dominantCategory
+                ) ?? llmSummary
+            }
+            aiProseSummary = llmSummary
         } catch {
             print("⚠️ LLM summary failed, using fallback: \(error)")
-            aiProseSummary = ScreenContentSummaryBuilder.recordingSummary(
-                from: timeline.compactMap(\.contentSummary)
+            aiProseSummary = ScreenContentSummaryBuilder.parentFacingRecordingSummary(
+                timeline: timeline,
+                dominantCategory: dominantCategory
             ) ?? Self.fallbackProseSummary(
                 timeline: timeline,
                 dominantCategory: dominantCategory
@@ -291,18 +300,22 @@ public actor PipelineOrchestrator {
         )
     }
 
+    /// Detects the old fallback format (newline-joined segment OCR) mistakenly shown as AI Summary.
+    private static func looksLikeRawSegmentDump(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        if lower.contains("on screen:") && lower.contains("spoken:") { return true }
+        if text.contains("… and ") && lower.contains("more segments") { return true }
+        if lower.contains("everything on your screen") { return true }
+        return text.filter(\.isNewline).count >= 3
+    }
+
     private static func fallbackProseSummary(
         timeline: [FrameClassificationSummary],
         dominantCategory: String
     ) -> String {
-        let segmentCount = timeline.count
-        guard segmentCount > 0 else {
-            return "We analyzed the recording but could not generate a detailed summary."
-        }
-        let sample = timeline.prefix(3).compactMap(\.contentSummary).joined(separator: " ")
-        if sample.isEmpty {
-            return "The session was mostly \(dominantCategory) across \(segmentCount) analyzed segments."
-        }
-        return "The session was mostly \(dominantCategory). Highlights: \(sample)"
+        ScreenContentSummaryBuilder.parentFacingRecordingSummary(
+            timeline: timeline,
+            dominantCategory: dominantCategory
+        ) ?? "We analyzed the recording but could not generate a detailed summary."
     }
 }

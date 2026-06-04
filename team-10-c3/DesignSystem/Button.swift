@@ -134,6 +134,7 @@ struct SecondaryButton: View {
     let title: String
     var size: ButtonSize = .medium
     var systemImage: String? = nil
+    var isDisabled: Bool = false
     var action: () -> Void
 
     private static let secondaryColor = Color.gray
@@ -145,8 +146,10 @@ struct SecondaryButton: View {
                 .padding(.vertical, size.verticalPadding)
                 .foregroundStyle(Self.secondaryColor)
                 .overlay(Capsule().stroke(Self.secondaryColor, lineWidth: 1))
+                .opacity(isDisabled ? 0.5 : 1)
         }
         .buttonStyle(PressableButtonStyle())
+        .disabled(isDisabled)
     }
 
     @ViewBuilder

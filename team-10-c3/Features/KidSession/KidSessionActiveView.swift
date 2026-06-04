@@ -4,10 +4,20 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct KidSessionActiveView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var isBroadcastLive = false
+
+    private var showsRecordingWarning: Bool {
+        kidSessionViewModel.sessionIncludedScreenRecording && !isBroadcastLive
+    }
+
+    private var isEndingSession: Bool {
+        !kidSessionViewModel.isSessionActive && !kidSessionViewModel.isSessionComplete
+    }
 
     var body: some View {
         VStack(spacing: 32) {
@@ -42,11 +52,23 @@ struct KidSessionActiveView: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
 
+            if showsRecordingWarning {
+                Text(
+                    "Screen recording is not active. End the session, tap Start Session, " +
+                    "and confirm the system recording dialog before continuing."
+                )
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.orange)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+            }
+
             Spacer()
 
             SecondaryButton(
-                title: "End Session Early",
+                title: isEndingSession ? "Ending session…" : "End Session Early",
                 size: .medium,
+                isDisabled: isEndingSession,
                 action: endSession
             )
         }
@@ -58,15 +80,18 @@ struct KidSessionActiveView: View {
         .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
             if isComplete { dismiss() }
         }
-        .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
-            if !isActive, !kidSessionViewModel.isSessionComplete {
-                dismiss()
-            }
+        .onAppear { refreshBroadcastLive() }
+        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
+            refreshBroadcastLive()
         }
     }
 
+    private func refreshBroadcastLive() {
+        isBroadcastLive = BroadcastCaptureStatus.isReplayKitBroadcastActive
+    }
+
     private func endSession() {
+        guard !isEndingSession else { return }
         kidSessionViewModel.endSessionEarly()
-        dismiss()
     }
 }

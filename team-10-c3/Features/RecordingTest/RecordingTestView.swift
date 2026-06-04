@@ -172,9 +172,6 @@ struct RecordingTestView: View {
                 if let result {
                     ResultCard(icon: "📊", title: "Dominant Category", value: result.category)
                     ResultCard(icon: "✍️", title: "AI Summary", value: result.summary)
-                    if !result.creators.isEmpty {
-                        ResultCard(icon: "🎥", title: "Creators Seen", value: result.creators.joined(separator: ", "))
-                    }
                     if !result.signals.isEmpty {
                         ResultCard(icon: "⚠️", title: "Concern Signals", value: result.signals.joined(separator: "\n"))
                     }

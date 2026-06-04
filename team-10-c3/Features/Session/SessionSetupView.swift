@@ -17,6 +17,11 @@ struct SessionSetupView: View {
     @State private var showScreenTimeAuthAlert = false
     @State private var showActiveSession = false
     @State private var showResult = false
+    @State private var broadcastObserverTask: Task<Void, Never>?
+    /// Tracks App Group `broadcastActive` so we only react to false→true (user confirmed broadcast).
+    @State private var extensionBroadcastWasActive = false
+    /// Set when the user taps Start Session — blocks false starts from display connect / toggle alone.
+    @State private var broadcastStartArmed = false
 
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
@@ -49,7 +54,30 @@ struct SessionSetupView: View {
                 syncDuration(to: newValue)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
-                handleCaptureChange()
+                if recordScreen, BroadcastCaptureStatus.isBroadcastConfirmedForSessionStart {
+                    broadcastStartArmed = true
+                }
+                evaluateBroadcastAndMaybeStartSession()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIScreen.didConnectNotification)) { _ in
+                evaluateBroadcastAndMaybeStartSession()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIScreen.didDisconnectNotification)) { _ in
+                evaluateBroadcastAndMaybeStartSession()
+            }
+            .onChange(of: recordScreen) { _, isEnabled in
+                if isEnabled {
+                    prepareForRecordingMode()
+                    startBroadcastObserver()
+                } else {
+                    broadcastStartArmed = false
+                    stopBroadcastObserver()
+                }
+            }
+            .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
+                if isActive, recordScreen {
+                    showActiveSession = true
+                }
             }
             .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
                 if isComplete {
@@ -61,10 +89,27 @@ struct SessionSetupView: View {
                 familyControlsAuth.refreshAuthorizationStatus()
                 syncDuration(to: totalSeconds)
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
+                prepareForRecordingMode()
+                if recordScreen {
+                    startBroadcastObserver()
+                    if kidSessionViewModel.isSessionActive {
+                        showActiveSession = true
+                    }
+                }
             }
-            .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
-                beginSessionAfterAuthorization()
+            .onDisappear {
+                stopBroadcastObserver()
             }
+            .screenTimeAuthorizationAlert(
+                isPresented: $showScreenTimeAuthAlert,
+                onAuthorized: {
+                    if recordScreen, broadcastStartArmed {
+                        beginSessionFromBroadcast()
+                    } else {
+                        beginSessionAfterAuthorization()
+                    }
+                }
+            )
     }
 
     @ViewBuilder
@@ -82,6 +127,14 @@ struct SessionSetupView: View {
                 )
                 .padding(.top, 10)
                 .font(.system(size: 17, weight: .semibold))
+
+                if recordScreen {
+                    Text("Tap Start Session below, then confirm screen recording in the system dialog.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
+                }
 
                 Spacer()
 
@@ -123,9 +176,11 @@ struct SessionSetupView: View {
             .allowsHitTesting(false)
 
             if recordScreen {
-                StartSessionPickerView()
-                    .opacity(0.011)
-                    .allowsHitTesting(canStartSession)
+                StartSessionPickerView {
+                    broadcastStartArmed = true
+                }
+                .opacity(0.011)
+                .allowsHitTesting(canStartSession)
             } else {
                 Color.clear
                     .contentShape(Rectangle())
@@ -207,46 +262,127 @@ struct SessionSetupView: View {
         )
     }
 
+    /// Non-recording path: start immediately after Screen Time authorization.
     private func beginSessionAfterAuthorization() {
         guard profileViewModel.selectedChild != nil else { return }
         kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         syncDuration(to: totalSeconds)
-        kidSessionViewModel.startSession(includesScreenRecording: recordScreen)
+        kidSessionViewModel.startSession(includesScreenRecording: false)
         onSessionStarted?()
         if showsBackButton {
             dismiss()
         }
     }
 
-    private func handleCaptureChange() {
-        guard recordScreen else { return }
-        if UIScreen.main.isCaptured {
-            guard canStartSession else { return }
-            ScreenTimePermissionGate.runIfAuthorized(
-                auth: familyControlsAuth,
-                showAlert: { showScreenTimeAuthAlert = true },
-                onAuthorized: {
-                    kidSessionViewModel.syncSelectedChild(from: profileViewModel)
-                    syncDuration(to: totalSeconds)
-                    kidSessionViewModel.startSession(includesScreenRecording: true)
-                    showActiveSession = true
-                }
-            )
+    /// Resets edge detection when the record toggle changes — does not arm or start a session.
+    private func prepareForRecordingMode() {
+        broadcastStartArmed = false
+        extensionBroadcastWasActive = BroadcastCaptureStatus.isExtensionBroadcastActive
+    }
+
+    /// Starts the session only after the user tapped Start Session and ReplayKit confirmed broadcast.
+    private func evaluateBroadcastAndMaybeStartSession() {
+        guard recordScreen, broadcastStartArmed else { return }
+
+        if kidSessionViewModel.isSessionActive {
+            showActiveSession = true
+            syncExtensionBroadcastEdge()
+            return
         }
+
+        guard canStartSession else {
+            syncExtensionBroadcastEdge()
+            return
+        }
+
+        let confirmed = BroadcastCaptureStatus.isBroadcastConfirmedForSessionStart
+        syncExtensionBroadcastEdge()
+        guard confirmed else { return }
+
+        ScreenTimePermissionGate.runIfAuthorized(
+            auth: familyControlsAuth,
+            showAlert: { showScreenTimeAuthAlert = true },
+            onAuthorized: { beginSessionFromBroadcast() }
+        )
+    }
+
+    private func syncExtensionBroadcastEdge() {
+        extensionBroadcastWasActive = BroadcastCaptureStatus.isExtensionBroadcastActive
+    }
+
+    private func beginSessionFromBroadcast() {
+        guard BroadcastCaptureStatus.isBroadcastConfirmedForSessionStart else { return }
+        kidSessionViewModel.syncSelectedChild(from: profileViewModel)
+        syncDuration(to: totalSeconds)
+        kidSessionViewModel.startSession(
+            includesScreenRecording: true,
+            recordingBroadcastConfirmed: true
+        )
+        showActiveSession = true
+    }
+
+    /// Polls for external-display capture and extension start after the user confirms broadcast.
+    private func startBroadcastObserver() {
+        stopBroadcastObserver()
+        guard recordScreen else { return }
+        broadcastObserverTask = Task { @MainActor in
+            while !Task.isCancelled {
+                if recordScreen {
+                    evaluateBroadcastAndMaybeStartSession()
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    private func stopBroadcastObserver() {
+        broadcastObserverTask?.cancel()
+        broadcastObserverTask = nil
     }
 
 }
 
 private struct StartSessionPickerView: UIViewRepresentable {
+    var onStartTapped: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onStartTapped: onStartTapped)
+    }
+
     func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
         let picker = RPSystemBroadcastPickerView()
         picker.preferredExtension = BroadcastConstants.extensionBundleID
         picker.showsMicrophoneButton = false
+        context.coordinator.attach(to: picker)
         return picker
     }
 
     func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {
-        uiView.subviews.first?.frame = uiView.bounds
+        if let button = uiView.subviews.first {
+            button.frame = uiView.bounds
+        }
+        context.coordinator.attach(to: uiView)
+    }
+
+    final class Coordinator: NSObject {
+        let onStartTapped: () -> Void
+        private weak var attachedButton: UIButton?
+
+        init(onStartTapped: @escaping () -> Void) {
+            self.onStartTapped = onStartTapped
+        }
+
+        func attach(to picker: RPSystemBroadcastPickerView) {
+            guard let button = picker.subviews.first as? UIButton else { return }
+            guard button !== attachedButton else { return }
+            attachedButton?.removeTarget(self, action: #selector(startTapped), for: .touchUpInside)
+            attachedButton = button
+            button.addTarget(self, action: #selector(startTapped), for: .touchUpInside)
+        }
+
+        @objc private func startTapped() {
+            onStartTapped()
+        }
     }
 }
 

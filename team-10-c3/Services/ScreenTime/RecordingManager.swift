@@ -1,30 +1,40 @@
 import Foundation
+import UIKit
 import Combine
 
 @MainActor
 public class RecordingManager: ObservableObject {
     public static let shared = RecordingManager()
-    
+
     public let appGroupIdentifier = BroadcastConstants.appGroupID
-    
+
     private init() {}
-    
+
     public func fetchLatestRecordedVideoPath() -> String? {
-        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else { return nil }
-        return defaults.string(forKey: "LatestRecordingPath")
+        UserDefaults(suiteName: appGroupIdentifier)?
+            .string(forKey: BroadcastStorageKeys.latestRecordingPath)
     }
-    
+
     // MARK: - Auto-Stop Session Logic
+
     public func setSessionDuration(minutes: Int) {
-        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else { return }
-        defaults.set(minutes, forKey: "TargetSessionDurationMinutes")
-        defaults.synchronize()
+        let defaults = UserDefaults(suiteName: appGroupIdentifier)
+        defaults?.set(minutes, forKey: BroadcastStorageKeys.targetSessionDurationMinutes)
+        defaults?.synchronize()
     }
-    
+
     public func clearSessionDuration() {
-        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else { return }
-        defaults.removeObject(forKey: "TargetSessionDurationMinutes")
-        defaults.synchronize()
+        let defaults = UserDefaults(suiteName: appGroupIdentifier)
+        defaults?.removeObject(forKey: BroadcastStorageKeys.targetSessionDurationMinutes)
+        defaults?.synchronize()
+    }
+
+    /// Clears `broadcastActive` only when nothing is capturing (safe after a session ends).
+    public func clearBroadcastActiveFlag() {
+        guard !BroadcastCaptureStatus.isCaptureInProgress else { return }
+        let defaults = UserDefaults(suiteName: appGroupIdentifier)
+        defaults?.set(false, forKey: BroadcastStorageKeys.broadcastActive)
+        defaults?.synchronize()
     }
 
     public func postStopBroadcast() {
@@ -34,6 +44,21 @@ public class RecordingManager: ObservableObject {
             nil, nil, true
         )
     }
+
+    // MARK: - Broadcast Teardown Wait
+
+    /// Polls `UIScreen.main.isCaptured` until the broadcast ends or `timeout` elapses.
+    /// Call this before starting analysis to avoid a race between the extension finalizing
+    /// the recording and the app trying to read it.
+    /// Waits until ReplayKit teardown finishes. Does not wait on external-display mirror `isCaptured`.
+    public func waitForBroadcastEnded(timeout: TimeInterval = 8) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while BroadcastCaptureStatus.isReplayKitBroadcastActive, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+    }
+
+    // MARK: - Recording File Lookup
 
     public func findLatestRecordingURL() -> URL? {
         let fileManager = FileManager.default
@@ -55,9 +80,9 @@ public class RecordingManager: ObservableObject {
             .filter { $0.pathExtension == "mp4" }
             .filter { (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0 > 1000 }
             .sorted {
-                let d1 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let d2 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return d1 > d2
+                let date0 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let date1 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return date0 > date1
             }
             .first
     }

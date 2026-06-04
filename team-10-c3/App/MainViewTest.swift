@@ -76,15 +76,6 @@ struct MainViewTest: View {
                             value: result.summary
                         )
 
-                        // Top Creators
-                        if !result.creators.isEmpty {
-                            ResultCard(
-                                icon: "🎥",
-                                title: "Creators Seen",
-                                value: result.creators.joined(separator: ", ")
-                            )
-                        }
-
                         // Concern Signals
                         if !result.signals.isEmpty {
                             ResultCard(

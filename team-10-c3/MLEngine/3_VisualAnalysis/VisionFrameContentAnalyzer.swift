@@ -39,7 +39,8 @@ public actor VisionFrameContentAnalyzer {
             observation.topCandidates(1).first?.string
         }
 
-        return normalizeText(lines.joined(separator: " "))
+        let raw = normalizeText(lines.joined(separator: " "))
+        return OnScreenTextSanitizer.sanitizeForSummary(raw)
     }
 
     private func classifyScenes(in pixelBuffer: CVPixelBuffer) -> [String] {
@@ -91,9 +92,9 @@ public enum ScreenContentSummaryBuilder {
             parts.append(category)
         }
 
-        let screen = onScreenText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !screen.isEmpty {
-            parts.append("On screen: \(truncate(screen, limit: 160))")
+        let screen = OnScreenTextSanitizer.sanitizeForSummary(onScreenText)
+        if OnScreenTextSanitizer.isUsefulOnScreenContent(screen) {
+            parts.append("On screen: \(truncate(screen, limit: 100))")
         }
 
         let spoken = TranscriptSanitizer.sanitize(transcript ?? "")
@@ -114,19 +115,76 @@ public enum ScreenContentSummaryBuilder {
         return parts.joined(separator: " · ")
     }
 
-    public static func recordingSummary(from segments: [String]) -> String? {
-        let unique = orderedUnique(segments.filter { !$0.isEmpty })
-        guard !unique.isEmpty else { return nil }
+    /// Parent-readable summary when Apple Intelligence is unavailable (no raw OCR dump).
+    public static func parentFacingRecordingSummary(
+        timeline: [FrameClassificationSummary],
+        dominantCategory: String
+    ) -> String? {
+        guard !timeline.isEmpty else { return nil }
 
-        if unique.count == 1 {
-            return unique[0]
+        let segmentCount = timeline.count
+        let estimatedMinutes = max(1, (segmentCount * 3) / 60)
+
+        var categoryCounts: [String: Int] = [:]
+        for item in timeline {
+            let name = item.label
+                .replacingOccurrences(of: " content", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            categoryCounts[name, default: 0] += 1
         }
 
-        let preview = unique.prefix(4).joined(separator: "\n")
-        if unique.count <= 4 {
-            return preview
+        let sortedCategories = categoryCounts.sorted { $0.value > $1.value }
+        let categoryPhrase: String
+        if sortedCategories.count <= 1, let only = sortedCategories.first {
+            categoryPhrase = only.key.lowercased()
+        } else {
+            let parts = sortedCategories.prefix(3).map { entry in
+                let pct = Int((Double(entry.value) / Double(segmentCount)) * 100)
+                return "\(entry.key) (\(pct)%)"
+            }
+            categoryPhrase = parts.joined(separator: ", ")
         }
-        return preview + "\n… and \(unique.count - 4) more segments"
+
+        var themes: [String] = []
+        for item in timeline {
+            if let prompt = item.videoMatchedPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !prompt.isEmpty,
+               !themes.contains(prompt) {
+                themes.append(truncate(prompt, limit: 80))
+            }
+            if themes.count >= 2 { break }
+        }
+
+        if themes.isEmpty {
+            let spokenSnippets = timeline.compactMap { item -> String? in
+                guard let transcript = item.audioTranscript else { return nil }
+                let spoken = TranscriptSanitizer.sanitize(transcript)
+                guard TranscriptSanitizer.isQuotableSnippet(spoken) else { return nil }
+                return truncate(spoken, limit: 90)
+            }
+            themes = orderedUnique(spokenSnippets).prefix(2).map { $0 }
+        }
+
+        let dominant = dominantCategory
+            .replacingOccurrences(of: " content", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        var sentences: [String] = []
+        let durationLabel = estimatedMinutes == 1 ? "about a minute" : "about \(estimatedMinutes) minutes"
+        sentences.append(
+            "During this session (\(durationLabel)), the screen was mostly \(dominant) content."
+        )
+        if sortedCategories.count > 1 {
+            sentences.append("Time broke down as: \(categoryPhrase).")
+        }
+        if !themes.isEmpty {
+            let themeList = themes.joined(separator: "; ")
+            sentences.append("Notable themes included \(themeList).")
+        }
+        sentences.append("Open the screen-by-screen breakdown for more detail.")
+        return sentences.joined(separator: " ")
     }
 
     public static func mergeSegmentSummaries(_ summaries: [String]) -> String? {

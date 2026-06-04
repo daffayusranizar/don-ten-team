@@ -110,6 +110,11 @@
 			path = "team-10-c3";
 			sourceTree = "<group>";
 		};
+		8FBCA0012FCA0000001AF248 /* BroadcastShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BroadcastShared;
+			sourceTree = "<group>";
+		};
 		8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -182,6 +187,7 @@
 				8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */,
 				8FDB9C632FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 				8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */,
+				8FBCA0012FCA0000001AF248 /* BroadcastShared */,
 				8FDA4F162FC5E0B0001AF248 /* Frameworks */,
 				8F5E2D282FC04CB700A62CBC /* Products */,
 			);
@@ -238,6 +244,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
+				8FBCA0012FCA0000001AF248 /* BroadcastShared */,
 			);
 			name = "team-10-c3";
 			packageProductDependencies = (
@@ -282,6 +289,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				8FBCA0012FCA0000001AF248 /* BroadcastShared */,
 				8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */,
 			);
 			name = ScreenRecorderExtension;
@@ -395,13 +403,6 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		8F5E2D232FC04CB700A62CBC /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8FDACT182FC94010001AF248 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (

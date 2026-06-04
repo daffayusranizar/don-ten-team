@@ -18,6 +18,7 @@ struct DashboardView: View {
     @State var showSettings: Bool = false
     @State var showAddChild: Bool = false
     @State var showKidSession: Bool = false
+    @State var showKidSessionActive: Bool = false
     @State var showSessionEnd: Bool = false
     @State var addingTime: Bool = false
     @State private var showScreenTimeAuthAlert = false
@@ -140,6 +141,9 @@ struct DashboardView: View {
                     kidSessionViewModel.syncSelectedChild(from: profileViewModel)
                 }
         }
+        .navigationDestination(isPresented: $showKidSessionActive) {
+            KidSessionActiveView()
+        }
         .navigationDestination(isPresented: $showSessionEnd) {
             SessionResultView {
                 showSessionEnd = false
@@ -181,8 +185,16 @@ struct DashboardView: View {
                 sessionCoordinator.refresh(for: profileViewModel.selectedChild)
             }
         }
+        .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
+            if isActive, kidSessionViewModel.sessionIncludedScreenRecording {
+                showKidSessionActive = true
+            } else if !isActive {
+                showKidSessionActive = false
+            }
+        }
         .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
             if isComplete {
+                showKidSessionActive = false
                 showSessionEnd = true
             }
         }

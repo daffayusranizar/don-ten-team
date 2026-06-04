@@ -20,14 +20,11 @@ enum BroadcastConstants {
     static let recordingFinishedAtKey = "recordingFinishedAt"
     static let broadcastActiveKey = "broadcastActive"
 
-    static var recordingReadyNotification: CFNotificationName {
-        CFNotificationName("\(appGroupID).recordingReady" as CFString)
-    }
+    static var recordingReadyNotification: CFNotificationName { BroadcastNotifications.recordingReady }
+    static var stopBroadcastNotification: CFNotificationName { BroadcastNotifications.stopBroadcast }
 
-    static var stopBroadcastNotification: CFNotificationName {
-        CFNotificationName("\(appGroupID).stopBroadcast" as CFString)
-    }
-
+    static var latestRecordingPathKey: String { BroadcastStorageKeys.latestRecordingPath }
+    static var targetSessionDurationKey: String { BroadcastStorageKeys.targetSessionDurationMinutes }
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
     static var fallbackExtensionBundleID: String { SigningConfig.screenRecorderExtensionBundleID }
