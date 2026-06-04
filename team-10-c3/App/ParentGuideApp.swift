@@ -16,6 +16,7 @@ struct ParentGuideApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onAppear { RecordingReadyBridge.ensureListening() }
                 .preferredColorScheme(.light)
                 .environment(\.featureFlags, container.featureFlags)
                 .environment(\.childRepository, container.childRepository)

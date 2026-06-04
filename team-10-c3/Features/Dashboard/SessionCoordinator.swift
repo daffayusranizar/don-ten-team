@@ -34,6 +34,8 @@ final class SessionCoordinator {
     var isSessionPaused = false
     var isSessionComplete = false
     var sessionStartAt: Date?
+    /// Start-marker id for the active / just-finished session (used for analysis cache).
+    private(set) var currentSessionId: UUID?
     var plannedEndAt: Date?
     var remainingSeconds = 0
     var durationMinutes = 30
@@ -353,7 +355,14 @@ final class SessionCoordinator {
         resetPauseState()
 
         do {
-            _ = try sessionRepository.recordMarker(childId: child.id, type: .start, timestamp: startAt)
+            let markerId = RecordingManager.shared.consumeStagedRecordingSessionId() ?? UUID()
+            let startMarker = try sessionRepository.recordMarker(
+                childId: child.id,
+                type: .start,
+                timestamp: startAt,
+                id: markerId
+            )
+            currentSessionId = startMarker.id
             try screenTimeService.startMonitoring(
                 childId: child.id,
                 startAt: startAt,
@@ -387,7 +396,12 @@ final class SessionCoordinator {
         let plannedSeconds = durationMinutes * 60
 
         do {
-            _ = try sessionRepository.recordMarker(childId: childId, type: .stop, timestamp: stopAt)
+            _ = try sessionRepository.recordMarker(
+                childId: childId,
+                type: .stop,
+                timestamp: stopAt,
+                id: UUID()
+            )
             try? screenTimeService.stopMonitoring()
             screenTimeService.deactivateSessionRestrictions()
         } catch {
@@ -511,6 +525,7 @@ final class SessionCoordinator {
 
     func resetAfterEndScreen() {
         isSessionComplete = false
+        currentSessionId = nil
     }
 
     private func applyActiveSession(

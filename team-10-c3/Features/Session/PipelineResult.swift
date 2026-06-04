@@ -28,6 +28,16 @@ struct PipelineResult {
         self.offlineActivity = result.guidance.offlineActivity
         self.screens = result.timeline.map { ScreenBreakdownItem(frame: $0) }
     }
+
+    init(stored: StoredPipelineResult) {
+        category = stored.category
+        summary = stored.summary
+        creators = stored.creators
+        signals = stored.signals
+        conversationStarter = stored.conversationStarter
+        offlineActivity = stored.offlineActivity
+        screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
+    }
 }
 
 /// One analyzed screen segment (~3s bucket from the recording pipeline).
@@ -58,6 +68,49 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         audioTranscript = frame.audioTranscript
         audioTone = frame.audioTone
         audioLabel = frame.audioLabel
+    }
+
+    init(stored: StoredScreenBreakdown) {
+        id = stored.id
+        timestampLabel = stored.timestampLabel
+        timestampSeconds = stored.timestampSeconds
+        categoryLabel = stored.categoryLabel
+        contentSummary = stored.contentSummary
+        creatorHandle = stored.creatorHandle
+        confidence = stored.confidence
+        thumbnail = nil
+        bottomCropThumbnail = nil
+        audioTranscript = stored.audioTranscript
+        audioTone = stored.audioTone
+        audioLabel = stored.audioLabel
+    }
+
+    init(
+        id: Int,
+        timestampLabel: String,
+        timestampSeconds: TimeInterval,
+        categoryLabel: String,
+        contentSummary: String?,
+        creatorHandle: String?,
+        confidence: Float?,
+        thumbnail: UIImage?,
+        bottomCropThumbnail: UIImage?,
+        audioTranscript: String?,
+        audioTone: String?,
+        audioLabel: String?
+    ) {
+        self.id = id
+        self.timestampLabel = timestampLabel
+        self.timestampSeconds = timestampSeconds
+        self.categoryLabel = categoryLabel
+        self.contentSummary = contentSummary
+        self.creatorHandle = creatorHandle
+        self.confidence = confidence
+        self.thumbnail = thumbnail
+        self.bottomCropThumbnail = bottomCropThumbnail
+        self.audioTranscript = audioTranscript
+        self.audioTone = audioTone
+        self.audioLabel = audioLabel
     }
 
     var confidencePercentText: String? {
@@ -130,32 +183,5 @@ extension ScreenBreakdownItem {
         )
     }
 
-    init(
-        id: Int,
-        timestampLabel: String,
-        timestampSeconds: TimeInterval,
-        categoryLabel: String,
-        contentSummary: String?,
-        creatorHandle: String?,
-        confidence: Float?,
-        thumbnail: UIImage?,
-        bottomCropThumbnail: UIImage?,
-        audioTranscript: String?,
-        audioTone: String?,
-        audioLabel: String?
-    ) {
-        self.id = id
-        self.timestampLabel = timestampLabel
-        self.timestampSeconds = timestampSeconds
-        self.categoryLabel = categoryLabel
-        self.contentSummary = contentSummary
-        self.creatorHandle = creatorHandle
-        self.confidence = confidence
-        self.thumbnail = thumbnail
-        self.bottomCropThumbnail = bottomCropThumbnail
-        self.audioTranscript = audioTranscript
-        self.audioTone = audioTone
-        self.audioLabel = audioLabel
-    }
 }
 #endif

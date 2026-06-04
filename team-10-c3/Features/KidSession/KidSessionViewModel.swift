@@ -11,15 +11,18 @@ import UIKit
 @MainActor
 final class KidSessionViewModel {
     private let sessionCoordinator: SessionCoordinator
+    private let sessionAnalysisStore: SessionAnalysisStore?
 
     var selectedChild: Child?
     var isSessionActive = false
     var isSessionComplete = false
     var remainingSeconds = 0
-    /// Set when the session was started with screen recording enabled.
+    /// True when the user enabled "Record your screen" for this session.
     var sessionIncludedScreenRecording = false
     /// True when ReplayKit broadcast was active when the recorded session began.
     var recordingBroadcastConfirmed = false
+    /// Start-marker id for the session that just ended (analysis cache key).
+    private(set) var completedSessionId: UUID?
 
     var isAnalyzingSession = false
     var analysisProgress = SessionAnalysisProgress.initial
@@ -27,15 +30,21 @@ final class KidSessionViewModel {
     var sessionAnalysisError: String?
 
     private var timerTask: Task<Void, Never>?
-    private var analysisTask: Task<Void, Never>?
+    private var postSessionAnalysisTask: Task<Void, Never>?
+    /// Prevents re-running analysis when navigating back within the same session.
+    private var analyzedSessionId: UUID?
+    /// Baseline + session id used to pick the correct MP4 (not the previous session's file).
+    private var recordingMatchContext: SessionRecordingMatchContext?
 
     let durationOptions: [Int]
 
     init(
         sessionCoordinator: SessionCoordinator,
+        sessionAnalysisStore: SessionAnalysisStore? = nil,
         durationOptions: [Int] = [15, 30, 45, 60]
     ) {
         self.sessionCoordinator = sessionCoordinator
+        self.sessionAnalysisStore = sessionAnalysisStore
         self.durationOptions = durationOptions
     }
 
@@ -56,7 +65,6 @@ final class KidSessionViewModel {
         selectedChild = profileViewModel.selectedChild
     }
 
-    /// Branch runtime: local countdown + recording stop signal; Screen Time prep without coordinator timer.
     func startSession(
         includesScreenRecording: Bool = false,
         recordingBroadcastConfirmed: Bool = false
@@ -66,6 +74,9 @@ final class KidSessionViewModel {
 
         sessionIncludedScreenRecording = includesScreenRecording
         self.recordingBroadcastConfirmed = includesScreenRecording && recordingBroadcastConfirmed
+        completedSessionId = nil
+        analyzedSessionId = nil
+        recordingMatchContext = nil
         clearAnalysisState()
         timerTask?.cancel()
         let plannedSeconds = durationMinutes * 60
@@ -84,6 +95,16 @@ final class KidSessionViewModel {
 
             isSessionActive = true
             sessionCoordinator.syncRemainingSeconds(remainingSeconds)
+
+            if sessionIncludedScreenRecording,
+               let sessionId = sessionCoordinator.currentSessionId {
+                let startedAt = sessionCoordinator.sessionStartAt ?? Date()
+                recordingMatchContext = RecordingManager.shared.bindActiveSessionRecording(
+                    sessionId: sessionId,
+                    sessionStartedAt: startedAt
+                )
+            }
+
             startBranchTimer()
         }
     }
@@ -91,27 +112,151 @@ final class KidSessionViewModel {
     func endSessionEarly() {
         timerTask?.cancel()
         guard isSessionActive || sessionCoordinator.isSessionActive else { return }
+        Task { await completeSession() }
+    }
 
+    func resetAfterEndScreen() {
+        postSessionAnalysisTask?.cancel()
+        postSessionAnalysisTask = nil
+        isAnalyzingSession = false
+        analysisProgress = .initial
+        isSessionComplete = false
+        completedSessionId = nil
+        analyzedSessionId = nil
+        sessionIncludedScreenRecording = false
+        recordingBroadcastConfirmed = false
+        recordingMatchContext = nil
+        clearAnalysisState()
+        sessionCoordinator.resetAfterEndScreen()
+        RecordingManager.shared.clearBroadcastActiveFlag()
+        RecordingManager.shared.clearSessionRecordingBinding()
+    }
+
+    // MARK: - Session end
+
+    /// Ends Screen Time, opens session-complete UI, then runs analysis once for this session id.
+    private func completeSession() async {
+        timerTask?.cancel()
         isSessionActive = false
         remainingSeconds = 0
         sessionCoordinator.syncRemainingSeconds(0)
 
-        Task {
-            if sessionIncludedScreenRecording {
-                RecordingManager.shared.postStopBroadcast()
-            }
-            await finishAndPersistSession(requireActive: false)
+        if sessionCoordinator.isSessionActive {
+            await sessionCoordinator.stopSession()
+        }
+
+        completedSessionId = sessionCoordinator.currentSessionId
+
+        if sessionIncludedScreenRecording {
+            isAnalyzingSession = true
+            analysisProgress = .initial
+            sessionAnalysisResult = nil
+            sessionAnalysisError = nil
+        }
+
+        isSessionComplete = true
+
+        if sessionIncludedScreenRecording {
+            runPostSessionAnalysisIfNeeded()
         }
     }
 
-    func resetAfterEndScreen() {
-        cancelSessionAnalysis()
-        isSessionComplete = false
-        sessionIncludedScreenRecording = false
-        recordingBroadcastConfirmed = false
-        clearAnalysisState()
-        sessionCoordinator.resetAfterEndScreen()
-        RecordingManager.shared.clearBroadcastActiveFlag()
+    /// Stop broadcast, poll for file, run pipeline — once per `completedSessionId` (SwiftData + memory guard).
+    func runPostSessionAnalysisIfNeeded() {
+        guard sessionIncludedScreenRecording else { return }
+        guard let sessionId = completedSessionId else { return }
+        guard analyzedSessionId != sessionId else { return }
+
+        if let cached = sessionAnalysisStore?.load(sessionId: sessionId) {
+            applyCachedAnalysis(cached, sessionId: sessionId)
+            return
+        }
+
+        guard postSessionAnalysisTask == nil else { return }
+
+        postSessionAnalysisTask = Task {
+            defer {
+                postSessionAnalysisTask = nil
+                isAnalyzingSession = false
+            }
+
+            isAnalyzingSession = true
+            setAnalysisProgress(
+                phase: .waitingForRecording,
+                fraction: 0.02,
+                detail: "Stopping screen recording…"
+            )
+
+            guard let videoURL = await stopRecordingAndWaitForFile() else {
+                let message =
+                    "Recording was not saved. Start screen recording before the session, then try again."
+                sessionAnalysisError = message
+                persistAnalysis(sessionId: sessionId, result: nil, errorMessage: message)
+                analyzedSessionId = sessionId
+                return
+            }
+
+            await executePipeline(videoURL: videoURL, sessionId: sessionId)
+            analyzedSessionId = sessionId
+            recordingMatchContext = nil
+        }
+    }
+
+    private func applyCachedAnalysis(_ cached: SessionAnalysisCacheEntry, sessionId: UUID) {
+        sessionAnalysisResult = cached.result
+        sessionAnalysisError = cached.errorMessage
+        analyzedSessionId = sessionId
+        isAnalyzingSession = false
+    }
+
+    private func persistAnalysis(
+        sessionId: UUID,
+        result: PipelineResult?,
+        errorMessage: String?
+    ) {
+        guard let childId = selectedChild?.id,
+              let sessionAnalysisStore else { return }
+        try? sessionAnalysisStore.save(
+            sessionId: sessionId,
+            childId: childId,
+            result: result,
+            errorMessage: errorMessage
+        )
+    }
+
+    private func stopRecordingAndWaitForFile() async -> URL? {
+        let recordingManager = RecordingManager.shared
+        RecordingReadyBridge.ensureListening()
+        recordingManager.postStopBroadcast()
+
+        guard let context = recordingMatchContext else {
+            return nil
+        }
+
+        let timeout: TimeInterval = 90
+        let interval: TimeInterval = 0.5
+        let started = Date()
+        var attempt = 0
+
+        while Date().timeIntervalSince(started) < timeout {
+            if Task.isCancelled { return nil }
+            attempt += 1
+
+            if let url = recordingManager.findRecordingMatchingSession(context) {
+                return url
+            }
+
+            let elapsed = Date().timeIntervalSince(started)
+            setAnalysisProgress(
+                phase: .waitingForRecording,
+                fraction: min(0.14, 0.02 + (elapsed / timeout) * 0.12),
+                detail: "Waiting for this session's recording… (\(attempt))"
+            )
+
+            try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
+        }
+
+        return recordingManager.findRecordingMatchingSession(context)
     }
 
     private func startBranchTimer() {
@@ -124,75 +269,44 @@ final class KidSessionViewModel {
             }
 
             if !Task.isCancelled {
-                await finishAndPersistSession()
+                await completeSession()
             }
         }
     }
 
-    /// Main persistence: markers, timer snapshot, Screen Time enrichment; then AI analysis if recorded.
-    private func finishAndPersistSession(requireActive: Bool = true) async {
-        if requireActive {
-            guard isSessionActive else { return }
-        }
-        timerTask?.cancel()
-        isSessionActive = false
-        remainingSeconds = 0
-        sessionCoordinator.syncRemainingSeconds(0)
+    private func executePipeline(videoURL: URL, sessionId: UUID) async {
+        guard !Task.isCancelled else { return }
 
-        if sessionCoordinator.isSessionActive {
-            await sessionCoordinator.stopSession()
-        }
+        let child = selectedChild
+        setAnalysisProgress(phase: .loadingRecording, fraction: 0.1, detail: "Recording found")
 
-        if sessionIncludedScreenRecording {
-            await RecordingManager.shared.waitForBroadcastEnded()
-        }
-
-        isSessionComplete = true
-
-        if sessionIncludedScreenRecording {
-            if recordingBroadcastConfirmed || BroadcastCaptureStatus.isReplayKitBroadcastActive {
-                analysisTask?.cancel()
-                analysisTask = Task { await runSessionAnalysis() }
-            } else {
-                sessionAnalysisError = Self.recordingNeverStartedMessage
-            }
+        do {
+            let output = try await SessionAnalysisRunner.runPipeline(
+                videoURL: videoURL,
+                child: child,
+                onProgress: { [weak self] progress in
+                    Task { @MainActor in
+                        self?.analysisProgress = progress
+                    }
+                }
+            )
+            guard !Task.isCancelled else { return }
+            let result = PipelineResult(from: output)
+            sessionAnalysisResult = result
+            persistAnalysis(sessionId: sessionId, result: result, errorMessage: nil)
+        } catch is CancellationError {
+            return
+        } catch {
+            sessionAnalysisError = error.localizedDescription
+            persistAnalysis(sessionId: sessionId, result: nil, errorMessage: error.localizedDescription)
         }
     }
 
-    private static let recordingNeverStartedMessage =
-        "Screen recording did not start. Tap Start Session, confirm the system screen recording dialog, " +
-        "then run the session before ending."
-
-    private func runSessionAnalysis() async {
-        isAnalyzingSession = true
+    func cancelSessionAnalysis() {
+        postSessionAnalysisTask?.cancel()
+        postSessionAnalysisTask = nil
+        isAnalyzingSession = false
         analysisProgress = .initial
-        sessionAnalysisResult = nil
-        sessionAnalysisError = nil
-        defer { isAnalyzingSession = false }
-
-        guard !Task.isCancelled else { return }
-
-        if !recordingBroadcastConfirmed, !BroadcastCaptureStatus.isCaptureInProgress {
-            if RecordingManager.shared.findLatestRecordingURL() == nil {
-                sessionAnalysisError = Self.recordingNeverStartedMessage
-                return
-            }
-        }
-
-        // If the broadcast is still live (e.g. user ended session while capturing), wait for
-        // the extension to finish writing before we start polling for the recording file.
-        if BroadcastCaptureStatus.isReplayKitBroadcastActive {
-            setAnalysisProgress(phase: .waitingForRecording, fraction: 0.01, detail: "Waiting for broadcast to stop…")
-            await RecordingManager.shared.waitForBroadcastEnded()
-        }
-
-        RecordingReadyBridge.startListening()
-        setAnalysisProgress(phase: .waitingForRecording, fraction: 0.02, detail: "Waiting for broadcast to finish…")
-        _ = await waitForRecordingReady(timeoutSeconds: 20)
-
-        guard !Task.isCancelled else { return }
-
-        await executePipeline()
     }
 
     private func setAnalysisProgress(
@@ -207,103 +321,9 @@ final class KidSessionViewModel {
         )
     }
 
-    private func waitForRecordingReady(timeoutSeconds: Int) async -> Bool {
-        await withCheckedContinuation { continuation in
-            var observer: NSObjectProtocol?
-            var finished = false
-
-            let complete: (Bool) -> Void = { value in
-                guard !finished else { return }
-                finished = true
-                if let observer {
-                    NotificationCenter.default.removeObserver(observer)
-                }
-                continuation.resume(returning: value)
-            }
-
-            observer = NotificationCenter.default.addObserver(
-                forName: RecordingReadyBridge.notification,
-                object: nil,
-                queue: .main
-            ) { _ in
-                complete(true)
-            }
-
-            Task {
-                try? await Task.sleep(for: .seconds(timeoutSeconds))
-                complete(false)
-            }
-        }
-    }
-
-    private func executePipeline() async {
-        let recordingManager = RecordingManager.shared
-        let child = selectedChild
-
-        setAnalysisProgress(phase: .loadingRecording, fraction: 0.06, detail: "Looking for the saved video…")
-
-        guard let videoURL = await waitForRecordingFileWithProgress(recordingManager: recordingManager) else {
-            sessionAnalysisError =
-                "No recording found in App Group '\(recordingManager.appGroupIdentifier)'. " +
-                "Make sure you started the ScreenRecorder broadcast and kept it running during the session."
-            return
-        }
-
-        guard !Task.isCancelled else { return }
-
-        do {
-            let output = try await SessionAnalysisRunner.runPipeline(
-                videoURL: videoURL,
-                child: child,
-                onProgress: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.analysisProgress = progress
-                    }
-                }
-            )
-            guard !Task.isCancelled else { return }
-            sessionAnalysisResult = PipelineResult(from: output)
-        } catch is CancellationError {
-            return
-        } catch {
-            sessionAnalysisError = error.localizedDescription
-        }
-    }
-
-    /// Stops analysis UI and cancels in-flight pipeline work.
-    func cancelSessionAnalysis() {
-        analysisTask?.cancel()
-        analysisTask = nil
-        isAnalyzingSession = false
-        analysisProgress = .initial
-    }
-
-    @MainActor
-    private func waitForRecordingFileWithProgress(
-        recordingManager: RecordingManager
-    ) async -> URL? {
-        let maxAttempts = SessionAnalysisRunner.recordingFilePollAttempts
-        for attempt in 0..<maxAttempts {
-            if Task.isCancelled { return nil }
-            if let url = recordingManager.findLatestRecordingURL() {
-                setAnalysisProgress(phase: .loadingRecording, fraction: 0.1, detail: "Recording found")
-                return url
-            }
-            let pollFraction = 0.06 + (0.04 * Double(attempt + 1) / Double(maxAttempts))
-            setAnalysisProgress(
-                phase: .loadingRecording,
-                fraction: pollFraction,
-                detail: "Waiting for file… (\(attempt + 1)/\(maxAttempts))"
-            )
-            if attempt < maxAttempts - 1 {
-                try? await Task.sleep(for: .seconds(SessionAnalysisRunner.recordingFilePollIntervalSeconds))
-            }
-        }
-        return recordingManager.findLatestRecordingURL()
-    }
-
-    /// Clears in-memory AI results; screen-by-screen breakdown is only available until this runs.
     private func clearAnalysisState() {
+        postSessionAnalysisTask?.cancel()
+        postSessionAnalysisTask = nil
         isAnalyzingSession = false
         analysisProgress = .initial
         sessionAnalysisResult = nil

@@ -75,7 +75,7 @@ struct SessionSetupView: View {
                 }
             }
             .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
-                if isActive, recordScreen {
+                if isActive {
                     showActiveSession = true
                 }
             }
@@ -92,9 +92,9 @@ struct SessionSetupView: View {
                 prepareForRecordingMode()
                 if recordScreen {
                     startBroadcastObserver()
-                    if kidSessionViewModel.isSessionActive {
-                        showActiveSession = true
-                    }
+                }
+                if kidSessionViewModel.isSessionActive {
+                    showActiveSession = true
                 }
             }
             .onDisappear {
@@ -178,6 +178,7 @@ struct SessionSetupView: View {
             if recordScreen {
                 StartSessionPickerView {
                     broadcastStartArmed = true
+                    RecordingManager.shared.stageRecordingSessionId(UUID())
                 }
                 .opacity(0.011)
                 .allowsHitTesting(canStartSession)
@@ -268,10 +269,8 @@ struct SessionSetupView: View {
         kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         syncDuration(to: totalSeconds)
         kidSessionViewModel.startSession(includesScreenRecording: false)
+        showActiveSession = true
         onSessionStarted?()
-        if showsBackButton {
-            dismiss()
-        }
     }
 
     /// Resets edge detection when the record toggle changes — does not arm or start a session.

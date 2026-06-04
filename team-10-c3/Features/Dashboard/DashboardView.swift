@@ -186,15 +186,10 @@ struct DashboardView: View {
             }
         }
         .onChange(of: kidSessionViewModel.isSessionActive) { _, isActive in
-            if isActive, kidSessionViewModel.sessionIncludedScreenRecording {
-                showKidSessionActive = true
-            } else if !isActive {
-                showKidSessionActive = false
-            }
+            showKidSessionActive = isActive
         }
         .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
             if isComplete {
-                showKidSessionActive = false
                 showSessionEnd = true
             }
         }

@@ -10,6 +10,12 @@ public enum BroadcastStorageKeys {
     /// Path of the latest recording MP4 that the extension wrote.
     public static let latestRecordingPath = "LatestRecordingPath"
 
+    /// Start-marker UUID for the app session the next/current broadcast belongs to.
+    public static let activeRecordingSessionId = "ActiveRecordingSessionId"
+
+    /// Set when the extension finishes writing the MP4 for that session id.
+    public static let recordingCompletedSessionId = "RecordingCompletedSessionId"
+
     /// Session duration in minutes, read by the extension for its auto-stop timer.
     public static let targetSessionDurationMinutes = "TargetSessionDurationMinutes"
 

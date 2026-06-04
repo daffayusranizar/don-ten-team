@@ -110,7 +110,12 @@ private enum SessionSnapshotMatching {
 
 @MainActor
 protocol SessionRepository {
-    func recordMarker(childId: UUID, type: SessionMarkerType, timestamp: Date) throws -> SessionMarker
+    func recordMarker(
+        childId: UUID,
+        type: SessionMarkerType,
+        timestamp: Date,
+        id: UUID
+    ) throws -> SessionMarker
     func activeSession(for childId: UUID) throws -> ActiveSessionInfo?
     func lastCompletedSession(for childId: UUID) throws -> CompletedSessionInfo?
     func saveUsageSnapshot(
@@ -141,8 +146,13 @@ final class SwiftDataSessionRepository: SessionRepository {
         self.modelContext = modelContext
     }
 
-    func recordMarker(childId: UUID, type: SessionMarkerType, timestamp: Date) throws -> SessionMarker {
-        let marker = SessionMarker(childId: childId, timestamp: timestamp, type: type)
+    func recordMarker(
+        childId: UUID,
+        type: SessionMarkerType,
+        timestamp: Date,
+        id: UUID = UUID()
+    ) throws -> SessionMarker {
+        let marker = SessionMarker(id: id, childId: childId, timestamp: timestamp, type: type)
         modelContext.insert(marker)
         try modelContext.save()
         return marker
@@ -381,8 +391,13 @@ final class InMemorySessionRepository: SessionRepository {
     private var markers: [SessionMarker] = []
     private var snapshots: [SessionUsageSnapshot] = []
 
-    func recordMarker(childId: UUID, type: SessionMarkerType, timestamp: Date) throws -> SessionMarker {
-        let marker = SessionMarker(childId: childId, timestamp: timestamp, type: type)
+    func recordMarker(
+        childId: UUID,
+        type: SessionMarkerType,
+        timestamp: Date,
+        id: UUID = UUID()
+    ) throws -> SessionMarker {
+        let marker = SessionMarker(id: id, childId: childId, timestamp: timestamp, type: type)
         markers.append(marker)
         return marker
     }

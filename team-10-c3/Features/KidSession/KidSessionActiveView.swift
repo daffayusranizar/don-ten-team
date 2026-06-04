@@ -8,23 +8,16 @@ import UIKit
 
 struct KidSessionActiveView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
-    @Environment(\.dismiss) private var dismiss
     @State private var isBroadcastLive = false
 
     private var showsRecordingWarning: Bool {
         kidSessionViewModel.sessionIncludedScreenRecording && !isBroadcastLive
     }
 
-    private var isEndingSession: Bool {
-        !kidSessionViewModel.isSessionActive && !kidSessionViewModel.isSessionComplete
-    }
-
     var body: some View {
         VStack(spacing: 32) {
             HStack {
-                Button {
-                    endSession()
-                } label: {
+                Button(action: endSession) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .semibold))
                         .padding()
@@ -66,9 +59,8 @@ struct KidSessionActiveView: View {
             Spacer()
 
             SecondaryButton(
-                title: isEndingSession ? "Ending session…" : "End Session Early",
+                title: "End Session Early",
                 size: .medium,
-                isDisabled: isEndingSession,
                 action: endSession
             )
         }
@@ -77,9 +69,6 @@ struct KidSessionActiveView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
-        .onChange(of: kidSessionViewModel.isSessionComplete) { _, isComplete in
-            if isComplete { dismiss() }
-        }
         .onAppear { refreshBroadcastLive() }
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
             refreshBroadcastLive()
@@ -91,7 +80,6 @@ struct KidSessionActiveView: View {
     }
 
     private func endSession() {
-        guard !isEndingSession else { return }
         kidSessionViewModel.endSessionEarly()
     }
 }

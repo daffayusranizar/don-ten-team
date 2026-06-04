@@ -48,11 +48,22 @@ class SampleHandler: RPBroadcastSampleHandler {
         let defaults = UserDefaults(suiteName: appGroupID)
         defaults?.set(true, forKey: BroadcastStorageKeys.broadcastActive)
 
-        let filename = "screen_recording_\(Int(Date().timeIntervalSince1970)).mp4"
+        let sessionIdString = defaults?.string(forKey: BroadcastStorageKeys.activeRecordingSessionId)
+        let filename: String
+        if let sessionIdString,
+           !sessionIdString.isEmpty,
+           let sessionId = UUID(uuidString: sessionIdString) {
+            filename = SessionRecordingFilename.mp4Name(sessionId: sessionId)
+            log("📎 Bound broadcast to session \(sessionIdString)")
+        } else {
+            filename = "screen_recording_\(Int(Date().timeIntervalSince1970)).mp4"
+            log("⚠️ No ActiveRecordingSessionId — fallback filename")
+        }
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         let finalURL = groupURL.appendingPathComponent(filename)
         tempRecordingURL = tempURL
         defaults?.set(finalURL.path, forKey: BroadcastStorageKeys.latestRecordingPath)
+        defaults?.removeObject(forKey: BroadcastStorageKeys.recordingCompletedSessionId)
         defaults?.synchronize()
 
         scheduleAutoStop(defaults: defaults)
@@ -84,6 +95,11 @@ class SampleHandler: RPBroadcastSampleHandler {
 
         guard let writer = assetWriter, writer.status == .writing else {
             log("⚠️ Writer not in writing state (status \(assetWriter?.status.rawValue ?? -1))")
+            if let tempURL = tempRecordingURL,
+               FileManager.default.fileExists(atPath: tempURL.path) {
+                log("⚠️ Attempting to salvage temp recording")
+                moveRecordingToAppGroup()
+            }
             markBroadcastInactive()
             return
         }
@@ -296,6 +312,10 @@ class SampleHandler: RPBroadcastSampleHandler {
             try FileManager.default.moveItem(at: tempURL, to: finalURL)
             let defaults = UserDefaults(suiteName: appGroupID)
             defaults?.set(finalURL.path, forKey: BroadcastStorageKeys.latestRecordingPath)
+            if let sessionIdString = defaults?.string(forKey: BroadcastStorageKeys.activeRecordingSessionId),
+               !sessionIdString.isEmpty {
+                defaults?.set(sessionIdString, forKey: BroadcastStorageKeys.recordingCompletedSessionId)
+            }
             defaults?.synchronize()
             log("✅ Recording moved to App Group: \(finalURL.lastPathComponent)")
             CFNotificationCenterPostNotification(

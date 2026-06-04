@@ -19,6 +19,7 @@ final class AppContainer {
     let familyControlsAuth: FamilyControlsAuthService
     let screenTimeService: ScreenTimeUsageProviding
     let sessionCoordinator: SessionCoordinator
+    let sessionAnalysisStore: SessionAnalysisStore
     let kidSessionViewModel: KidSessionViewModel
     let suggestionHistoryRepository: SuggestionHistoryRepository
 
@@ -31,6 +32,7 @@ final class AppContainer {
         familyControlsAuth: FamilyControlsAuthService? = nil,
         screenTimeService: ScreenTimeUsageProviding? = nil,
         sessionCoordinator: SessionCoordinator? = nil,
+        sessionAnalysisStore: SessionAnalysisStore? = nil,
         kidSessionViewModel: KidSessionViewModel? = nil,
         suggestionHistoryRepository: SuggestionHistoryRepository? = nil
     ) {
@@ -52,8 +54,12 @@ final class AppContainer {
             screenTimeService: self.screenTimeService,
             familyControlsAuth: self.familyControlsAuth
         )
+        self.sessionAnalysisStore = sessionAnalysisStore ?? SessionAnalysisStore(
+            modelContext: modelContainer.mainContext
+        )
         self.kidSessionViewModel = kidSessionViewModel ?? KidSessionViewModel(
-            sessionCoordinator: self.sessionCoordinator
+            sessionCoordinator: self.sessionCoordinator,
+            sessionAnalysisStore: self.sessionAnalysisStore
         )
         self.suggestionHistoryRepository = suggestionHistoryRepository
             ?? InMemorySuggestionHistoryRepository()
@@ -74,7 +80,12 @@ final class AppContainer {
     }
 
     private static func makeModelContainer() throws -> ModelContainer {
-        let schema = Schema([Child.self, SessionMarker.self, SessionUsageSnapshot.self])
+        let schema = Schema([
+            Child.self,
+            SessionMarker.self,
+            SessionUsageSnapshot.self,
+            SessionAnalysisRecord.self,
+        ])
         let configuration = ModelConfiguration()
         do {
             return try ModelContainer(for: schema, configurations: configuration)
