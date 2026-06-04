@@ -125,6 +125,7 @@ private struct ProfileFormScreen: View {
                                 )
                             }
                         }
+                        .padding(.leading, 20)
                     }
                     .padding(.horizontal, -30)
                 }
