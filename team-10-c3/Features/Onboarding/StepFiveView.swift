@@ -93,9 +93,9 @@ struct StepFiveView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $goToReviewPage) {
-                ReviewView(/*data: $data*/)
-            }
+        .navigationDestination(isPresented: $goToReviewPage) {
+            ReviewView(data: $data)
+        }
     }
 }
 
