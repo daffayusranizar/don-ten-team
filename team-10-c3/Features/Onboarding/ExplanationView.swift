@@ -16,7 +16,7 @@ struct step: Identifiable {
 struct ExplanationView: View {
     //@Binding var data: OnboardingData
 
-    @State private var goToTermsConditionsPage: Bool = false
+    @State private var goToAgreementsPage: Bool = false
     
     private var steps: [step] = [
         step(
@@ -112,7 +112,7 @@ struct ExplanationView: View {
                 
                 PrimaryButton(
                     title: "Continue",
-                    action: { goToTermsConditionsPage = true }
+                    action: { goToAgreementsPage = true }
                 )
             }
             .foregroundStyle(.textPrimary)
@@ -125,8 +125,8 @@ struct ExplanationView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $goToTermsConditionsPage) {
-                TermsConditionsView()
+            .navigationDestination(isPresented: $goToAgreementsPage) {
+                AgreementView()
             }
         }
     }
