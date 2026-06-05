@@ -6,5 +6,7 @@
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>ScreenRecorderExtensionBundleID</key>
 	<string>$(SCREEN_RECORDER_EXTENSION_BUNDLE_IDENTIFIER)</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Kiddly schedules an alarm when your child's screen time session ends.</string>
 </dict>
 </plist>

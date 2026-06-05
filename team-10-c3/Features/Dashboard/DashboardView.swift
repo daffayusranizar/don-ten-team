@@ -294,7 +294,7 @@ func latestSummary(
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .help(
-                    "ParentGuide counts session minutes with a timer. The chart stacks estimated per-app usage by hour for today."
+                    "Kiddly counts session minutes with a timer. The chart stacks estimated per-app usage by hour for today."
                 )
         }
 

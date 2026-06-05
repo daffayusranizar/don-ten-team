@@ -1,4 +1,4 @@
-# Child data storage in ParentGuide
+# Child data storage in Kiddly
 
 This document explains how child profiles and child-linked session data are stored on device, how reads and writes flow through the app, and what is **not** persisted.
 

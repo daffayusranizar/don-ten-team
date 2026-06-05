@@ -37,7 +37,8 @@ enum FamilyControlsAuthError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAuthorized(let status):
-            return "Screen Time access was not granted (status: \(status)). Open Settings → Screen Time and allow ParentGuide, or tap Enable in Parent’s Access."
+            return "Screen Time access was not granted (status: \(status)). " +
+                "Open Settings → Screen Time and allow Kiddly, or tap Enable in Parent’s Access."
         case .usageAccessNotGranted(let status):
             return ScreenTimeFetchError.missingUsageDataAccess(status: status).localizedDescription
         }
@@ -98,7 +99,7 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     func permissionAlertMessage() -> String {
         if missingPermissions.contains(.familyControlsNotApproved) {
             return """
-            ParentGuide needs Screen Time permission to run parent sessions:
+            Kiddly needs Screen Time permission to run parent sessions:
 
             • Block all apps except TikTok and YouTube
             • Show estimated app usage on the dashboard
@@ -109,7 +110,7 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
         return """
             Screen Time is on, but per-app usage data is not available yet.
 
-            Tap Continue and allow App & Website Usage so ParentGuide can show TikTok and YouTube time. \
+            Tap Continue and allow App & Website Usage so Kiddly can show TikTok and YouTube time. \
             Sessions can still block other apps once basic Screen Time access is granted.
             """
     }
@@ -117,7 +118,8 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     func sessionPermissionBlockedMessage() -> String? {
         guard !canBlockAppsDuringSession else {
             if !canRecordSessionUsage {
-                return "Session started, but usage charts need App & Website Usage. Open Parent’s Access → Allow Screen Time usage."
+                return "Session started, but usage charts need App & Website Usage. " +
+                    "Open Parent’s Access → Allow Screen Time usage."
             }
             return nil
         }

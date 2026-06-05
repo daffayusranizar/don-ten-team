@@ -16,4 +16,9 @@ public enum BroadcastNotifications {
     public static var stopBroadcast: CFNotificationName {
         CFNotificationName("\(BroadcastAppGroup.identifier).stopBroadcast" as CFString)
     }
+
+    /// Posted by the extension when the session timer reaches zero.
+    public static var sessionTimerFired: CFNotificationName {
+        CFNotificationName("\(BroadcastAppGroup.identifier).sessionTimerFired" as CFString)
+    }
 }

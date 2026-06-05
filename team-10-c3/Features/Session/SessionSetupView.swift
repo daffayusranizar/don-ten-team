@@ -15,7 +15,10 @@ struct SessionSetupView: View {
     @State private var seconds = 0
     @State private var recordScreen = false
     @State private var showScreenTimeAuthAlert = false
+    @State private var showAlarmAuthAlert = false
     @State private var showSessionStartErrorAlert = false
+    @State private var alarmAuthorizationState = SessionEndAlarmScheduler.displayState
+    @State private var pendingSessionStartAfterAlarmAuth = false
     @State private var showActiveSession = false
     @State private var showResult = false
     @State private var broadcastObserverTask: Task<Void, Never>?
@@ -93,6 +96,10 @@ struct SessionSetupView: View {
             .onAppear {
                 RecordingReadyBridge.startListening()
                 familyControlsAuth.refreshAuthorizationStatus()
+                refreshAlarmAuthorizationState()
+                if alarmAuthorizationState == .notDetermined {
+                    showAlarmAuthAlert = true
+                }
                 loadDurationPickersFromViewModel()
                 kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
@@ -112,6 +119,13 @@ struct SessionSetupView: View {
             .onDisappear {
                 stopBroadcastObserver()
             }
+            .alarmAuthorizationAlert(
+                isPresented: $showAlarmAuthAlert,
+                onAuthorized: {
+                    refreshAlarmAuthorizationState()
+                    resumePendingSessionStartAfterAlarmAuth()
+                }
+            )
             .screenTimeAuthorizationAlert(
                 isPresented: $showScreenTimeAuthAlert,
                 onAuthorized: {
@@ -143,6 +157,13 @@ struct SessionSetupView: View {
             VStack(spacing: 18) {
                 Color.clear
                     .frame(height: 210)
+
+                if alarmAuthorizationState != .authorized {
+                    SessionEndAlarmPermissionBanner(
+                        authorizationState: alarmAuthorizationState,
+                        onEnable: { showAlarmAuthAlert = true }
+                    )
+                }
 
                 sessionDurationSection
 
@@ -314,11 +335,33 @@ struct SessionSetupView: View {
     }
 
     private func requestSessionStart() {
-        ScreenTimePermissionGate.runIfAuthorized(
-            auth: familyControlsAuth,
-            showAlert: { showScreenTimeAuthAlert = true },
-            onAuthorized: { beginSessionAfterAuthorization() }
+        SessionEndAlarmPermissionGate.runIfAuthorized(
+            showAlert: {
+                pendingSessionStartAfterAlarmAuth = true
+                showAlarmAuthAlert = true
+            },
+            onAuthorized: {
+                ScreenTimePermissionGate.runIfAuthorized(
+                    auth: familyControlsAuth,
+                    showAlert: { showScreenTimeAuthAlert = true },
+                    onAuthorized: { beginSessionAfterAuthorization() }
+                )
+            }
         )
+    }
+
+    private func refreshAlarmAuthorizationState() {
+        alarmAuthorizationState = SessionEndAlarmScheduler.displayState
+    }
+
+    private func resumePendingSessionStartAfterAlarmAuth() {
+        guard pendingSessionStartAfterAlarmAuth else { return }
+        pendingSessionStartAfterAlarmAuth = false
+        if recordScreen, broadcastStartArmed {
+            evaluateBroadcastAndMaybeStartSession()
+        } else {
+            requestSessionStart()
+        }
     }
 
     /// Non-recording path: start immediately after Screen Time authorization.
@@ -359,10 +402,18 @@ struct SessionSetupView: View {
         syncExtensionBroadcastEdge()
         guard confirmed else { return }
 
-        ScreenTimePermissionGate.runIfAuthorized(
-            auth: familyControlsAuth,
-            showAlert: { showScreenTimeAuthAlert = true },
-            onAuthorized: { beginSessionFromBroadcast() }
+        SessionEndAlarmPermissionGate.runIfAuthorized(
+            showAlert: {
+                pendingSessionStartAfterAlarmAuth = true
+                showAlarmAuthAlert = true
+            },
+            onAuthorized: {
+                ScreenTimePermissionGate.runIfAuthorized(
+                    auth: familyControlsAuth,
+                    showAlert: { showScreenTimeAuthAlert = true },
+                    onAuthorized: { beginSessionFromBroadcast() }
+                )
+            }
         )
     }
 

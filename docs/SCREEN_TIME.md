@@ -1,12 +1,12 @@
-# Screen Time data in ParentGuide
+# Screen Time data in Kiddly
 
-This document explains how ParentGuide uses Apple's Screen Time APIs, how we aggregate usage for parent sessions, and what parents should expect on the dashboard.
+This document explains how Kiddly uses Apple's Screen Time APIs, how we aggregate usage for parent sessions, and what parents should expect on the dashboard.
 
 ## What parents see
 
 | Metric | Source | Accuracy |
 |--------|--------|----------|
-| **Session time (today)** | ParentGuide session timer (start/stop, pause-aware) | Exact for time the session was active |
+| **Session time (today)** | Kiddly session timer (start/stop, pause-aware) | Exact for time the session was active |
 | **Last Screen Time (banner)** | Parent session timer for the most recent session | Exact session length |
 | **24h stacked chart + app list** | Live `activityData` per calendar hour for today's sessions | Approximate Apple estimates |
 | **Settings → Screen Time** | Apple's full-day view | Optional “ground truth” for the whole device |
@@ -22,7 +22,7 @@ Session time and per-app bars answer different questions. They will not always a
 
 ## App blocking during sessions
 
-When a parent session **starts**, ParentGuide applies a **ManagedSettings** shield (`SessionAppShield` + `SessionShieldStore`):
+When a parent session **starts**, Kiddly applies a **ManagedSettings** shield (`SessionAppShield` + `SessionShieldStore`):
 
 - **Category policy**: shield all app categories except TikTok/YouTube tokens (`.all(except:)`).
 - **Per-app blocklist**: shield every other installed app token from `FamilyActivityData.installedApplications`.
@@ -35,7 +35,7 @@ Shields clear on session stop and on app launch if no session is active.
 - Test on a **physical device**; the simulator does not enforce shields.
 - In **Screen Time debug**, check App Group key `deviceActivityExtensionHeartbeat` after starting a session — should read `intervalDidStart` if the monitor extension ran.
 
-## What ParentGuide uses
+## What Kiddly uses
 
 - **`DeviceActivityData.activityData`** only—no `DeviceActivityReport`, no report extension, no App Group export for usage charts.
 - **Filter**: One `activityData` query **per calendar hour** touched by any session that day (`SessionActivityFilterBuilder.filterForHour`), scoped to **TikTok and YouTube** via FamilyControls `ApplicationToken`s (`MonitoredApplicationTokens`).

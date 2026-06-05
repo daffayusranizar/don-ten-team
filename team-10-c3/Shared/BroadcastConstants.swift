@@ -27,7 +27,7 @@ public enum BroadcastConstants {
     static var targetSessionDurationKey: String { BroadcastStorageKeys.targetSessionDurationMinutes }
 
     /// Shown in the system screen-recording picker when the parent starts a session.
-    static let extensionDisplayName = "ParentGuide"
+    static let extensionDisplayName = "Kiddly"
 
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
     static var fallbackExtensionBundleID: String { SigningConfig.screenRecorderExtensionBundleID }
@@ -46,10 +46,12 @@ public enum BroadcastConstants {
             return nil
         }
 
-        return contents
+        let extensionBundleIDs = contents
             .filter { $0.pathExtension == "appex" }
             .compactMap { Bundle(url: $0)?.bundleIdentifier }
-            .first { $0.localizedCaseInsensitiveContains("ScreenRecorderExtension") }
+
+        return extensionBundleIDs.first { $0 == fallbackExtensionBundleID }
+            ?? extensionBundleIDs.first { $0.hasSuffix(".ScreenRecorderExtension") }
     }
 
     static var isExtensionEmbedded: Bool {

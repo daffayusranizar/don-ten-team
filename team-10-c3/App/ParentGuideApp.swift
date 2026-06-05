@@ -8,15 +8,36 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
+
+final class AppNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+}
 
 @main
 struct ParentGuideApp: App {
     private let container = AppContainer()
+    private let notificationDelegate = AppNotificationDelegate()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = notificationDelegate
+        Task {
+            await ParentGuideApp.prepareNotificationAuthorization()
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .onAppear { RecordingReadyBridge.ensureListening() }
+                .onAppear {
+                    RecordingReadyBridge.ensureListening()
+                    SessionTimerFiredBridge.ensureListening()
+                }
                 .preferredColorScheme(.light)
                 .environment(\.childRepository, container.childRepository)
                 .environment(\.sessionRepository, container.sessionRepository)
@@ -29,5 +50,18 @@ struct ParentGuideApp: App {
                 .environment(\.familyControlsAuth, container.familyControlsAuth)
         }
         .modelContainer(container.modelContainer)
+    }
+
+    private static func prepareNotificationAuthorization() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound])
+            BroadcastExtensionLog.append("🔔 Notification authorization requested at launch: \(granted)")
+        } catch {
+            BroadcastExtensionLog.append("⚠️ Notification authorization request failed: \(error.localizedDescription)")
+        }
     }
 }

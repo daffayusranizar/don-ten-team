@@ -56,6 +56,7 @@ extension UsageCategorySegment {
 
 enum DurationFormatting {
     /// Compact labels: `45S`, `5M 30S`, `1H 5M 30S`
+    nonisolated
     static func compact(seconds rawSeconds: Int) -> String {
         let seconds = max(0, rawSeconds)
         let hours = seconds / 3600
@@ -76,6 +77,7 @@ enum DurationFormatting {
     }
 
     /// Readable labels: `45 Seconds`, `5 Minutes 30 Seconds`, `1 Hour 5 Minutes`
+    nonisolated
     static func verbose(seconds rawSeconds: Int) -> String {
         let seconds = max(0, rawSeconds)
         let hours = seconds / 3600
@@ -98,6 +100,7 @@ enum DurationFormatting {
         return parts.joined(separator: " ")
     }
 
+    nonisolated
     static func hoursAndMinutes(_ interval: TimeInterval) -> String {
         compact(seconds: Int(interval.rounded()))
     }

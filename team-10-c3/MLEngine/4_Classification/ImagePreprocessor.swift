@@ -16,28 +16,34 @@ struct FrameDisplayImages {
 enum ImagePreprocessor {
     private static let modelInputSize = 256
     private static let screenshotAspectThreshold: CGFloat = 1.6
-    static let screenshotBottomCropFraction: CGFloat = 0.50
     // Using a nonisolated CIContext so it can be safely called from any actor
     private static let renderContext = CIContext(options: [.useSoftwareRenderer: false])
 
-    nonisolated(unsafe) static func modelInputBuffers(from image: UIImage, size: Int = modelInputSize) -> [CVPixelBuffer]? {
+    nonisolated(unsafe)
+    static func modelInputBuffers(
+        from image: UIImage,
+        size: Int = modelInputSize
+    ) -> [CVPixelBuffer]? {
         guard let ciImage = CIImage(image: image) else { return nil }
         let oriented = ciImage.oriented(forExifOrientation: image.imageOrientation.exifOrientation)
         return modelInputBuffers(from: oriented, size: size)
     }
 
-    nonisolated(unsafe) static func modelInputBuffers(from source: CVPixelBuffer, size: Int = modelInputSize) -> [CVPixelBuffer]? {
+    nonisolated(unsafe)
+    static func modelInputBuffers(
+        from source: CVPixelBuffer,
+        size: Int = modelInputSize
+    ) -> [CVPixelBuffer]? {
         modelInputBuffers(from: CIImage(cvPixelBuffer: source), size: size)
     }
 
-    nonisolated(unsafe) static func modelInputPreviews(from source: CVPixelBuffer, size: Int = modelInputSize) -> ModelInputPreviews {
+    nonisolated(unsafe)
+    static func modelInputPreviews(
+        from source: CVPixelBuffer,
+        size: Int = modelInputSize
+    ) -> ModelInputPreviews {
         let buffers = modelInputBuffers(from: source, size: size) ?? []
         let images = buffers.compactMap { uiImage(from: $0) }
-
-        if isTallScreenshot(source), images.count >= 2 {
-            return ModelInputPreviews(fullFrame: images[1], bottomCrop: images[0])
-        }
-
         return ModelInputPreviews(fullFrame: images.first, bottomCrop: nil)
     }
 
@@ -49,38 +55,10 @@ enum ImagePreprocessor {
         return UIImage(cgImage: cgImage)
     }
 
-    /// Full-frame screenshot plus optional caption-area crop for tall phone recordings.
+    /// Full-frame screenshot for timeline / screen breakdown.
     nonisolated(unsafe) static func frameDisplayImages(from source: CVPixelBuffer) -> FrameDisplayImages {
         let thumbnail = uiImage(from: source)
-        let previews = modelInputPreviews(from: source)
-        let bottomCrop: UIImage?
-        if isTallScreenshot(source) {
-            bottomCrop = captionAreaThumbnail(from: CIImage(cvPixelBuffer: source))
-        } else {
-            bottomCrop = previews.bottomCrop
-        }
-        return FrameDisplayImages(thumbnail: thumbnail, bottomCropThumbnail: bottomCrop)
-    }
-
-    /// Bottom portion of a tall screenshot, scaled for on-screen preview (not model input size).
-    nonisolated(unsafe) private static func captionAreaThumbnail(from image: CIImage, maxWidth: CGFloat = 400) -> UIImage? {
-        let extent = image.extent.integral
-        guard extent.width > 0, extent.height > 0 else { return nil }
-
-        let cropHeight = extent.height * screenshotBottomCropFraction
-        let cropRect = CGRect(
-            x: extent.minX,
-            y: extent.minY,
-            width: extent.width,
-            height: cropHeight
-        )
-        let cropped = image.cropped(to: cropRect)
-        let scale = min(1, maxWidth / cropped.extent.width)
-        let scaled = cropped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        guard let cgImage = renderContext.createCGImage(scaled, from: scaled.extent) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        return FrameDisplayImages(thumbnail: thumbnail, bottomCropThumbnail: nil)
     }
 
     /// Left-bottom overlay zone for TikTok/Reels handle OCR at native resolution.
@@ -116,25 +94,14 @@ enum ImagePreprocessor {
         let extent = image.extent.integral
         guard extent.width > 0, extent.height > 0 else { return nil }
 
-        let aspect = extent.height / extent.width
-        if aspect >= screenshotAspectThreshold {
-            guard
-                let bottom = pixelBuffer(from: bottomAnchoredCrop(image, targetSize: CGFloat(size)), width: size, height: size),
-                let full = pixelBuffer(from: letterbox(image, targetSize: CGFloat(size)), width: size, height: size)
-            else {
-                return nil
-            }
-            return [bottom, full]
-        }
-
-        guard let center = pixelBuffer(
-            from: centerCropAspectFill(image, targetSize: CGFloat(size)),
+        guard let fullFrame = pixelBuffer(
+            from: letterbox(image, targetSize: CGFloat(size)),
             width: size,
             height: size
         ) else {
             return nil
         }
-        return [center]
+        return [fullFrame]
     }
 
     private static func isTallScreenshot(_ source: CVPixelBuffer) -> Bool {
@@ -142,21 +109,6 @@ enum ImagePreprocessor {
         let height = CVPixelBufferGetHeight(source)
         guard width > 0 else { return false }
         return CGFloat(height) / CGFloat(width) >= screenshotAspectThreshold
-    }
-
-    private static func bottomAnchoredCrop(_ image: CIImage, targetSize: CGFloat) -> CIImage {
-        let extent = image.extent.integral
-        guard extent.width > 0, extent.height > 0 else { return image }
-
-        let cropHeight = extent.height * screenshotBottomCropFraction
-        let cropRect = CGRect(
-            x: extent.minX,
-            y: extent.minY,
-            width: extent.width,
-            height: cropHeight
-        )
-        let cropped = image.cropped(to: cropRect)
-        return centerCropAspectFill(cropped, targetSize: targetSize)
     }
 
     private static func letterbox(_ image: CIImage, targetSize: CGFloat) -> CIImage {
@@ -177,26 +129,11 @@ enum ImagePreprocessor {
         return positioned.composited(over: background)
     }
 
-    private static func centerCropAspectFill(_ image: CIImage, targetSize: CGFloat) -> CIImage {
-        let extent = image.extent.integral
-        guard extent.width > 0, extent.height > 0 else { return image }
-
-        let scale = max(targetSize / extent.width, targetSize / extent.height)
-        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let scaledExtent = scaled.extent
-
-        let cropX = scaledExtent.midX - targetSize / 2
-        let cropY = scaledExtent.midY - targetSize / 2
-        let cropRect = CGRect(x: cropX, y: cropY, width: targetSize, height: targetSize)
-
-        return scaled.cropped(to: cropRect)
-    }
-
     private static func pixelBuffer(from image: CIImage, width: Int, height: Int) -> CVPixelBuffer? {
         var output: CVPixelBuffer?
         let attrs: [CFString: Any] = [
             kCVPixelBufferCGImageCompatibilityKey: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true
         ]
 
         let status = CVPixelBufferCreate(

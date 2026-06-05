@@ -28,6 +28,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private var stopWorkItem: DispatchWorkItem?
     private var darwinObserverToken: UnsafeMutableRawPointer?
+    private let autoStopQueue = DispatchQueue(label: "com.kiddly.broadcast.autostop")
 
     // MARK: - Broadcast lifecycle
 
@@ -285,22 +286,32 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private func scheduleAutoStop(defaults: UserDefaults?) {
         let targetSeconds = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationSeconds) ?? 0
+        let targetMinutes = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationMinutes) ?? 0
         let delay: Double
         if targetSeconds > 0 {
             delay = Double(targetSeconds)
         } else {
-            let targetMinutes = defaults?.integer(forKey: BroadcastStorageKeys.targetSessionDurationMinutes) ?? 0
-            guard targetMinutes > 0 else { return }
+            guard targetMinutes > 0 else {
+                log("⚠️ Auto-stop not armed (targetSeconds=0, targetMinutes=0)")
+                return
+            }
             delay = Double(targetMinutes * 60)
         }
         guard delay > 0 else { return }
-        log("⏱ Auto-stop in \(Int(delay))s")
+        log("⏱ Auto-stop in \(Int(delay))s (secondsKey=\(targetSeconds), minutesKey=\(targetMinutes))")
         let item = DispatchWorkItem { [weak self] in
-            self?.log("⏱ GCD auto-stop timer fired")
-            self?.triggerStop(reason: "Session timer completed")
+            guard let self else { return }
+            self.log("⏱ GCD auto-stop timer fired")
+            // Signal app first so background notification can fire while child still on device.
+            CFNotificationCenterPostNotification(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                BroadcastNotifications.sessionTimerFired,
+                nil, nil, true
+            )
+            self.triggerStop(reason: "Session timer completed")
         }
         stopWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        autoStopQueue.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     // MARK: - File move + notifications

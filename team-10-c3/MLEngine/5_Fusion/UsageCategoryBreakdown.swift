@@ -50,6 +50,7 @@ public struct UsageCategoryBreakdown: Codable, Equatable, Sendable {
 
     public static let empty = UsageCategoryBreakdown(items: [])
 
+    nonisolated
     public var isEmpty: Bool {
         items.isEmpty || items.allSatisfy { $0.frameCount == 0 }
     }

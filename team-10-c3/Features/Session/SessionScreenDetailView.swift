@@ -50,10 +50,7 @@ struct SessionScreenDetailView: View {
 
             VStack(spacing: 12) {
                 if let thumbnail = screen.thumbnail {
-                    screenshotImage(thumbnail, caption: "Full frame")
-                }
-                if let crop = screen.bottomCropThumbnail {
-                    screenshotImage(crop, caption: "Caption area")
+                    screenshotImage(thumbnail, caption: "Screenshot")
                 }
             }
         }
@@ -119,25 +116,6 @@ extension ScreenBreakdownItem {
                 iconColor: .primaryMediumBlue,
                 title: "Segment summary",
                 content: summary
-            ))
-        }
-
-        if let transcript = meaningfulAudioTranscript {
-            fields.append(ScreenAnalysisField(
-                id: "transcript",
-                icon: "waveform",
-                iconColor: .decorativeSunnyYellow,
-                title: "Transcript",
-                content: transcript
-            ))
-        } else {
-            fields.append(ScreenAnalysisField(
-                id: "transcript-empty",
-                icon: "waveform",
-                iconColor: .decorativeSunnyYellow,
-                title: "Transcript",
-                content: "App audio wasn’t clear in this clip "
-                    + "(Screen Time captures app sound only, not the microphone)."
             ))
         }
 

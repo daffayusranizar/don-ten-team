@@ -44,7 +44,7 @@ public actor LLMSummarizer {
         } else {
             childContext = nil
         }
-        return analystFrameworkInstructions(childContext: childContext)
+        return PromptLibrary.Summarization.analystFrameworkInstructions(childContext: childContext)
     }
 
     public init() {}
@@ -101,54 +101,10 @@ public actor LLMSummarizer {
 
         guard !evidenceNotes.isEmpty else { return "" }
 
-        let mergePrompt = """
-        \(dailyMetadataPrompt(input))
-
-        You are given chunk-level evidence notes from one day of child screen activity.
-        Generate one parent-facing report using only these notes and metadata.
-        Review all sessions together before deciding repeated topics/messages.
-        Focus on repeated patterns across sessions, not isolated moments.
-        Never include raw timestamps (for example, 0:09), frame indexes, or line-by-line frame descriptions.
-        Do not use prefixes like "visual:" or "spoken:" in the final answer.
-        Do not use prefixes like "on-screen:" in the final answer.
-        Do not invent creators, titles, apps, dialogue, or claims not present in the notes.
-
-        Output format (use exactly):
-        Overall Summary:
-        <2-4 sentences, plain language, parent-friendly>
-
-        Topics Repeated Most Often:
-        - <topic 1>
-        - <topic 2>
-        - <topic 3>
-
-        Key Messages Repeated Most Often:
-        - <message 1>
-        - <message 2>
-        - <message 3>
-
-        What Appears To Hold Attention:
-        <2-3 sentences using cautious language like "appears drawn to", "may be interested in", "repeatedly viewed", "frequently exposed to". Base this on repeated topics/messages/formats and total viewing time patterns.>
-
-        Evidence Summary:
-        - <strongest evidence point 1>
-        - <strongest evidence point 2>
-        - <strongest evidence point 3>
-
-        Potential Concerns:
-        - <evidence-based concern 1>
-        - <evidence-based concern 2>
-        If no concerns: No significant concerns detected.
-
-
-        Parent Recommendation:
-        <one short practical recommendation>
-
-        Evidence notes:
-        \(evidenceNotes.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
-
-        write a natural language report with no bullet points and no evidence notes.
-        """
+        let mergePrompt = PromptLibrary.Summarization.dailyTopicMergePrompt(
+            metadata: dailyMetadataPrompt(for: input),
+            evidenceNotes: evidenceNotes
+        )
         let merged = try await respond(
             prompt: mergePrompt,
             instructions: dailyTopicInstructions(for: input)
@@ -161,23 +117,10 @@ public actor LLMSummarizer {
         _ lines: [String],
         input: DailyInsightInput
     ) async throws -> String {
-        let prompt = """
-        \(dailyMetadataPrompt(input))
-
-        Extract concise evidence bullets from this subset of sessions for a later merged parent report.
-        Keep only concrete observations that help identify repeated topics, repeated messages, attention signals, and concerns.
-        Use up to 8 bullet points.
-        Do not invent apps, creators, titles, or quoted dialogue not present in the notes.
-        Avoid repeating timestamps or percentages.
-        Never include timestamps like 0:09 or tokens like "09 —".
-        Do not copy frame lines verbatim.
-        Prefer content meaning over generic labels.
-        If audio and visual/on-screen cues disagree, prioritize audio meaning.
-        When on-screen OCR or on-screen summary text is present, include a brief interpretation of what the screen showed.
-        Include message-quality indicators when supported: Positive, Neutral, Questionable, Potentially Harmful.
-
-        \(lines.joined(separator: "\n"))
-        """
+        let prompt = PromptLibrary.Summarization.dailyTopicChunkPrompt(
+            metadata: dailyMetadataPrompt(for: input),
+            lines: lines
+        )
         return try await respond(
             prompt: prompt,
             instructions: dailyTopicInstructions(for: input)
@@ -203,20 +146,11 @@ public actor LLMSummarizer {
         var segmentOffset = 0
 
         for chunk in chunks {
-            let prompt = """
-            For each numbered item, write one brief sentence summarizing what appears on screen based ONLY on the OCR text.
-            Use plain parent-friendly language. Do not invent creators, titles, apps, or dialogue not present in the OCR.
-            If OCR is too sparse to interpret, reply with "Unclear on-screen content" for that item.
-            Reply with numbered lines only in this format:
-            1: <summary>
-            2: <summary>
-
-            \(chunk.joined(separator: "\n"))
-            """
+            let prompt = PromptLibrary.Summarization.onScreenBriefPrompt(chunk: chunk)
             do {
                 let response = try await respond(
                     prompt: prompt,
-                    instructions: onScreenBriefInstructions()
+                    instructions: PromptLibrary.Summarization.onScreenBriefInstructions()
                 )
                 let parsed = parseNumberedOnScreenBriefs(response)
                 for (lineNumber, summary) in parsed {
@@ -239,6 +173,7 @@ public actor LLMSummarizer {
         timeline: [FrameClassificationSummary],
         overallCategory: String?,
         transcriptBrief: String? = nil,
+        fullTrackTranscript: String? = nil,
         transcriptEvidence: String? = nil,
         child: Child? = nil
     ) async throws -> String {
@@ -257,88 +192,42 @@ public actor LLMSummarizer {
         }
 
         let chunks = chunkLines(segmentLines, maxCharacters: 2_800)
-        var chunkSummaries: [String] = []
+        var supportingEvidenceNotes: [String] = []
 
         for chunk in chunks {
             let summary = try await summarizeChunk(
                 chunk,
                 overallCategory: overallCategory,
-                statsString: statsString,
-                transcriptBrief: transcriptBrief,
-                transcriptEvidence: transcriptEvidence,
-                isFinalPass: chunks.count == 1,
                 child: child
             )
             if !summary.isEmpty {
-                chunkSummaries.append(summary)
+                supportingEvidenceNotes.append(summary)
             }
         }
 
-        guard !chunkSummaries.isEmpty else {
+        let fullTrackEvidenceNotes = try await summarizeFullTrackEvidenceNotes(
+            fullTrackTranscript: fullTrackTranscript,
+            overallCategory: overallCategory,
+            statsString: statsString,
+            child: child
+        )
+
+        guard !supportingEvidenceNotes.isEmpty || !fullTrackEvidenceNotes.isEmpty else {
             throw SummarizerError.emptyInput
         }
 
-        if chunks.count == 1, let only = chunkSummaries.first {
-            return sanitizeDailyReport(only)
-        }
-
-        let sessionMetadata = sessionMetadataPrompt(
+        let sessionMetadata = PromptLibrary.Summarization.sessionMetadataPrompt(
             statsString: statsString,
             overallCategory: overallCategory,
             transcriptBrief: transcriptBrief,
             transcriptEvidence: transcriptEvidence
         )
-
-        let mergePrompt = """
-        \(sessionMetadata)
-
-        You are given chunk-level evidence notes from one child screen recording session.
-        Generate one parent-facing report using only these notes and metadata.
-        Focus on content meaning and repeated messages, not labels.
-        Prioritize spoken content when audio and on-screen/visual cues conflict.
-        Never include raw timestamps (for example, 0:09), frame indexes, or line-by-line frame descriptions.
-        Do not use prefixes like "visual:" or "spoken:" in the final answer.
-        Do not use prefixes like "on-screen:" in the final answer.
-        Do not invent creators, titles, apps, dialogue, or claims not present in the notes.
-
-        Output format (use exactly):
-        Overall Summary:
-        <2-4 sentences, plain language, parent-friendly>
-
-        Topics Repeated Most Often:
-        - <topic 1>
-        - <topic 2>
-        - <topic 3>
-
-        Key Messages Repeated Most Often:
-        - <message 1>
-        - <message 2>
-        - <message 3>
-
-        What Appears To Hold Attention:
-        <2-3 sentences using cautious language like "appears drawn to", "may be interested in", "repeatedly viewed", "frequently exposed to". Base this on repeated topics/messages/formats and total viewing time patterns.>
-
-        Evidence Summary:
-        - <strongest evidence point 1>
-        - <strongest evidence point 2>
-        - <strongest evidence point 3>
-
-        Potential Concerns:
-        - <evidence-based concern 1>
-        - <evidence-based concern 2>
-        If no concerns: No significant concerns detected.
-
-        Parent Recommendation:
-        <one short practical recommendation>
-
-        Evidence notes:
-        \(chunkSummaries.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
-
-        TASK:
-        write a natural language report with no bullet points and no evidence notes.
-        """
         let merged = try await respond(
-            prompt: mergePrompt,
+            prompt: PromptLibrary.Summarization.parentFacingSessionSummaryPrompt(
+                sessionMetadata: sessionMetadata,
+                fullTrackNotes: fullTrackEvidenceNotes,
+                evidenceNotes: supportingEvidenceNotes
+            ),
             instructions: instructions(for: child)
         )
         return sanitizeDailyReport(merged)
@@ -348,60 +237,50 @@ public actor LLMSummarizer {
     private func summarizeChunk(
         _ lines: [String],
         overallCategory: String?,
-        statsString: String,
-        transcriptBrief: String?,
-        transcriptEvidence: String?,
-        isFinalPass: Bool,
         child: Child?
     ) async throws -> String {
         let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
-        let statsLine = isFinalPass ? "\n\(statsString)\n" : ""
-        let transcriptLine: String
-        if let transcriptBrief, TranscriptSanitizer.isMeaningful(transcriptBrief) {
-            transcriptLine = "Spoken content summary: \(transcriptBrief)\n"
-        } else {
-            transcriptLine = ""
-        }
-        let transcriptEvidenceLine: String
-        if let transcriptEvidence, TranscriptSanitizer.isMeaningful(transcriptEvidence) {
-            transcriptEvidenceLine = "Transcript evidence:\n\(transcriptEvidence)\n"
-        } else {
-            transcriptEvidenceLine = ""
-        }
-        let prompt: String
-        if isFinalPass {
-            prompt = """
-            \(categoryLine)\(statsLine)\(transcriptLine)\(transcriptEvidenceLine)
-            Extract concise evidence bullets from this recording for a later parent-facing report.
-            Keep only observations that identify repeated topics, repeated messages, attention signals, and evidence-based concerns.
-            Use up to 8 bullet points.
-            If audio and visual/on-screen cues disagree, prioritize audio meaning.
-            When on-screen OCR or on-screen summary text is present, include a brief interpretation of what the screen showed.
-            Do not invent creators, titles, apps, dialogue, or claims not present in the notes.
-            Avoid generic category-only statements when more concrete message evidence exists.
-            Never include raw timestamps (for example, 0:09).
-
-            \(lines.joined(separator: "\n"))
-            """
-        } else {
-            prompt = """
-            \(categoryLine)\(transcriptLine)\(transcriptEvidenceLine)
-            Extract concise evidence bullets from this recording chunk for a later parent-facing report.
-            Keep only observations that identify repeated topics, repeated messages, attention signals, and evidence-based concerns.
-            Use up to 6 bullet points.
-            If audio and visual/on-screen cues disagree, prioritize audio meaning.
-            When on-screen OCR or on-screen summary text is present, include a brief interpretation of what the screen showed.
-            Do not invent creators, titles, apps, dialogue, or claims not present in the notes.
-            Avoid generic category-only statements when more concrete message evidence exists.
-            Never include raw timestamps (for example, 0:09).
-
-            \(lines.joined(separator: "\n"))
-            """
-        }
+        let prompt = PromptLibrary.Summarization.recordingChunkEvidencePrompt(
+            categoryLine: categoryLine,
+            lines: lines
+        )
         return try await respond(
             prompt: prompt,
             instructions: instructions(for: child)
         )
+    }
+
+    @available(iOS 26, *)
+    private func summarizeFullTrackEvidenceNotes(
+        fullTrackTranscript: String?,
+        overallCategory: String?,
+        statsString: String,
+        child: Child?
+    ) async throws -> [String] {
+        guard let fullTrackTranscript else { return [] }
+        let cleaned = TranscriptSanitizer.sanitize(fullTrackTranscript)
+        guard TranscriptSanitizer.isMeaningful(cleaned) else { return [] }
+
+        let chunks = fullTrackTranscriptChunks(cleaned, maxCharacters: 2_800)
+        guard !chunks.isEmpty else { return [] }
+
+        let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
+        var notes: [String] = []
+        for chunk in chunks {
+            let prompt = PromptLibrary.Summarization.fullTrackEvidencePrompt(
+                categoryLine: categoryLine,
+                statsString: statsString,
+                chunk: chunk
+            )
+            let response = try await respond(
+                prompt: prompt,
+                instructions: instructions(for: child)
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !response.isEmpty {
+                notes.append(response)
+            }
+        }
+        return notes
     }
 
     private func dailyTopicInstructions(for input: DailyInsightInput) -> String {
@@ -411,15 +290,40 @@ public actor LLMSummarizer {
         } else {
             childContext = nil
         }
-        return analystFrameworkInstructions(childContext: childContext)
+        return PromptLibrary.Summarization.analystFrameworkInstructions(childContext: childContext)
     }
 
-    private func onScreenBriefInstructions() -> String {
-        """
-        You summarize on-screen content for parents from OCR text captured in child screen recordings.
-        Use only the OCR text provided. Keep each summary to one short sentence.
-        Do not include timestamps, bullet points, or prefixes like "on-screen:".
-        """
+    private func dailyMetadataPrompt(for input: DailyInsightInput) -> String {
+        let categoryBreakdown: String?
+        if input.mergedCategoryBreakdown.isEmpty {
+            categoryBreakdown = nil
+        } else {
+            categoryBreakdown = input.mergedCategoryBreakdown.items
+                .map { "\($0.name) \($0.percentage)%" }
+                .joined(separator: ", ")
+        }
+
+        let appUsageEstimate: String?
+        let topApps: String?
+        if input.hasScreenTimeData {
+            appUsageEstimate = DurationFormatting.verbose(seconds: input.screenTimeAppTotalSeconds)
+            topApps = input.topApps.prefix(3).map {
+                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
+            }.joined(separator: ", ")
+        } else {
+            appUsageEstimate = nil
+            topApps = nil
+        }
+
+        return PromptLibrary.Summarization.dailyMetadataPrompt(
+            dayLabel: input.dayLabel,
+            childAgeText: input.childAge.map { String($0) } ?? "unknown",
+            totalSessionTime: DurationFormatting.verbose(seconds: input.totalSessionSeconds),
+            sessionCount: input.sessionCount,
+            categoryBreakdown: categoryBreakdown,
+            appUsageEstimate: appUsageEstimate,
+            topApps: topApps
+        )
     }
 
     private func parseNumberedOnScreenBriefs(_ text: String) -> [Int: String] {
@@ -438,119 +342,35 @@ public actor LLMSummarizer {
         return result
     }
 
-    private func analystFrameworkInstructions(childContext: String?) -> String {
-        let childLine = childContext.map { "\($0)\n" } ?? ""
-        return """
-            You are an AI assistant that analyzes children's screen activity and helps parents understand what content their child was exposed to.
-            Your goals are to identify: what the content was actually about, what messages were communicated, what themes appeared repeatedly, and what content appears to hold the child's attention.
-            \(childLine)Focus on meaning, not labels.
-
-            Content interpretation priority (highest to lowest):
-            1. Spoken audio and transcript
-            2. Creator speech captured in captions
-            3. On-screen text and OCR text
-            4. Visual content
-            5. Category labels
-
-            Spoken audio is the primary source of meaning.
-            If audio and on-screen text suggest different meanings, prioritize the audio.
-
-            Content type vs message:
-            - "Educational", "Entertainment", and "Commercial" describe content type only.
-            - These labels do not imply accuracy, safety, quality, age appropriateness, or positive influence.
-            - Always evaluate the actual message being communicated.
-
-            Analysis process:
-            - Review all provided sessions/chunks together before final conclusions.
-            - Identify recurring topics from spoken content first.
-            - Extract key messages by asking what a child is most likely to remember.
-            - Identify recurring patterns in topics, messages, format, speaking style, and themes.
-            - Determine what appears to hold attention based on repeated exposure and viewing-time patterns.
-            - Assess message quality as Positive, Neutral, Questionable, or Potentially Harmful.
-
-            Attention language constraints:
-            - Use cautious language: "may be interested in", "appears drawn to", "repeatedly viewed", "frequently exposed to".
-            - Avoid certainty claims like "definitely likes", "enjoys", or "is passionate about" unless strongly evidence-backed.
-
-            Safety and evidence constraints:
-            - Consider dishonesty, risky behavior, manipulation, misinformation, aggression, profanity, and age-inappropriate themes.
-            - Do not invent creators, titles, apps, dialogue, or facts not present in the notes.
-            - Focus on repeated messages, not isolated moments.
-            - Be factual and evidence-based; avoid speculation.
-            """
-    }
-
-    private func sessionMetadataPrompt(
-        statsString: String,
-        overallCategory: String?,
-        transcriptBrief: String?,
-        transcriptEvidence: String?
-    ) -> String {
-        var lines: [String] = []
-        if !statsString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lines.append(statsString.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        if let overallCategory,
-           !overallCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lines.append("Overall classification label: \(overallCategory)")
-        }
-        if let transcriptBrief {
-            let trimmed = transcriptBrief.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                lines.append("Spoken content summary: \(trimmed)")
-            }
-        }
-        if let transcriptEvidence {
-            let trimmed = transcriptEvidence.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                lines.append("Transcript evidence:\n\(trimmed)")
-            }
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private func dailyMetadataPrompt(_ input: DailyInsightInput) -> String {
-        var lines: [String] = []
-        lines.append("Date: \(input.dayLabel)")
-        lines.append("Child age: \(input.childAge.map { String($0) } ?? "unknown")")
-        lines.append("Total session time: \(DurationFormatting.verbose(seconds: input.totalSessionSeconds))")
-        lines.append("Session count: \(input.sessionCount)")
-
-        if !input.mergedCategoryBreakdown.isEmpty {
-            let breakdown = input.mergedCategoryBreakdown.items
-                .map { "\($0.name) \($0.percentage)%" }
-                .joined(separator: ", ")
-            lines.append("Category breakdown: \(breakdown)")
-        }
-
-        if input.hasScreenTimeData {
-            lines.append("App usage estimate: \(DurationFormatting.verbose(seconds: input.screenTimeAppTotalSeconds))")
-            let appLine = input.topApps.prefix(3).map {
-                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
-            }.joined(separator: ", ")
-            if !appLine.isEmpty {
-                lines.append("Top apps: \(appLine)")
-            }
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
     private func sanitizeDailyReport(_ text: String) -> String {
         let patterns = [
             #"\b\d{1,2}:\d{2}\b"#,
             #"\b\d{1,2}\s*[—-]\s*"#
+        ]
+        let forbiddenSentencePatterns = [
+            #"[^.!?]*screen\s*[- ]?\s*by\s*[- ]?\s*screen\s+breakdown[^.!?]*[.!?]?"#,
+            #"[^.!?]*(open|view|check|see)\s+[^.!?]*breakdown[^.!?]*[.!?]?"#
         ]
 
         var cleaned = text
         for pattern in patterns {
             cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
         }
+        for pattern in forbiddenSentencePatterns {
+            cleaned = cleaned.replacingOccurrences(
+                of: pattern,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
 
         cleaned = cleaned
             .replacingOccurrences(of: "visual:", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "spoken:", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "on-screen:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "audio:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+([.,!?])"#, with: "$1", options: .regularExpression)
             .replacingOccurrences(of: "  ", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -616,12 +436,6 @@ public actor LLMSummarizer {
             }
 
             var parts: [String] = [entry.label]
-            if let transcript = entry.audioTranscript {
-                let spoken = TranscriptSanitizer.sanitize(transcript)
-                if TranscriptSanitizer.isMeaningful(spoken) {
-                    parts.append("spoken: \(truncate(spoken, limit: 120))")
-                }
-            }
             if let onScreen = entry.onScreenBriefSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
                !onScreen.isEmpty {
                 parts.append("on-screen: \(truncate(onScreen, limit: 120))")
@@ -635,6 +449,33 @@ public actor LLMSummarizer {
             return "\(timestamp) — \(parts.joined(separator: "; "))"
         }
     }
+
+    private func fullTrackTranscriptChunks(_ text: String, maxCharacters: Int) -> [String] {
+        guard maxCharacters > 0 else { return [] }
+        let words = text.split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return [] }
+
+        var chunks: [String] = []
+        var current = ""
+        for word in words {
+            let token = String(word)
+            let candidateLength = current.isEmpty ? token.count : current.count + 1 + token.count
+            if candidateLength > maxCharacters, !current.isEmpty {
+                chunks.append(current)
+                current = token
+            } else if current.isEmpty {
+                current = token
+            } else {
+                current += " " + token
+            }
+        }
+
+        if !current.isEmpty {
+            chunks.append(current)
+        }
+        return chunks
+    }
+
     private func chunkLines(_ lines: [String], maxCharacters: Int) -> [[String]] {
         guard !lines.isEmpty else { return [] }
 

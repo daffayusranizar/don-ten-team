@@ -36,7 +36,8 @@ final class KidSessionViewModel {
     private var recordingMatchContext: SessionRecordingMatchContext?
     private var timerTask: Task<Void, Never>?
     private var postSessionAnalysisTask: Task<Void, Never>?
-
+    private var sessionTimerFiredObserver: NSObjectProtocol?
+    private var appDidBecomeActiveObserver: NSObjectProtocol?
     let durationOptions: [Int]
 
     init(
@@ -47,6 +48,26 @@ final class KidSessionViewModel {
         self.sessionCoordinator = sessionCoordinator
         self.sessionAnalysisStore = sessionAnalysisStore
         self.durationOptions = durationOptions
+        SessionTimerFiredBridge.ensureListening()
+        sessionTimerFiredObserver = NotificationCenter.default.addObserver(
+            forName: SessionTimerFiredBridge.notification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                BroadcastExtensionLog.append("🔔 Timer-fired bridge received (AlarmKit handles session-end alert)")
+            }
+        }
+        appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.resumeRecordingAnalysisIfNeeded()
+            }
+        }
     }
 
     // MARK: - Derived (for existing views)
@@ -157,6 +178,8 @@ final class KidSessionViewModel {
         let generation = workflowGeneration
 
         Task {
+            await SessionEndAlarmScheduler.cancel()
+
             if sessionCoordinator.isSessionActive {
                 await sessionCoordinator.stopSession()
             }
@@ -210,12 +233,21 @@ final class KidSessionViewModel {
                 )
             }
 
+            let alarmDelay = remainingSeconds
+            let alarmChildName = child.name
             startBranchTimer()
+            Task { @MainActor [weak self] in
+                await SessionEndAlarmScheduler.schedule(
+                    after: alarmDelay,
+                    childName: alarmChildName
+                )
+            }
         }
     }
 
     func endSessionEarly() {
         timerTask?.cancel()
+        cancelSessionEndAlarm()
         guard phase.isActive else { return }
         Task { await completeSession() }
     }
@@ -226,6 +258,7 @@ final class KidSessionViewModel {
         sessionCoordinator.resetAfterEndScreen()
         RecordingManager.shared.clearBroadcastActiveFlag()
         RecordingManager.shared.clearSessionRecordingBinding()
+        cancelSessionEndAlarm(removeDelivered: true)
     }
 
     func cancelSessionAnalysis() {
@@ -239,6 +272,11 @@ final class KidSessionViewModel {
     func runPostSessionAnalysisIfNeeded() {
         guard case .finished(let finished) = phase else { return }
         guard finished.includesScreenRecording else { return }
+        guard UIApplication.shared.applicationState == .active else {
+            isAnalyzingSession = false
+            BroadcastExtensionLog.append("⏸ Skip analysis while app is backgrounded")
+            return
+        }
 
         let sessionId = finished.sessionId
         guard displaySessionId == sessionId else { return }
@@ -326,6 +364,9 @@ final class KidSessionViewModel {
         sessionCoordinator.syncRemainingSeconds(0)
 
         let recording = sessionIncludedScreenRecording
+        if !recording {
+            cancelSessionEndAlarm()
+        }
 
         if sessionCoordinator.isSessionActive {
             await sessionCoordinator.stopSession(recordedElapsedSeconds: usedSeconds)
@@ -351,11 +392,13 @@ final class KidSessionViewModel {
         isSessionActiveSync(false)
 
         if recording {
-            isAnalyzingSession = true
+            // Analysis is intentionally started from SessionResultView.task (foreground UI path)
+            // to avoid GPU work being submitted while app is backgrounded.
+            isAnalyzingSession = false
             analysisProgress = .initial
             sessionAnalysisResult = nil
             sessionAnalysisError = nil
-            runPostSessionAnalysisIfNeeded()
+            BroadcastExtensionLog.append("⏸ Session analysis waiting for result screen foreground task")
         }
     }
 
@@ -392,6 +435,7 @@ final class KidSessionViewModel {
     private func stopRecordingAndWaitForFile() async -> URL? {
         let recordingManager = RecordingManager.shared
         RecordingReadyBridge.ensureListening()
+        SessionTimerFiredBridge.ensureListening()
         recordingManager.postStopBroadcast()
 
         guard let context = recordingMatchContext else { return nil }
@@ -427,6 +471,12 @@ final class KidSessionViewModel {
         return max(0, limit - remainingSeconds)
     }
 
+    private func cancelSessionEndAlarm(removeDelivered: Bool = false) {
+        Task {
+            await SessionEndAlarmScheduler.cancel(removeDelivered: removeDelivered)
+        }
+    }
+
     private func startBranchTimer() {
         timerTask?.cancel()
         let generation = workflowGeneration
@@ -455,6 +505,10 @@ final class KidSessionViewModel {
         generation: UInt64
     ) async {
         guard generation == workflowGeneration, displaySessionId == sessionId else { return }
+        guard UIApplication.shared.applicationState == .active else {
+            BroadcastExtensionLog.append("⏸ Pipeline execution skipped in background")
+            return
+        }
 
         let child = selectedChild
         setAnalysisProgress(phase: .loadingRecording, fraction: 0.1, detail: "Recording found")
@@ -463,8 +517,8 @@ final class KidSessionViewModel {
             let output = try await SessionAnalysisRunner.runPipeline(
                 videoURL: videoURL,
                 child: child,
-                onProgress: { [weak self] progress in
-                    Task { @MainActor in
+                onProgress: { progress in
+                    Task { @MainActor [weak self] in
                         guard let self,
                               generation == self.workflowGeneration,
                               self.displaySessionId == sessionId else { return }
@@ -495,6 +549,14 @@ final class KidSessionViewModel {
             fraction: min(1, max(0, fraction)),
             detail: detail
         )
+    }
+
+    private func resumeRecordingAnalysisIfNeeded() {
+        guard case .finished(let finished) = phase else { return }
+        guard finished.includesScreenRecording else { return }
+        guard postSessionAnalysisTask == nil else { return }
+        guard sessionAnalysisResult == nil, sessionAnalysisError == nil else { return }
+        runPostSessionAnalysisIfNeeded()
     }
 
     #if DEBUG

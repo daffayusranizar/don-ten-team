@@ -97,7 +97,6 @@ public enum ScreenContentSummaryBuilder {
             let themeList = themes.joined(separator: "; ")
             sentences.append("Notable themes included \(themeList).")
         }
-        sentences.append("Open the screen-by-screen breakdown for more detail.")
         return sentences.joined(separator: " ")
     }
 

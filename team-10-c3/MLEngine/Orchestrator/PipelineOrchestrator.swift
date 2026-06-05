@@ -50,7 +50,6 @@ public actor PipelineOrchestrator {
         let summarizer = LLMSummarizer()
         let audioTranscriptAnalyzer = AudioTranscriptAnalyzer(window: .defaultPhase2)
         let visualTranscriptAnalyzer = VisualTranscriptAnalyzer(window: .defaultPhase2)
-        let transcriptFusionAnalyzer = TranscriptFusionAnalyzer()
         
         let clipClassifier = try await MobileCLIPClassifier()
         let whisper = try await ScreenRecordingWhisperTranscriber()
@@ -180,16 +179,11 @@ public actor PipelineOrchestrator {
 
         rawFrames = rawFrames.map { frame in
             let segmentKey = Self.audioBucketKey(for: frame.timestamp, windowDuration: windowDuration)
-            let transcript = Self.resolvedTranscript(
-                at: frame.timestamp,
-                from: audioResult.bucketedTranscripts,
-                windowDuration: windowDuration
-            )
             let visualText = visualResult.segmentVisualText[segmentKey]
             let categoryLabel = frame.matches.first?.label ?? "Unknown"
             let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
                 label: categoryLabel,
-                transcript: transcript.isEmpty ? nil : transcript,
+                transcript: nil,
                 onScreenTranscript: visualText
             )
             return (
@@ -197,7 +191,7 @@ public actor PipelineOrchestrator {
                 matches: frame.matches,
                 thumbnail: frame.thumbnail,
                 bottomCropThumbnail: frame.bottomCropThumbnail,
-                audioTranscript: transcript.isEmpty ? nil : transcript,
+                audioTranscript: nil,
                 audioTone: frame.audioTone,
                 audioLabel: frame.audioLabel,
                 videoMatchedPrompt: frame.videoMatchedPrompt,
@@ -209,11 +203,8 @@ public actor PipelineOrchestrator {
         }
         logTiming("attach transcripts")
 
-        let windowsWithTranscript = audioResult.bucketedTranscripts.count
         let sessionTranscriptExcerpt = Self.sessionTranscriptExcerpt(
-            fullTranscripts: audioResult.fullTrackSegments,
-            audioResultsByBucket: audioResult.bucketedTranscripts,
-            windowsWithTranscript: windowsWithTranscript
+            fullTranscripts: audioResult.fullTrackSegments
         )
         
         report(.generatingSummary, 0.82, "Grouping results by time…")
@@ -230,23 +221,15 @@ public actor PipelineOrchestrator {
         let categoryBreakdown = UsageCategoryBreakdown.from(timeline: timeline)
         let dominantCategory = categoryBreakdown.dominantCategoryName ?? "Mixed content"
 
-        let fusionSegments = timeline.map { entry in
-            TranscriptFusionSegment(
-                id: entry.id,
-                timestamp: entry.timestamp,
-                audioText: entry.audioTranscript,
-                visualText: entry.onScreenTranscript
-            )
-        }
-        let transcriptFusion = await transcriptFusionAnalyzer.fuse(segments: fusionSegments)
-        print(
-            "[\(Date().formatted(date: .omitted, time: .standard))] 🔀 Fusion: audioDominant=\(transcriptFusion.fusionStats.audioDominantSegments), visualFallback=\(transcriptFusion.fusionStats.visualFallbackSegments), dropped=\(transcriptFusion.fusionStats.droppedSegments)"
-        )
         let fullTrackText = TranscriptSanitizer.sanitize(audioResult.fullTrackSegments.map(\.text).joined(separator: " "))
-        let transcriptDigestFallback = TranscriptDigestBuilder.buildDigest(timeline: timeline, fullTrackText: fullTrackText)
-        let sessionTranscriptDigest = transcriptFusion.sessionDigest ?? transcriptDigestFallback
-        let sessionTranscriptBriefSummary = transcriptFusion.sessionBrief
-            ?? TranscriptDigestBuilder.buildBriefSummary(fullTrackText: fullTrackText, digest: sessionTranscriptDigest)
+        let sessionTranscriptDigest = TranscriptDigestBuilder.buildDigest(
+            timeline: timeline,
+            fullTrackText: fullTrackText
+        )
+        let sessionTranscriptBriefSummary = TranscriptDigestBuilder.buildBriefSummary(
+            fullTrackText: fullTrackText,
+            digest: sessionTranscriptDigest
+        )
 
         report(.generatingSummary, 0.88, "Writing parent-friendly summary…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🧠 Step 6: Generating AI Summary...")
@@ -256,7 +239,7 @@ public actor PipelineOrchestrator {
                 timeline: timeline,
                 overallCategory: dominantCategory,
                 transcriptBrief: sessionTranscriptBriefSummary,
-                transcriptEvidence: transcriptFusion.summaryEvidence,
+                fullTrackTranscript: fullTrackText,
                 child: child
             )
             if Self.looksLikeRawSegmentDump(llmSummary) {
@@ -319,15 +302,10 @@ public actor PipelineOrchestrator {
     }
 
     private static func sessionTranscriptExcerpt(
-        fullTranscripts: [SegmentedTranscript],
-        audioResultsByBucket: [Int: String],
-        windowsWithTranscript: Int
+        fullTranscripts: [SegmentedTranscript]
     ) -> String? {
         let joined = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
         guard TranscriptSanitizer.isMeaningful(joined) else { return nil }
-        if windowsWithTranscript >= max(2, audioResultsByBucket.count / 4) {
-            return nil
-        }
         let maxLen = 280
         if joined.count <= maxLen {
             return joined
@@ -406,19 +384,6 @@ public actor PipelineOrchestrator {
         return Int((max(0, timestamp) / windowDuration).rounded())
     }
 
-    private static func resolvedTranscript(
-        at timestamp: TimeInterval,
-        from buckets: [Int: String],
-        windowDuration: TimeInterval
-    ) -> String {
-        let key = audioBucketKey(for: timestamp, windowDuration: windowDuration)
-        let candidates = [key, key - 1, key + 1]
-        for candidate in candidates {
-            guard let transcript = buckets[candidate], !transcript.isEmpty else { continue }
-            return transcript
-        }
-        return ""
-    }
 }
 
 #if DEBUG
@@ -428,20 +393,6 @@ extension PipelineOrchestrator {
         assert(audioBucketKey(for: 2.0, windowDuration: interval) == 1)
         assert(audioBucketKey(for: 2.02, windowDuration: interval) == 1)
         assert(audioBucketKey(for: 1.98, windowDuration: interval) == 1)
-
-        let exactMatch = resolvedTranscript(
-            at: 2.02,
-            from: [1: "exact transcript"],
-            windowDuration: interval
-        )
-        assert(exactMatch == "exact transcript")
-
-        let neighborMatch = resolvedTranscript(
-            at: 2.0,
-            from: [2: "neighbor transcript"],
-            windowDuration: interval
-        )
-        assert(neighborMatch == "neighbor transcript")
     }
 }
 #endif
