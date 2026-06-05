@@ -59,6 +59,8 @@ struct CheckBoxRow: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .padding()
         .padding(.vertical, 2)

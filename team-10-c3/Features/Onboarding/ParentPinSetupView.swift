@@ -179,6 +179,8 @@ struct ParentPinSetupView: View {
     
     private func threeLetters (_ val: String) -> String {
         switch val {
+        case "1":
+            return " "
         case "2":
             return "ABC"
         case "3":

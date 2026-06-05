@@ -14,16 +14,19 @@ struct OnboardingData {
     var parentBirthdate: Date?
     var parentPin: String?
     
+    // step 2 data (family situation)
+    var familySituation: FamilySituation?
+    
     // step 3 data (child)
     var childName = ""
     var childBirthdate: Date?
     var childIsMale = true
     var selectedAvatar: ChildAvatarImage?
 
-    // step 4 data
+    // step 4 data (most important goals)
     var selectedGoals: [ParentGoal] = []
     
-    // step 5 data
+    // step 5 data (reminders)
     var weeklySuggestions: Bool = false
     var weeklyCheckIns: Bool = false
 }
@@ -33,7 +36,7 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            ParentPinSetupView(data: $data)
+            StepOneView(data: $data)
         }
     }
 }
