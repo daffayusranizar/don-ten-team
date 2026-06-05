@@ -28,7 +28,7 @@ struct SessionScreenBreakdownView: View {
                     .buttonStyle(.plain)
                 }
             } footer: {
-                Text("Each entry is about 3 seconds of the recording. Analysis is saved on this device and survives app restarts.")
+                Text("Each entry is about \(BroadcastConstants.classificationIntervalSeconds) seconds of the recording. Analysis is saved on this device and survives app restarts.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

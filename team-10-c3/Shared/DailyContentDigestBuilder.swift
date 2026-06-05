@@ -14,7 +14,7 @@ enum DailyContentDigestBuilder {
         for screen in screens {
             let timestamp = ScreenBreakdownItem.formatTimestamp(screen.timestampSeconds)
             let spoken = normalizedSpokenLine(screen.meaningfulAudioTranscript)
-            let visual = normalizedVisualLine(screen.videoMatchedPrompt ?? screen.matchedPrompt)
+            let onScreen = normalizedOnScreenLine(screen.onScreenContent)
 
             if let summary = screen.contentSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
                !summary.isEmpty {
@@ -22,10 +22,14 @@ enum DailyContentDigestBuilder {
                 if shouldIncludeFrameLine(
                     stripped,
                     spoken: spoken,
-                    visual: visual,
+                    onScreen: onScreen,
                     lineCounts: &lineCounts
                 ) {
-                    output.append("\(timestamp) — \(stripped)")
+                    if let onScreen {
+                        output.append("\(timestamp) — \(stripped); on-screen: \(onScreen)")
+                    } else {
+                        output.append("\(timestamp) — \(stripped)")
+                    }
                 }
                 continue
             }
@@ -34,8 +38,8 @@ enum DailyContentDigestBuilder {
             if let spoken {
                 parts.append("spoken: \(spoken)")
             }
-            if let visual {
-                parts.append("visual: \(visual)")
+            if let onScreen {
+                parts.append("on-screen: \(onScreen)")
             }
             guard parts.count > 1 else { continue }
 
@@ -43,7 +47,7 @@ enum DailyContentDigestBuilder {
             if shouldIncludeFrameLine(
                 detail,
                 spoken: spoken,
-                visual: visual,
+                onScreen: onScreen,
                 lineCounts: &lineCounts
             ) {
                 output.append("\(timestamp) — \(detail)")
@@ -132,7 +136,8 @@ enum DailyContentDigestBuilder {
     static func allTopicLines(from sessions: [DailySessionInsight]) -> [String] {
         var lines: [String] = []
         for session in sessions {
-            let header = "Session \(session.index) (\(DurationFormatting.compact(seconds: session.durationSeconds)), \(session.dominantCategory)):"
+            let duration = DurationFormatting.compact(seconds: session.durationSeconds)
+            let header = "Session \(session.index) (\(duration), \(session.dominantCategory)):"
             lines.append(header)
 
             for frameLine in session.frameLines {
@@ -170,7 +175,7 @@ enum DailyContentDigestBuilder {
     private static func shouldIncludeFrameLine(
         _ line: String,
         spoken: String?,
-        visual: String?,
+        onScreen: String?,
         lineCounts: inout [String: Int]
     ) -> Bool {
         let normalized = normalizeForDedup(line)
@@ -178,8 +183,8 @@ enum DailyContentDigestBuilder {
         lineCounts[normalized] = nextCount
 
         let spokenIsLowSignal = spoken.map(isLowSignalAudioMarker) ?? false
-        let hasVisualSignal = visual.map(TranscriptSanitizer.isMeaningful) ?? false
-        if spokenIsLowSignal && !hasVisualSignal {
+        let hasOnScreenSignal = onScreen.map(TranscriptSanitizer.isMeaningful) ?? false
+        if spokenIsLowSignal && !hasOnScreenSignal {
             return nextCount == 1
         }
         return nextCount <= 2
@@ -193,7 +198,7 @@ enum DailyContentDigestBuilder {
         return cleaned
     }
 
-    private static func normalizedVisualLine(_ prompt: String?) -> String? {
+    private static func normalizedOnScreenLine(_ prompt: String?) -> String? {
         guard let prompt else { return nil }
         let cleaned = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard TranscriptSanitizer.isMeaningful(cleaned) else { return nil }
@@ -292,7 +297,8 @@ enum DailyContentDigestBuilder {
 
     private static func extractVisualPhrase(from line: String) -> String? {
         let lower = line.lowercased()
-        guard let visualRange = lower.range(of: "visual:") else { return nil }
+        let marker = lower.range(of: "on-screen:") ?? lower.range(of: "visual:")
+        guard let visualRange = marker else { return nil }
 
         let visualStart = line.index(
             line.startIndex,
@@ -315,14 +321,15 @@ enum DailyContentDigestBuilder {
 
         for line in frameLines {
             let lower = line.lowercased()
-            if let visualRange = lower.range(of: "visual: ") {
-                let start = line.index(line.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: visualRange.upperBound))
+            if let visualRange = lower.range(of: "on-screen: ") ?? lower.range(of: "visual: ") {
+                let offset = lower.distance(from: lower.startIndex, to: visualRange.upperBound)
+                let start = line.index(line.startIndex, offsetBy: offset)
                 let theme = String(line[start...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 let key = theme.lowercased()
                 if !theme.isEmpty, seen.insert(key).inserted {
                     themes.append(theme)
                 }
-            } else if !line.contains("spoken:") {
+            } else if !line.contains("spoken:") && !line.contains("on-screen:") {
                 let note = line.split(separator: "—", maxSplits: 1).dropFirst().first
                     .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? line
                 let key = note.lowercased()

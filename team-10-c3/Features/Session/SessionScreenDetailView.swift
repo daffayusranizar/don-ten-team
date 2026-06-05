@@ -99,15 +99,15 @@ extension ScreenBreakdownItem {
                 iconColor: .decorativeSkyBlue,
                 title: "Category",
                 content: categoryDetailText
-            ),
+            )
         ]
 
-        if let visual = trimmed(videoMatchedPrompt) ?? trimmed(matchedPrompt) {
+        if let visual = onScreenContent {
             fields.append(ScreenAnalysisField(
                 id: "visual",
                 icon: "eye.fill",
                 iconColor: .decorativeMintGreen,
-                title: "Visual match",
+                title: "On-screen content",
                 content: visual
             ))
         }
@@ -136,7 +136,8 @@ extension ScreenBreakdownItem {
                 icon: "waveform",
                 iconColor: .decorativeSunnyYellow,
                 title: "Transcript",
-                content: "App audio wasn’t clear in this clip (Screen Time captures app sound only, not the microphone)."
+                content: "App audio wasn’t clear in this clip "
+                    + "(Screen Time captures app sound only, not the microphone)."
             ))
         }
 

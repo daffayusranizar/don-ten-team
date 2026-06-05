@@ -66,12 +66,12 @@ public actor ScreenRecordingFrameExtractor {
     }
 
     public func estimatedClassificationFrameCount(durationSeconds: TimeInterval) -> Int {
-        let interval = 3
+        let interval = BroadcastConstants.classificationIntervalSeconds
         return max(1, Int(floor(durationSeconds / Double(interval))) + 1)
     }
 
     public func shouldClassify(at timestamp: TimeInterval) -> Bool {
-        let interval = 3
+        let interval = BroadcastConstants.classificationIntervalSeconds
         let second = Int(timestamp.rounded(.down))
         return second % interval == 0
     }

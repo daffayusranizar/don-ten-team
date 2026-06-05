@@ -14,7 +14,6 @@ enum AppTab: Int {
     case session
 }
 
-
 struct RootView: View {
     @SceneStorage("selectedTab") private var selectedTab = AppTab.dashboard.rawValue
     @Environment(\.sessionCoordinator) private var sessionCoordinator
@@ -24,7 +23,7 @@ struct RootView: View {
 
         NavigationStack {
             TabView(selection: $selectedTab) {
-                Tab("Dashboard", systemImage: "house.fill", value: AppTab.dashboard.rawValue) {
+                Tab("Home", systemImage: "house.fill", value: AppTab.dashboard.rawValue) {
                     DashboardView()
                 }
 
@@ -38,11 +37,9 @@ struct RootView: View {
                     )
                 }
             }
-            .tabViewStyle(.sidebarAdaptable)
         }
     }
 }
-
 
 #Preview {
     RootView()

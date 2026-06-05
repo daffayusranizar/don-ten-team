@@ -3,7 +3,8 @@ import Foundation
 public enum ScreenContentSummaryBuilder {
     public static func segmentSummary(
         label: String,
-        transcript: String?
+        transcript: String?,
+        onScreenTranscript: String? = nil
     ) -> String? {
         var parts: [String] = []
 
@@ -17,6 +18,11 @@ public enum ScreenContentSummaryBuilder {
         let spoken = TranscriptSanitizer.sanitize(transcript ?? "")
         if TranscriptSanitizer.isMeaningful(spoken) {
             parts.append("Spoken: \(truncate(spoken, limit: 160))")
+        }
+
+        if let onScreen = onScreenTranscript?.trimmingCharacters(in: .whitespacesAndNewlines),
+           OnScreenTextSanitizer.isUsefulOnScreenContent(onScreen) {
+            parts.append("On screen: \(truncate(onScreen, limit: 120))")
         }
 
         guard parts.count > 1 || TranscriptSanitizer.isMeaningful(spoken) else { return nil }

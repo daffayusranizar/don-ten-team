@@ -21,61 +21,65 @@ struct WeeklySummaryView: View {
     @State private var showOfflineActivity = false
 
     var body: some View {
-        NavigationStack {
-            VStack {
+        VStack {
+            HStack(spacing: 12) {
                 Picker("Period", selection: $selectedPeriod) {
                     ForEach(Period.allCases, id: \.self) { period in
                         Text(period.rawValue).tag(period)
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal)
 
-                if let viewModel {
-                    ReportView(
-                        period: selectedPeriod,
-                        report: viewModel.report,
-                        emptyMessage: viewModel.emptyMessage,
-                        isLoading: viewModel.isLoading,
-                        showOfflineActivity: $showOfflineActivity
-                    )
-                } else {
-                    ReportView(
-                        period: selectedPeriod,
-                        report: nil,
-                        emptyMessage: "Insights are unavailable right now.",
-                        isLoading: false,
-                        showOfflineActivity: $showOfflineActivity
-                    )
+                NavigationLink {
+                    SessionHistoryView()
+                } label: {
+                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.primaryMediumBlue)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color(.systemGray6)))
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
                 }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
 
-                Spacer()
+            if let viewModel {
+                ReportView(
+                    period: selectedPeriod,
+                    report: viewModel.report,
+                    emptyMessage: viewModel.emptyMessage,
+                    isLoading: viewModel.isLoading,
+                    showOfflineActivity: $showOfflineActivity
+                )
+            } else {
+                ReportView(
+                    period: selectedPeriod,
+                    report: nil,
+                    emptyMessage: "Insights are unavailable right now.",
+                    isLoading: false,
+                    showOfflineActivity: $showOfflineActivity
+                )
             }
-            .navigationTitle("Insight Usage")
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        refreshInsights()
-                    } label: {
-                        Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                    }
-                }
-            }
-            .onAppear {
-                refreshInsights()
-            }
-            .onChange(of: selectedPeriod) { _, newValue in
-                viewModel?.selectedPeriod = newValue
-                refreshInsights()
-            }
-            .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
-                refreshInsights()
-            }
-            .navigationDestination(isPresented: $showOfflineActivity) {
-                if let activity = viewModel?.report?.offlineActivity {
-                    InsightOfflineActivityDetailView(activityText: activity)
-                }
+
+            Spacer()
+        }
+        .navigationTitle("Usage Insight")
+        .toolbarTitleDisplayMode(.inline)
+        .onAppear {
+            refreshInsights()
+        }
+        .onChange(of: selectedPeriod) { _, newValue in
+            viewModel?.selectedPeriod = newValue
+            refreshInsights()
+        }
+        .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
+            refreshInsights()
+        }
+        .navigationDestination(isPresented: $showOfflineActivity) {
+            if let activity = viewModel?.report?.offlineActivity {
+                InsightOfflineActivityDetailView(activityText: activity)
             }
         }
     }
@@ -106,10 +110,7 @@ struct ReportView: View {
                 } else if let report {
                     usageInsightCard(report: report)
                     aiSummaryCard(report: report)
-                    if period == .weekly, let suggestion = report.weeklySuggestion {
-                        weeklySuggestionCard(suggestion: suggestion)
-                    }
-                    offlineActivityCard(report: report)
+                    recommendedActivityCard(report: report)
                 } else if let emptyMessage {
                     insightEmptyState(message: emptyMessage)
                 }
@@ -121,7 +122,7 @@ struct ReportView: View {
     }
 
     private func usageInsightCard(report: UsageInsightReport) -> some View {
-        CardView(width: 364, height: 216) {
+        CardView(minHeight: 216) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image("insight-icon")
@@ -151,7 +152,7 @@ struct ReportView: View {
     }
 
     private func aiSummaryCard(report: UsageInsightReport) -> some View {
-        CardView(width: 364, height: 242) {
+        CardView(minHeight: 242) {
             VStack(spacing: 0) {
                 if report.needsAttention {
                     HStack(spacing: 10) {
@@ -184,7 +185,7 @@ struct ReportView: View {
                     HStack(spacing: 8) {
                         Image("summary-icon")
 
-                        Text(period == .daily ? "AI Summary of Today" : "AI Summary of This Week")
+                        Text("AI Summary of This Week")
                             .font(.heading6)
                             .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
                             .lineLimit(1)
@@ -206,62 +207,13 @@ struct ReportView: View {
         }
     }
 
-    private func weeklySuggestionCard(suggestion: String) -> some View {
-        CardView(width: 364, height: 216) {
-            VStack {
-                HStack(spacing: 8) {
-                    Image("suggestion-icon")
-
-                    Text("This Week Reflection")
-                        .font(.heading6)
-                        .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                        .padding(8)
-
-                    Spacer(minLength: 0)
-                }
-
-                Text(suggestion)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
-                    .lineSpacing(5)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack {
-                    PrimaryButton(
-                        title: "Not Now",
-                        size: .medium,
-                        systemImage: "",
-                        action: {}
-                    )
-                    .padding(.top, 8)
-
-                    PrimaryButton(
-                        title: "Try",
-                        size: .medium,
-                        systemImage: "",
-                        action: {}
-                    )
-                    .padding(.top, 8)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
-            .background(
-                Color("primaryMediumBlue").opacity(0.2)
-            )
-        }
-    }
-
-    private func offlineActivityCard(report: UsageInsightReport) -> some View {
-        CardView(width: 364, height: 216) {
+    private func recommendedActivityCard(report: UsageInsightReport) -> some View {
+        CardView(minHeight: 190) {
             VStack {
                 HStack(spacing: 8) {
                     Image("activity-icon")
 
-                    Text("Offline Activity")
+                    Text("Recommended Activity")
                         .font(.heading6)
                         .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
                         .lineLimit(1)
@@ -271,11 +223,11 @@ struct ReportView: View {
                 }
 
                 Text(report.offlineActivityTeaser)
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
-                    .lineSpacing(5)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
 
                 PrimaryButton(
                     title: "See Activity",
@@ -283,7 +235,7 @@ struct ReportView: View {
                     systemImage: "",
                     action: { showOfflineActivity = true }
                 )
-                .padding(.top, 8)
+                .padding(.top, 10)
             }
             .padding(.horizontal, 18)
             .padding(.top, 14)
@@ -292,7 +244,7 @@ struct ReportView: View {
     }
 
     private func insightEmptyState(message: String) -> some View {
-        CardView(width: 364, height: 180) {
+        CardView(minHeight: 180) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(period == .daily ? "Today's Usage Insight" : "This Week Usage Insight")
                     .font(.heading6)
@@ -344,23 +296,20 @@ struct InsightOfflineActivityDetailView: View {
 }
 
 struct CardView<Content: View>: View {
-    let width: CGFloat
-    let height: CGFloat
+    let minHeight: CGFloat
     let content: Content
 
     init(
-        width: CGFloat,
-        height: CGFloat,
+        minHeight: CGFloat,
         @ViewBuilder content: () -> Content
     ) {
-        self.width = width
-        self.height = height
+        self.minHeight = minHeight
         self.content = content()
     }
 
     var body: some View {
         content
-            .frame(minWidth: width, minHeight: height, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
             .background(.white)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
@@ -368,7 +317,7 @@ struct CardView<Content: View>: View {
                     .stroke(Color(red: 0.82, green: 0.83, blue: 0.88), lineWidth: 1)
             )
             .fixedSize(horizontal: false, vertical: true)
-            .shadow(radius: 6)
+            .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
     }
 }
 

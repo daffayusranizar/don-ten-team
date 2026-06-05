@@ -27,7 +27,7 @@ public actor ScreenRecordingAudioExtractor {
     }
 
     private let whisperSampleRate: Double = 16_000
-    private let windowDuration: TimeInterval = 3.0
+    private let windowDuration: TimeInterval = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
 
     public init() {}
 

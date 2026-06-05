@@ -65,14 +65,20 @@ public struct UsageCategoryBreakdown: Codable, Equatable, Sendable {
         return "\(top.name) · \(top.percentage)%"
     }
 
-    public static func from(timeline: [FrameClassificationSummary], intervalSeconds: Double = 3.0) -> UsageCategoryBreakdown {
+    public static func from(
+        timeline: [FrameClassificationSummary],
+        intervalSeconds: Double = Double(BroadcastConstants.classificationIntervalSeconds)
+    ) -> UsageCategoryBreakdown {
         fromScreens(
             timeline.map { ScreenLike(label: $0.label) },
             intervalSeconds: intervalSeconds
         )
     }
 
-    static func from(screens: [StoredScreenBreakdown], intervalSeconds: Double = 3.0) -> UsageCategoryBreakdown {
+    static func from(
+        screens: [StoredScreenBreakdown],
+        intervalSeconds: Double = Double(BroadcastConstants.classificationIntervalSeconds)
+    ) -> UsageCategoryBreakdown {
         fromScreens(
             screens.map { ScreenLike(label: $0.categoryLabel) },
             intervalSeconds: intervalSeconds

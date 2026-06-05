@@ -6,49 +6,62 @@
 import Foundation
 import Observation
 
-struct ScreenTimeHistoryEntry: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let date: Date
-    let totalSeconds: Int
-    let topAppName: String
+struct SessionHistoryEntry: Identifiable {
+    let sessionId: UUID
+    let analyzedAt: Date
+    let result: PipelineResult?
+    let errorMessage: String?
+
+    var id: UUID { sessionId }
 
     var dateLabel: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, EEEE"
-        return formatter.string(from: date)
+        Self.dateLabelFormatter.string(from: analyzedAt)
     }
 
-    var durationLabel: String {
-        DurationFormatting.hoursAndMinutes(TimeInterval(totalSeconds))
+    var timeLabel: String {
+        Self.timeLabelFormatter.string(from: analyzedAt)
     }
+
+    var categoryLabel: String? {
+        result?.dominantCategoryDisplay
+    }
+
+    var summaryPreview: String? {
+        result?.summary
+    }
+
+    var screenCount: Int {
+        result?.screens.count ?? 0
+    }
+
+    private static let dateLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, EEEE"
+        return formatter
+    }()
+
+    private static let timeLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
 }
 
 @Observable
 @MainActor
 final class SessionHistoryViewModel {
-    private let suggestionHistoryRepository: SuggestionHistoryRepository
-    private let sessionRepository: SessionRepository
+    private let sessionAnalysisStore: SessionAnalysisStore?
     private var childId: UUID?
 
-    var selectedTab: HistoryTab = .suggestion
     var selectedMonth: String
     private(set) var monthOptions: [String] = []
-    private(set) var suggestionEntries: [SuggestionHistoryEntry] = []
-    private(set) var screenTimeEntries: [ScreenTimeHistoryEntry] = []
+    private(set) var sessionEntries: [SessionHistoryEntry] = []
     var loadError: String?
 
-    init(
-        suggestionHistoryRepository: SuggestionHistoryRepository,
-        sessionRepository: SessionRepository
-    ) {
-        self.suggestionHistoryRepository = suggestionHistoryRepository
-        self.sessionRepository = sessionRepository
-        self.selectedMonth = suggestionHistoryRepository.availableMonths().first ?? ""
+    init(sessionAnalysisStore: SessionAnalysisStore?) {
+        self.sessionAnalysisStore = sessionAnalysisStore
+        self.selectedMonth = ""
         reload()
-    }
-
-    func selectTab(_ tab: HistoryTab) {
-        selectedTab = tab
     }
 
     func selectMonth(_ month: String) {
@@ -68,52 +81,35 @@ final class SessionHistoryViewModel {
     }
 
     private func reloadMonthOptions(for child: Child?) {
-        var months = suggestionHistoryRepository.availableMonths()
-        if let child,
-           let sessionMonths = try? sessionRepository.availableMonths(for: child.id) {
-            months.append(contentsOf: sessionMonths)
+        guard let child, let sessionAnalysisStore else {
+            monthOptions = []
+            selectedMonth = ""
+            return
         }
-        monthOptions = Array(Set(months)).sorted(by: >)
+
+        monthOptions = sessionAnalysisStore.availableMonths(for: child.id)
         if !monthOptions.contains(selectedMonth), let firstMonth = monthOptions.first {
             selectedMonth = firstMonth
         }
     }
 
     private func reloadEntries() {
-        reloadSuggestionEntries()
-        reloadScreenTimeEntries()
-    }
-
-    private func reloadSuggestionEntries() {
-        do {
-            suggestionEntries = try suggestionHistoryRepository.fetchEntries(for: selectedMonth)
-            loadError = nil
-        } catch {
-            suggestionEntries = []
-            loadError = error.localizedDescription
-        }
-    }
-
-    private func reloadScreenTimeEntries() {
-        guard let childId else {
-            screenTimeEntries = []
+        guard let childId, let sessionAnalysisStore else {
+            sessionEntries = []
             return
         }
 
-        do {
-            let snapshots = try sessionRepository.fetchSnapshots(for: childId, month: selectedMonth)
-            screenTimeEntries = snapshots.map { snapshot in
-                ScreenTimeHistoryEntry(
-                    id: snapshot.id,
-                    date: snapshot.stopAt,
-                    totalSeconds: snapshot.totalSeconds,
-                    topAppName: "Session"
-                )
-            }
-            loadError = nil
-        } catch {
-            screenTimeEntries = []
-            loadError = error.localizedDescription
+        let monthFilter = selectedMonth.isEmpty ? nil : selectedMonth
+        let items = sessionAnalysisStore.fetchHistory(for: childId, month: monthFilter)
+
+        sessionEntries = items.map { item in
+            SessionHistoryEntry(
+                sessionId: item.sessionId,
+                analyzedAt: item.analyzedAt,
+                result: item.cacheEntry.result,
+                errorMessage: item.cacheEntry.errorMessage
+            )
         }
+        loadError = nil
     }
 }

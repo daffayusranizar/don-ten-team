@@ -28,7 +28,7 @@ public struct SessionAnalysisResult: Sendable {
     /// Suggested actions and advice for the parent based on the session.
     public let guidance: GuidanceSuggestion
     
-    /// The full chronological breakdown of what happened every 3 seconds.
+    /// The full chronological breakdown of what happened every `BroadcastConstants.classificationIntervalSeconds` seconds.
     public let timeline: [FrameClassificationSummary]
 
     /// Educational / Entertainment / Commercial percentages for the Insight chart.

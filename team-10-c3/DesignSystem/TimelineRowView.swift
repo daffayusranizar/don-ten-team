@@ -32,9 +32,8 @@ struct TimelineRowView: View {
                     }
                 }
 
-                if let visual = item.videoMatchedPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !visual.isEmpty {
-                    Text("Visual: \(visual)")
+                if let onScreen = item.onScreenContent {
+                    Text("On screen: \(onScreen)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

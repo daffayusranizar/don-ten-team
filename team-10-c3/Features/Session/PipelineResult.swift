@@ -102,6 +102,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
     let contentSummary: String?
     let videoMatchedPrompt: String?
     let matchedPrompt: String?
+    let onScreenTranscript: String?
+    let onScreenBriefSummary: String?
     let creatorHandle: String?
     let confidence: Float?
     let thumbnail: UIImage?
@@ -118,6 +120,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         contentSummary = frame.contentSummary
         videoMatchedPrompt = frame.videoMatchedPrompt
         matchedPrompt = frame.matchedPrompt
+        onScreenTranscript = frame.onScreenTranscript
+        onScreenBriefSummary = frame.onScreenBriefSummary
         creatorHandle = frame.creatorHandle
         confidence = frame.probability
         thumbnail = frame.thumbnail
@@ -135,6 +139,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         contentSummary = stored.contentSummary
         videoMatchedPrompt = stored.videoMatchedPrompt
         matchedPrompt = stored.matchedPrompt
+        onScreenTranscript = stored.onScreenTranscript
+        onScreenBriefSummary = stored.onScreenBriefSummary
         creatorHandle = stored.creatorHandle
         confidence = stored.confidence
         thumbnail = nil
@@ -152,6 +158,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         contentSummary: String?,
         videoMatchedPrompt: String? = nil,
         matchedPrompt: String? = nil,
+        onScreenTranscript: String? = nil,
+        onScreenBriefSummary: String? = nil,
         creatorHandle: String?,
         confidence: Float?,
         thumbnail: UIImage?,
@@ -167,6 +175,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         self.contentSummary = contentSummary
         self.videoMatchedPrompt = videoMatchedPrompt
         self.matchedPrompt = matchedPrompt
+        self.onScreenTranscript = onScreenTranscript
+        self.onScreenBriefSummary = onScreenBriefSummary
         self.creatorHandle = creatorHandle
         self.confidence = confidence
         self.thumbnail = thumbnail
@@ -183,6 +193,21 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
 
     var meaningfulAudioTranscript: String? {
         TranscriptSanitizer.meaningfulForStorage(audioTranscript ?? "")
+    }
+
+    var onScreenContent: String? {
+        if let brief = onScreenBriefSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !brief.isEmpty {
+            return brief
+        }
+        if let ocr = onScreenTranscript?.trimmingCharacters(in: .whitespacesAndNewlines),
+           OnScreenTextSanitizer.isUsefulOnScreenContent(ocr) {
+            return ocr
+        }
+        let primary = videoMatchedPrompt ?? matchedPrompt
+        guard let primary else { return nil }
+        let cleaned = primary.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     var hasAudioDetails: Bool {

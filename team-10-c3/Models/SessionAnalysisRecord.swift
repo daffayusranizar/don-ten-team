@@ -108,6 +108,8 @@ struct StoredScreenBreakdown: Codable {
     let contentSummary: String?
     let videoMatchedPrompt: String?
     let matchedPrompt: String?
+    let onScreenTranscript: String?
+    let onScreenBriefSummary: String?
     let creatorHandle: String?
     let confidence: Float?
     let audioTranscript: String?
@@ -123,6 +125,8 @@ struct StoredScreenBreakdown: Codable {
         contentSummary = try container.decodeIfPresent(String.self, forKey: .contentSummary)
         videoMatchedPrompt = try container.decodeIfPresent(String.self, forKey: .videoMatchedPrompt)
         matchedPrompt = try container.decodeIfPresent(String.self, forKey: .matchedPrompt)
+        onScreenTranscript = try container.decodeIfPresent(String.self, forKey: .onScreenTranscript)
+        onScreenBriefSummary = try container.decodeIfPresent(String.self, forKey: .onScreenBriefSummary)
         creatorHandle = try container.decodeIfPresent(String.self, forKey: .creatorHandle)
         confidence = try container.decodeIfPresent(Float.self, forKey: .confidence)
         audioTranscript = try container.decodeIfPresent(String.self, forKey: .audioTranscript)
@@ -132,7 +136,8 @@ struct StoredScreenBreakdown: Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, timestampLabel, timestampSeconds, categoryLabel, contentSummary
-        case videoMatchedPrompt, matchedPrompt, creatorHandle, confidence
+        case videoMatchedPrompt, matchedPrompt, onScreenTranscript, onScreenBriefSummary
+        case creatorHandle, confidence
         case audioTranscript, audioTone, audioLabel
     }
 
@@ -145,6 +150,8 @@ struct StoredScreenBreakdown: Codable {
         try container.encodeIfPresent(contentSummary, forKey: .contentSummary)
         try container.encodeIfPresent(videoMatchedPrompt, forKey: .videoMatchedPrompt)
         try container.encodeIfPresent(matchedPrompt, forKey: .matchedPrompt)
+        try container.encodeIfPresent(onScreenTranscript, forKey: .onScreenTranscript)
+        try container.encodeIfPresent(onScreenBriefSummary, forKey: .onScreenBriefSummary)
         try container.encodeIfPresent(creatorHandle, forKey: .creatorHandle)
         try container.encodeIfPresent(confidence, forKey: .confidence)
         try container.encodeIfPresent(audioTranscript, forKey: .audioTranscript)
@@ -180,6 +187,8 @@ extension StoredScreenBreakdown {
         contentSummary = item.contentSummary
         videoMatchedPrompt = item.videoMatchedPrompt
         matchedPrompt = item.matchedPrompt
+        onScreenTranscript = item.onScreenTranscript
+        onScreenBriefSummary = item.onScreenBriefSummary
         creatorHandle = item.creatorHandle
         confidence = item.confidence
         audioTranscript = item.audioTranscript

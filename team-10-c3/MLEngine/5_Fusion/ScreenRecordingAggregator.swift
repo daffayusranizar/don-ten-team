@@ -19,6 +19,8 @@ public struct FrameClassificationSummary: Identifiable, Sendable {
     public let audioTone: String?
     public let audioLabel: String?
     public let contentSummary: String?
+    public let onScreenTranscript: String?
+    public let onScreenBriefSummary: String?
     public let creatorHandle: String?
 }
 
@@ -115,6 +117,14 @@ public actor ScreenRecordingAggregator {
         .sorted { $0.probability > $1.probability }
     }
 
+    private func mergeOnScreenTranscripts(_ transcripts: [String]) -> String? {
+        let cleaned = transcripts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { OnScreenTextSanitizer.isUsefulOnScreenContent($0) }
+        guard !cleaned.isEmpty else { return nil }
+        return cleaned.max(by: { $0.count < $1.count })
+    }
+
     private func fusionWeights(transcript: String?, audioTone: String?) -> (video: Float, audio: Float) {
         let trimmed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if MobileCLIPClassifier.isInstructionalTranscript(trimmed) {
@@ -138,10 +148,11 @@ public actor ScreenRecordingAggregator {
             videoMatchedPrompt: String?,
             audioMatchedPrompt: String?,
             contentSummary: String?,
+            onScreenTranscript: String?,
             creatorHandle: String?
         )],
         fps: Float,
-        intervalSeconds: Int = 3
+        intervalSeconds: Int = BroadcastConstants.classificationIntervalSeconds
     ) -> [FrameClassificationSummary] {
         guard !frames.isEmpty else { return [] }
 
@@ -161,6 +172,8 @@ public actor ScreenRecordingAggregator {
                 audioTone: frame.audioTone,
                 audioLabel: frame.audioLabel,
                 contentSummary: frame.contentSummary,
+                onScreenTranscript: frame.onScreenTranscript,
+                onScreenBriefSummary: nil,
                 creatorHandle: frame.creatorHandle
             )
         }
@@ -200,6 +213,8 @@ public actor ScreenRecordingAggregator {
                 contentSummary: ScreenContentSummaryBuilder.mergeSegmentSummaries(
                     bucket.compactMap(\.contentSummary)
                 ),
+                onScreenTranscript: mergeOnScreenTranscripts(bucket.compactMap(\.onScreenTranscript)),
+                onScreenBriefSummary: nil,
                 creatorHandle: nil
             )
         }

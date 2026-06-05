@@ -1,3 +1,4 @@
+import CoreVideo
 import Foundation
 import UIKit
 
@@ -38,7 +39,7 @@ public actor PipelineOrchestrator {
 
         report(.transcribing, 0.35, "Listening with on-device speech recognition…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing audio (\(audioSegments.count) windows, hasAudioTrack=\(hasAudioTrack))...")
-        let windowDuration: TimeInterval = 3.0
+        let windowDuration = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
         let fullTranscripts: [SegmentedTranscript]
         if let fullAudioURL {
             fullTranscripts = try await whisper.transcribeFull(wavURL: fullAudioURL)
@@ -106,6 +107,7 @@ public actor PipelineOrchestrator {
             videoMatchedPrompt: String?,
             audioMatchedPrompt: String?,
             contentSummary: String?,
+            onScreenTranscript: String?,
             creatorHandle: String?
         )
         
@@ -132,9 +134,14 @@ public actor PipelineOrchestrator {
 
                         let frameImages = ImagePreprocessor.frameDisplayImages(from: frame.pixelBuffer)
                         let categoryLabel = clip.categories.first?.label
+                        let onScreenTranscript = await Self.recognizedOnScreenText(
+                            pixelBuffer: frame.pixelBuffer,
+                            bottomCrop: frameImages.bottomCropThumbnail
+                        )
                         let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
                             label: categoryLabel ?? "Unknown",
-                            transcript: transcript.isEmpty ? nil : transcript
+                            transcript: transcript.isEmpty ? nil : transcript,
+                            onScreenTranscript: onScreenTranscript
                         )
                         
                         return (
@@ -148,6 +155,7 @@ public actor PipelineOrchestrator {
                             videoMatchedPrompt: clip.prompts.first?.matchedPrompt,
                             audioMatchedPrompt: nil,
                             contentSummary: contentSummary,
+                            onScreenTranscript: onScreenTranscript,
                             creatorHandle: nil
                         )
                     }
@@ -191,7 +199,12 @@ public actor PipelineOrchestrator {
         
         report(.generatingSummary, 0.82, "Grouping results by time…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⏱️ Step 5: Aggregating timeline (Fusion)...")
-        let timeline = await aggregator.timeline(frames: rawFrames, fps: 1.0, intervalSeconds: 3)
+        var timeline = await aggregator.timeline(
+            frames: rawFrames,
+            fps: 1.0,
+            intervalSeconds: BroadcastConstants.classificationIntervalSeconds
+        )
+        timeline = await Self.timelineWithOnScreenBriefs(timeline: timeline, summarizer: summarizer)
         let categoryBreakdown = UsageCategoryBreakdown.from(timeline: timeline)
         let dominantCategory = categoryBreakdown.dominantCategoryName ?? "Mixed content"
 
@@ -307,6 +320,60 @@ public actor PipelineOrchestrator {
         ) ?? "We analyzed the recording but could not generate a detailed summary."
     }
 
+    private static func recognizedOnScreenText(
+        pixelBuffer: CVPixelBuffer,
+        bottomCrop: UIImage?
+    ) async -> String? {
+        var parts: [String] = []
+        if let full = await ScreenTextRecognizer.recognizeText(in: pixelBuffer) {
+            parts.append(full)
+        }
+        if let bottomCrop,
+           let cropText = await ScreenTextRecognizer.recognizeText(in: bottomCrop),
+           !parts.contains(where: { $0.localizedCaseInsensitiveContains(cropText) }) {
+            parts.append(cropText)
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func timelineWithOnScreenBriefs(
+        timeline: [FrameClassificationSummary],
+        summarizer: LLMSummarizer
+    ) async -> [FrameClassificationSummary] {
+        let segments = timeline.compactMap { entry -> (id: Int, ocr: String, category: String)? in
+            guard let ocr = entry.onScreenTranscript,
+                  OnScreenTextSanitizer.isUsefulOnScreenContent(ocr) else { return nil }
+            return (entry.id, ocr, entry.label)
+        }
+        guard !segments.isEmpty else { return timeline }
+
+        let briefs = await summarizer.summarizeOnScreenBriefs(segments: segments)
+        guard !briefs.isEmpty else { return timeline }
+
+        return timeline.map { entry in
+            guard let brief = briefs[entry.id] else { return entry }
+            return FrameClassificationSummary(
+                id: entry.id,
+                timestamp: entry.timestamp,
+                label: entry.label,
+                matchedPrompt: entry.matchedPrompt,
+                videoMatchedPrompt: entry.videoMatchedPrompt,
+                audioMatchedPrompt: entry.audioMatchedPrompt,
+                probability: entry.probability,
+                thumbnail: entry.thumbnail,
+                bottomCropThumbnail: entry.bottomCropThumbnail,
+                audioTranscript: entry.audioTranscript,
+                audioTone: entry.audioTone,
+                audioLabel: entry.audioLabel,
+                contentSummary: entry.contentSummary,
+                onScreenTranscript: entry.onScreenTranscript,
+                onScreenBriefSummary: brief,
+                creatorHandle: entry.creatorHandle
+            )
+        }
+    }
+
     private static func audioBucketKey(for timestamp: TimeInterval, windowDuration: TimeInterval) -> Int {
         guard timestamp.isFinite, windowDuration > 0 else { return 0 }
         return Int((max(0, timestamp) / windowDuration).rounded())
@@ -330,20 +397,20 @@ public actor PipelineOrchestrator {
 #if DEBUG
 extension PipelineOrchestrator {
     static func runAudioMappingRegressionChecks() {
-        let interval: TimeInterval = 3.0
-        assert(audioBucketKey(for: 3.0, windowDuration: interval) == 1)
-        assert(audioBucketKey(for: 3.03, windowDuration: interval) == 1)
-        assert(audioBucketKey(for: 2.98, windowDuration: interval) == 1)
+        let interval = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
+        assert(audioBucketKey(for: 2.0, windowDuration: interval) == 1)
+        assert(audioBucketKey(for: 2.02, windowDuration: interval) == 1)
+        assert(audioBucketKey(for: 1.98, windowDuration: interval) == 1)
 
         let exactMatch = resolvedTranscript(
-            at: 3.03,
+            at: 2.02,
             from: [1: "exact transcript"],
             windowDuration: interval
         )
         assert(exactMatch == "exact transcript")
 
         let neighborMatch = resolvedTranscript(
-            at: 3.0,
+            at: 2.0,
             from: [2: "neighbor transcript"],
             windowDuration: interval
         )

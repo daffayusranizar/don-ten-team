@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum BroadcastConstants {
+public enum BroadcastConstants {
     static var appGroupID: String { SigningConfig.appGroupID }
     static let recordingsFolderName = "Recordings"
 
@@ -13,7 +13,7 @@ enum BroadcastConstants {
     static let targetRecordingFPS: Double = 1
 
     /// Classify one saved frame every N seconds during post-processing.
-    static let classificationIntervalSeconds: Int = 3
+    public static let classificationIntervalSeconds: Int = 2
 
     static let recordingReadyKey = "recordingReady"
     static let lastRecordingPathKey = "lastRecordingPath"
