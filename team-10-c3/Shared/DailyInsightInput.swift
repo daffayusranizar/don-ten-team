@@ -10,7 +10,8 @@ struct DailySessionInsight: Sendable {
     let durationSeconds: Int
     let dominantCategory: String
     let aiSummary: String
-    let transcriptBriefSummary: String?
+    let frameLines: [String]
+    let transcriptNotes: String?
 }
 
 struct DailyInsightInput: Sendable {
@@ -36,19 +37,26 @@ struct DailyInsightInput: Sendable {
         topApps: [AppUsageRow]
     ) -> DailyInsightInput {
         let sessionInsights = sessionResults.enumerated().map { offset, entry in
-            DailySessionInsight(
+            let digest = TranscriptDigestBuilder.resolvedDigest(
+                stored: entry.result.sessionTranscriptDigest,
+                screens: entry.result.screens
+            )
+            let brief = entry.result.sessionTranscriptBriefSummary
+                ?? TranscriptDigestBuilder.buildBriefSummary(
+                    fullTrackText: nil,
+                    digest: digest
+                )
+
+            return DailySessionInsight(
                 index: offset + 1,
                 durationSeconds: snapshotDuration(for: entry.session, snapshots: snapshots),
                 dominantCategory: entry.result.category,
                 aiSummary: entry.result.summary,
-                transcriptBriefSummary: entry.result.sessionTranscriptBriefSummary
-                    ?? TranscriptDigestBuilder.buildBriefSummary(
-                        fullTrackText: nil,
-                        digest: TranscriptDigestBuilder.resolvedDigest(
-                            stored: entry.result.sessionTranscriptDigest,
-                            screens: entry.result.screens
-                        )
-                    )
+                frameLines: DailyContentDigestBuilder.sessionFrameLines(screens: entry.result.screens),
+                transcriptNotes: DailyContentDigestBuilder.sessionTranscriptNotes(
+                    digest: digest,
+                    brief: brief
+                )
             )
         }
 
@@ -82,6 +90,14 @@ struct DailyInsightInput: Sendable {
 }
 
 extension DailyInsightInput {
+    func topicPromptBody() -> String {
+        let lines = DailyContentDigestBuilder.allTopicLines(from: sessions)
+        guard !lines.isEmpty else {
+            return "No frame or transcript notes available for today."
+        }
+        return lines.joined(separator: "\n")
+    }
+
     func promptBody() -> String {
         var lines: [String] = []
         lines.append("Date: \(dayLabel)")
@@ -89,15 +105,13 @@ extension DailyInsightInput {
         lines.append("Number of sessions: \(sessionCount)")
 
         if hasScreenTimeData {
-            lines.append("Screen Time app estimate: \(DurationFormatting.verbose(seconds: screenTimeAppTotalSeconds))")
+            lines.append("App usage estimate: \(DurationFormatting.verbose(seconds: screenTimeAppTotalSeconds))")
             let appLines = topApps.prefix(8).map {
                 "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
             }
             if !appLines.isEmpty {
                 lines.append("Top apps: \(appLines.joined(separator: ", "))")
             }
-        } else {
-            lines.append("Screen Time app estimate: not available (permissions or no data)")
         }
 
         if !mergedCategoryBreakdown.isEmpty {
@@ -107,17 +121,76 @@ extension DailyInsightInput {
             lines.append("Category breakdown: \(breakdown)")
         }
 
-        for session in sessions {
-            var block = """
-            Session \(session.index) (\(DurationFormatting.compact(seconds: session.durationSeconds)), \(session.dominantCategory)):
-            AI summary: \(session.aiSummary)
-            """
-            if let brief = session.transcriptBriefSummary, TranscriptSanitizer.isMeaningful(brief) {
-                block += "\nSpoken content summary: \(brief)"
-            }
-            lines.append(block)
-        }
-
+        lines.append(topicPromptBody())
         return lines.joined(separator: "\n\n")
     }
 }
+
+#if DEBUG
+extension DailyInsightInput {
+    /// Prints a human-readable summary to the Xcode console (DEBUG builds only).
+    func logToXcodeConsole(maxFrameLinesPerSession: Int = 6, maxTextChars: Int = 400) {
+        func truncate(_ text: String, max: Int) -> String {
+            guard text.count > max else { return text }
+            return String(text.prefix(max)) + "…"
+        }
+
+        let childLine: String = {
+            switch (childName, childAge) {
+            case let (name?, age?): return "\(name), age \(age)"
+            case let (name?, nil): return name
+            case let (nil, age?): return "age \(age)"
+            case (nil, nil): return "(unspecified)"
+            }
+        }()
+
+        let breakdown = mergedCategoryBreakdown.items
+            .map { "\($0.name): \($0.percentage)% (\($0.frameCount) frames)" }
+            .joined(separator: "\n  ")
+
+        let appLines = topApps.prefix(8).map {
+            "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
+        }.joined(separator: "\n  ")
+
+        let sessionBlocks = sessions.map { session in
+            let frames = session.frameLines.prefix(maxFrameLinesPerSession).joined(separator: "\n      ")
+            let moreFrames = session.frameLines.count > maxFrameLinesPerSession
+                ? "\n      … +\(session.frameLines.count - maxFrameLinesPerSession) more frame lines"
+                : ""
+            return """
+              Session \(session.index):
+                Duration: \(DurationFormatting.verbose(seconds: session.durationSeconds))
+                Category: \(session.dominantCategory)
+                AI summary: \(truncate(session.aiSummary, max: maxTextChars))
+                Frame lines (\(session.frameLines.count)):
+                  \(frames.isEmpty ? "(none)" : frames)\(moreFrames)
+                Transcript notes: \(session.transcriptNotes.map { truncate($0, max: maxTextChars) } ?? "(none)")
+            """
+        }.joined(separator: "\n")
+
+        print("""
+
+        ========== DailyInsightInput ==========
+        Child: \(childLine)
+        Date: \(dayLabel)
+        Total session time: \(DurationFormatting.verbose(seconds: totalSessionSeconds))
+        Session count: \(sessionCount)
+
+        Merged category breakdown:
+          \(breakdown.isEmpty ? "(empty)" : breakdown)
+
+        Screen Time: \(hasScreenTimeData ? DurationFormatting.verbose(seconds: screenTimeAppTotalSeconds) : "(none)")
+        Top apps:
+          \(appLines.isEmpty ? "(none)" : appLines)
+
+        Sessions:
+        \(sessionBlocks.isEmpty ? "  (none)" : sessionBlocks)
+
+        Prompt body preview:
+        \(truncate(promptBody(), max: maxTextChars * 2))
+        ========================================
+
+        """)
+    }
+}
+#endif

@@ -81,7 +81,7 @@ struct RecordingTestView: View {
 
             Section {
                 VStack(spacing: 12) {
-                    Text("Tap the button below, then choose **ScreenRecorderExtension** from the list to start recording.")
+                    Text("Tap the button below, then choose **\(BroadcastConstants.extensionDisplayName)** from the list to start recording.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 

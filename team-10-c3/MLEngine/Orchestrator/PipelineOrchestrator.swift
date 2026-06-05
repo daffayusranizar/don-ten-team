@@ -47,13 +47,14 @@ public actor PipelineOrchestrator {
         }
         let hasFullTrack = !fullTranscripts.isEmpty
 
-        var audioResults: [TimeInterval: String] = [:]
+        var audioResultsByBucket: [Int: String] = [:]
 
-        try await withThrowingTaskGroup(of: (TimeInterval, String).self) { group in
+        try await withThrowingTaskGroup(of: (Int, String).self) { group in
             for segment in audioSegments {
                 group.addTask {
                     let segmentStart = segment.timestamp
                     let segmentEnd = segmentStart + windowDuration
+                    let bucket = Self.audioBucketKey(for: segmentStart, windowDuration: windowDuration)
 
                     var matchedTexts = fullTranscripts.filter { entry in
                         max(entry.start, segmentStart) < min(entry.end, segmentEnd)
@@ -68,23 +69,27 @@ public actor PipelineOrchestrator {
                     }
 
                     let storedTranscript = TranscriptSanitizer.meaningfulForStorage(rawTranscript) ?? ""
-                    return (segmentStart, storedTranscript)
+                    return (bucket, storedTranscript)
                 }
             }
 
             for try await item in group {
-                audioResults[item.0] = item.1
+                guard !item.1.isEmpty else { continue }
+                if let existing = audioResultsByBucket[item.0], existing.count >= item.1.count {
+                    continue
+                }
+                audioResultsByBucket[item.0] = item.1
             }
         }
 
-        let windowsWithTranscript = audioResults.values.filter { !$0.isEmpty }.count
+        let windowsWithTranscript = audioResultsByBucket.count
         print(
             "[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Audio: \(windowsWithTranscript)/\(audioSegments.count) windows with transcript, full segments=\(fullTranscripts.count)"
         )
 
         let sessionTranscriptExcerpt = Self.sessionTranscriptExcerpt(
             fullTranscripts: fullTranscripts,
-            audioResults: audioResults,
+            audioResultsByBucket: audioResultsByBucket,
             windowsWithTranscript: windowsWithTranscript
         )
         
@@ -113,7 +118,11 @@ public actor PipelineOrchestrator {
                 for frame in batch {
                     group.addTask {
                         let timestamp = frame.timestamp
-                        let transcript = audioResults[timestamp] ?? ""
+                        let transcript = Self.resolvedTranscript(
+                            at: timestamp,
+                            from: audioResultsByBucket,
+                            windowDuration: windowDuration
+                        )
 
                         let clip = try await clipClassifier.classify(
                             pixelBuffer: frame.pixelBuffer,
@@ -246,7 +255,7 @@ public actor PipelineOrchestrator {
             print("⚠️ Failed to delete processed video: \(error)")
         }
 
-        return SessionAnalysisResult(
+        let result = SessionAnalysisResult(
             dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []),
             aiProseSummary: aiProseSummary,
             guidance: guidance,
@@ -256,16 +265,20 @@ public actor PipelineOrchestrator {
             sessionTranscriptDigest: sessionTranscriptDigest,
             sessionTranscriptBriefSummary: sessionTranscriptBriefSummary
         )
+        #if DEBUG
+        result.logToXcodeConsole()
+        #endif
+        return result
     }
 
     private static func sessionTranscriptExcerpt(
         fullTranscripts: [SegmentedTranscript],
-        audioResults: [TimeInterval: String],
+        audioResultsByBucket: [Int: String],
         windowsWithTranscript: Int
     ) -> String? {
         let joined = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
         guard TranscriptSanitizer.isMeaningful(joined) else { return nil }
-        if windowsWithTranscript >= max(2, audioResults.count / 4) {
+        if windowsWithTranscript >= max(2, audioResultsByBucket.count / 4) {
             return nil
         }
         let maxLen = 280
@@ -293,4 +306,48 @@ public actor PipelineOrchestrator {
             dominantCategory: dominantCategory
         ) ?? "We analyzed the recording but could not generate a detailed summary."
     }
+
+    private static func audioBucketKey(for timestamp: TimeInterval, windowDuration: TimeInterval) -> Int {
+        guard timestamp.isFinite, windowDuration > 0 else { return 0 }
+        return Int((max(0, timestamp) / windowDuration).rounded())
+    }
+
+    private static func resolvedTranscript(
+        at timestamp: TimeInterval,
+        from buckets: [Int: String],
+        windowDuration: TimeInterval
+    ) -> String {
+        let key = audioBucketKey(for: timestamp, windowDuration: windowDuration)
+        let candidates = [key, key - 1, key + 1]
+        for candidate in candidates {
+            guard let transcript = buckets[candidate], !transcript.isEmpty else { continue }
+            return transcript
+        }
+        return ""
+    }
 }
+
+#if DEBUG
+extension PipelineOrchestrator {
+    static func runAudioMappingRegressionChecks() {
+        let interval: TimeInterval = 3.0
+        assert(audioBucketKey(for: 3.0, windowDuration: interval) == 1)
+        assert(audioBucketKey(for: 3.03, windowDuration: interval) == 1)
+        assert(audioBucketKey(for: 2.98, windowDuration: interval) == 1)
+
+        let exactMatch = resolvedTranscript(
+            at: 3.03,
+            from: [1: "exact transcript"],
+            windowDuration: interval
+        )
+        assert(exactMatch == "exact transcript")
+
+        let neighborMatch = resolvedTranscript(
+            at: 3.0,
+            from: [2: "neighbor transcript"],
+            windowDuration: interval
+        )
+        assert(neighborMatch == "neighbor transcript")
+    }
+}
+#endif

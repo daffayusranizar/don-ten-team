@@ -718,7 +718,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = ParentGuide;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -748,7 +748,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = ParentGuide;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -778,7 +778,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtensionSetupUI;
+				INFOPLIST_KEY_CFBundleDisplayName = ParentGuide;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -808,7 +808,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = ScreenRecorderExtensionSetupUI;
+				INFOPLIST_KEY_CFBundleDisplayName = ParentGuide;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

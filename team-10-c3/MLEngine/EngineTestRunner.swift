@@ -14,7 +14,12 @@ public class EngineTestRunner {
         print("🚀 Starting ParentingEngine Backend Pipeline...")
         print("📂 Video URL: \(videoURL.path)")
         print("📂 File exists: \(FileManager.default.fileExists(atPath: videoURL.path))")
-        
+
+        #if DEBUG
+        TranscriptSanitizer.runRegressionChecks()
+        PipelineOrchestrator.runAudioMappingRegressionChecks()
+        #endif
+
         Task {
             do {
                 print("⚙️ Step 1: Initializing actors...")

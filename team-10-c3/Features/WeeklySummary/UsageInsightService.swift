@@ -153,6 +153,9 @@ struct UsageInsightService {
             snapshots: snapshots,
             topApps: topApps
         )
+        #if DEBUG
+        input.logToXcodeConsole()
+        #endif
 
         let summarizer = LLMSummarizer()
         do {
@@ -165,8 +168,10 @@ struct UsageInsightService {
         }
 
         return InsightProseBuilder.dailySummary(
+            childName: child?.name,
             totalSeconds: totalSeconds,
-            breakdown: mergedBreakdown
+            breakdown: mergedBreakdown,
+            sessions: input.sessions
         )
     }
 

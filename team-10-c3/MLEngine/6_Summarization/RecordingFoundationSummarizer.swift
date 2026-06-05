@@ -94,18 +94,91 @@ public actor LLMSummarizer {
             throw SummarizerError.emptyInput
         }
 
-        let prompt = """
-        Write one daily overview for a parent based on today's data below.
-        Use 2-4 clear sentences. Mention total screen time and the main content themes (educational, entertainment, commercial).
-        When spoken content summaries are provided, ground the overview in those brief notes alongside each session AI summary.
-        Use only the facts provided — do not invent apps, dialogue, or durations.
+        return try await summarizeDailyTopics(input: input)
+    }
 
-        \(input.promptBody())
+    @available(iOS 26, *)
+    private func summarizeDailyTopics(input: DailyInsightInput) async throws -> String {
+        let topicLines = DailyContentDigestBuilder.allTopicLines(from: input.sessions)
+        guard !topicLines.isEmpty else { return "" }
+
+        let chunks = chunkLines(topicLines, maxCharacters: 2_800)
+        var evidenceNotes: [String] = []
+
+        for chunk in chunks {
+            let summary = try await summarizeDailyTopicChunk(chunk, input: input)
+            if !summary.isEmpty {
+                evidenceNotes.append(summary)
+            }
+        }
+
+        guard !evidenceNotes.isEmpty else { return "" }
+
+        let mergePrompt = """
+        \(dailyMetadataPrompt(input))
+
+        You are given chunk-level evidence notes from one day of child screen activity.
+        Generate one parent-facing report using only these notes.
+        Never include raw timestamps (for example, 0:09), frame indexes, or line-by-line frame descriptions.
+        Do not use prefixes like "visual:" or "spoken:" in the final answer.
+
+        Output format (use exactly):
+        Overall Summary:
+        <2-4 sentences, plain language, parent-friendly>
+
+        Main Topics:
+        - <topic 1>
+        - <topic 2>
+        - <topic 3>
+
+        Key Messages:
+        - <message 1>
+        - <message 2>
+        - <message 3>
+
+        Potential Concerns:
+        - <evidence-based concern 1>
+        - <evidence-based concern 2>
+        If no concerns: No significant concerns detected.
+
+        Risk Level:
+        <Low | Medium | High>
+
+        Parent Recommendation:
+        <one short practical recommendation>
+
+        Evidence notes:
+        \(evidenceNotes.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
         """
+        let merged = try await respond(
+            prompt: mergePrompt,
+            instructions: dailyTopicInstructions(for: input)
+        )
+        return sanitizeDailyReport(merged)
+    }
 
+    @available(iOS 26, *)
+    private func summarizeDailyTopicChunk(
+        _ lines: [String],
+        input: DailyInsightInput
+    ) async throws -> String {
+        let prompt = """
+        \(dailyMetadataPrompt(input))
+
+        Extract concise evidence bullets from this subset of sessions.
+        Keep only concrete observations that help a parent understand topics, messages, and concerns.
+        Use up to 6 bullet points.
+        Do not invent apps, creators, titles, or quoted dialogue not present in the notes.
+        Avoid repeating timestamps or percentages.
+        Never include timestamps like 0:09 or tokens like "09 —".
+        Do not copy frame lines verbatim.
+        Prefer content meaning over generic labels.
+
+        \(lines.joined(separator: "\n"))
+        """
         return try await respond(
             prompt: prompt,
-            instructions: dailyInstructions(for: input)
+            instructions: dailyTopicInstructions(for: input)
         )
     }
 
@@ -197,20 +270,89 @@ public actor LLMSummarizer {
         return try await respond(prompt: prompt, child: child)
     }
 
-    private func dailyInstructions(for input: DailyInsightInput) -> String {
+    private func dailyTopicInstructions(for input: DailyInsightInput) -> String {
         if let name = input.childName, let age = input.childAge {
             return """
-                You are a parental monitoring assistant writing a daily screen-time overview for a parent of \(name), age \(age).
-                Synthesize today's session summaries, spoken content excerpts, category mix, and screen time into one cohesive paragraph.
-                Use \(name) when it reads naturally. Be objective and reassuring. Do not invent details or dialogue.
-                Write 2-4 sentences only.
+                You are a child screen activity analyst helping parents understand what their child watched.
+                The child is \(name), age \(age).
+                Your job is to analyze provided sessions and generate an evidence-based parent report.
+
+                Rules:
+                - "Educational", "Entertainment", and "Commercial" are content labels only, not quality judgments.
+                - Never assume educational content is safe, accurate, or beneficial.
+                - Evaluate actual messages, ideas, tone, and modeled behavior.
+                - Focus on what a child is likely to remember or imitate.
+                - Be factual and avoid speculation.
+                - Do not invent creators, titles, apps, or dialogue.
+                - Avoid repeating timestamps, frame counts, or percentages unless essential.
+
+                Evaluate whether messages are positive, neutral, questionable, or potentially harmful.
+                Flag profanity, mature language, dishonesty encouragement, unsafe behavior, aggression, or harmful beliefs only when supported by evidence.
                 """
         }
         return """
-            You are a parental monitoring assistant writing a daily screen-time overview for a parent.
-            Synthesize today's session summaries, spoken content excerpts, category mix, and screen time into one cohesive paragraph.
-            Be objective and reassuring. Do not invent details or dialogue. Write 2-4 sentences only.
+            You are a child screen activity analyst helping parents understand what their child watched.
+            Your job is to analyze provided sessions and generate an evidence-based parent report.
+
+            Rules:
+            - "Educational", "Entertainment", and "Commercial" are content labels only, not quality judgments.
+            - Never assume educational content is safe, accurate, or beneficial.
+            - Evaluate actual messages, ideas, tone, and modeled behavior.
+            - Focus on what a child is likely to remember or imitate.
+            - Be factual and avoid speculation.
+            - Do not invent creators, titles, apps, or dialogue.
+            - Avoid repeating timestamps, frame counts, or percentages unless essential.
+
+            Evaluate whether messages are positive, neutral, questionable, or potentially harmful.
+            Flag profanity, mature language, dishonesty encouragement, unsafe behavior, aggression, or harmful beliefs only when supported by evidence.
             """
+    }
+
+    private func dailyMetadataPrompt(_ input: DailyInsightInput) -> String {
+        var lines: [String] = []
+        lines.append("Date: \(input.dayLabel)")
+        lines.append("Child age: \(input.childAge.map { String($0) } ?? "unknown")")
+        lines.append("Total session time: \(DurationFormatting.verbose(seconds: input.totalSessionSeconds))")
+        lines.append("Session count: \(input.sessionCount)")
+
+        if !input.mergedCategoryBreakdown.isEmpty {
+            let breakdown = input.mergedCategoryBreakdown.items
+                .map { "\($0.name) \($0.percentage)%" }
+                .joined(separator: ", ")
+            lines.append("Category breakdown: \(breakdown)")
+        }
+
+        if input.hasScreenTimeData {
+            lines.append("App usage estimate: \(DurationFormatting.verbose(seconds: input.screenTimeAppTotalSeconds))")
+            let appLine = input.topApps.prefix(3).map {
+                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
+            }.joined(separator: ", ")
+            if !appLine.isEmpty {
+                lines.append("Top apps: \(appLine)")
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func sanitizeDailyReport(_ text: String) -> String {
+        let patterns = [
+            #"\b\d{1,2}:\d{2}\b"#,
+            #"\b\d{1,2}\s*[—-]\s*"#
+        ]
+
+        var cleaned = text
+        for pattern in patterns {
+            cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+
+        cleaned = cleaned
+            .replacingOccurrences(of: "visual:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "spoken:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return cleaned
     }
 
     @available(iOS 26, *)

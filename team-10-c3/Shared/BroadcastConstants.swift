@@ -26,6 +26,9 @@ enum BroadcastConstants {
     static var latestRecordingPathKey: String { BroadcastStorageKeys.latestRecordingPath }
     static var targetSessionDurationKey: String { BroadcastStorageKeys.targetSessionDurationMinutes }
 
+    /// Shown in the system screen-recording picker when the parent starts a session.
+    static let extensionDisplayName = "ParentGuide"
+
     /// Fallback if the embedded plug-in cannot be discovered at runtime.
     static var fallbackExtensionBundleID: String { SigningConfig.screenRecorderExtensionBundleID }
 

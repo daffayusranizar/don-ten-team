@@ -130,26 +130,59 @@ public struct UsageCategoryBreakdown: Codable, Equatable, Sendable {
 }
 
 enum InsightProseBuilder {
-    static func dailySummary(totalSeconds: Int, breakdown: UsageCategoryBreakdown) -> String {
+    static func dailyLeadSentence(
+        childName: String?,
+        totalSeconds: Int,
+        breakdown: UsageCategoryBreakdown
+    ) -> String {
         guard totalSeconds > 0 else {
             return "No screen time was recorded today yet."
         }
 
         let duration = DurationFormatting.verbose(seconds: totalSeconds).lowercased()
+        let subject = childName.map { "Today, \($0) spent" } ?? "Today, your child spent"
+
         guard !breakdown.isEmpty else {
-            return "Today, your child spent \(duration) on screen time."
+            return "\(subject) \(duration) on screen time."
         }
 
-        let ranked = breakdown.items
-        let primary = ranked[0]
-        if ranked.count == 1 {
-            return "Today, your child spent \(duration) on screen time, focused on \(primary.name.lowercased()) content."
-        }
+        let percentagePhrase = formatCategoryPercentages(breakdown.items)
+        return "\(subject) \(duration) on screen time: \(percentagePhrase)."
+    }
 
-        let secondary = ranked[1]
-        return """
-        Today, your child spent \(duration) on screen time, with most activity focused on \(primary.name.lowercased()) content and a smaller portion on \(secondary.name.lowercased()).
-        """
+    static func dailySummary(
+        childName: String?,
+        totalSeconds: Int,
+        breakdown: UsageCategoryBreakdown,
+        sessions: [DailySessionInsight] = []
+    ) -> String {
+        let lead = dailyLeadSentence(
+            childName: childName,
+            totalSeconds: totalSeconds,
+            breakdown: breakdown
+        )
+        guard totalSeconds > 0 else { return lead }
+
+        if let topics = DailyContentDigestBuilder.fallbackBriefTopicSentence(from: sessions),
+           TranscriptSanitizer.isMeaningful(topics) {
+            return "\(lead)\n\n\(topics)"
+        }
+        return lead
+    }
+
+    private static func formatCategoryPercentages(_ items: [UsageCategoryBreakdown.Item]) -> String {
+        let parts = items.map { "\($0.percentage)% \($0.name.lowercased())" }
+        switch parts.count {
+        case 0:
+            return ""
+        case 1:
+            return parts[0]
+        case 2:
+            return "\(parts[0]) and \(parts[1])"
+        default:
+            let head = parts.dropLast().joined(separator: ", ")
+            return "\(head), and \(parts.last!)"
+        }
     }
 
     static func weeklySummary(totalSeconds: Int, breakdown: UsageCategoryBreakdown) -> String {

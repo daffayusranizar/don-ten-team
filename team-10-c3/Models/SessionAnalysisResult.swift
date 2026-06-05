@@ -110,3 +110,59 @@ public struct GuidanceSuggestion: Sendable {
         self.offlineActivity = offlineActivity
     }
 }
+
+#if DEBUG
+extension SessionAnalysisResult {
+    /// Prints a human-readable summary to the Xcode console (DEBUG builds only).
+    public func logToXcodeConsole(maxTimelineRows: Int = 12, maxTranscriptChars: Int = 400) {
+        func truncate(_ text: String, max: Int) -> String {
+            guard text.count > max else { return text }
+            return String(text.prefix(max)) + "…"
+        }
+
+        let breakdown = categoryBreakdown.items
+            .map { "\($0.name): \($0.percentage)% (\($0.frameCount) frames)" }
+            .joined(separator: "\n  ")
+
+        let starters = guidance.conversationStarters
+            .enumerated()
+            .map { "\($0.offset + 1). \($0.element)" }
+            .joined(separator: "\n  ")
+
+        let timelinePreview = timeline.prefix(maxTimelineRows).map { frame in
+            let timestamp = String(format: "%.1fs", frame.timestamp)
+            let transcript = frame.audioTranscript.map { truncate($0, max: 80) } ?? "—"
+            return "[\(timestamp)] \(frame.label) · \(transcript)"
+        }.joined(separator: "\n  ")
+
+        let moreTimeline = timeline.count > maxTimelineRows
+            ? "\n  … +\(timeline.count - maxTimelineRows) more frames"
+            : ""
+
+        print("""
+
+        ========== SessionAnalysisResult ==========
+        Category: \(dominantCategory.name)
+        Breakdown:
+          \(breakdown.isEmpty ? "(empty)" : breakdown)
+
+        AI Summary:
+        \(aiProseSummary)
+
+        Guidance:
+          Conversation starters:
+          \(starters.isEmpty ? "(none)" : starters)
+          Offline activity: \(guidance.offlineActivity)
+
+        Transcript excerpt: \(sessionTranscriptExcerpt.map { truncate($0, max: maxTranscriptChars) } ?? "(none)")
+        Transcript digest: \(sessionTranscriptDigest.map { truncate($0, max: maxTranscriptChars) } ?? "(none)")
+        Transcript brief: \(sessionTranscriptBriefSummary ?? "(none)")
+
+        Timeline (\(timeline.count) frames):
+          \(timelinePreview.isEmpty ? "(empty)" : timelinePreview)\(moreTimeline)
+        ============================================
+
+        """)
+    }
+}
+#endif

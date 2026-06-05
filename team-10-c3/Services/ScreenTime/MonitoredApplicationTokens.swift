@@ -11,12 +11,14 @@ enum MonitoredAppsFilter {
     }
 
     static func appsForDisplay(_ apps: [AppUsageRow]) -> [AppUsageRow] {
-        userFacingApps(apps).map { app in
-            AppUsageRow(
-                displayName: KnownAppLabels.displayName(
-                    bundleId: app.bundleIdentifier,
-                    localized: app.displayName
-                ),
+        userFacingApps(apps).compactMap { app in
+            let displayName = KnownAppLabels.displayName(
+                bundleId: app.bundleIdentifier,
+                localized: app.displayName
+            )
+            guard !KnownAppLabels.looksLikeBundleIdentifier(displayName) else { return nil }
+            return AppUsageRow(
+                displayName: displayName,
                 bundleIdentifier: app.bundleIdentifier,
                 durationSeconds: app.durationSeconds
             )

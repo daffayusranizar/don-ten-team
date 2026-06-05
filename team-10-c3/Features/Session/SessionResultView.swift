@@ -152,7 +152,7 @@ struct SessionResultView: View {
                 }
 
                 // Start new session button
-                PrimaryButton(title: "Start New Session", size: .large, action: onStartNew)
+                PrimaryButton(title: "Nice Work!", size: .large, action: onStartNew)
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
                     .padding(.bottom, 40)

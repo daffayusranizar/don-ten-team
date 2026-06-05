@@ -154,7 +154,7 @@ struct SessionSetupView: View {
                 .font(.system(size: 17, weight: .semibold))
 
                 if recordScreen {
-                    Text("Tap Start Session below, then confirm screen recording in the system dialog.")
+                    Text("Tap Start Session below, then choose **\(BroadcastConstants.extensionDisplayName)** in the system dialog.")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

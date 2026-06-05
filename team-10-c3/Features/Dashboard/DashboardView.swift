@@ -294,7 +294,7 @@ func latestSummary(
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .help(
-                    "ParentGuide counts session minutes with a timer. The chart stacks estimated per-app Screen Time by hour for today."
+                    "ParentGuide counts session minutes with a timer. The chart stacks estimated per-app usage by hour for today."
                 )
         }
 
@@ -306,7 +306,7 @@ func latestSummary(
                 hourlyStackedAppChart(segments: hourlySegments)
                 if hourlySegments.contains(where: \.isPartialHour) {
                     Text(
-                        "Dotted bars: the parent session covered only part of that hour. App usage is still Apple's estimate for the whole hour bucket."
+                        "Dotted bars: the parent session covered only part of that hour. App usage is an estimate for the whole hour bucket."
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -334,27 +334,16 @@ func latestSummary(
                 Text("App usage (estimate): \(DurationFormatting.compact(seconds: screenTimeAppTotalSeconds))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("From iOS Screen Time for today. Times are approximate.")
+                Text("Estimated from today's sessions. Times are approximate.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             if showsTotalsMismatch {
-                Text("That's normal. Session time is exact; app breakdown is Apple's estimate and can differ when several apps were used in one session.")
+                Text("Session time is measured precisely; per-app estimates can differ when several apps were used in one session.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-
-            Link(destination: URL(string: UIApplication.openSettingsURLString)!) {
-                Text("See Apple's Screen Time")
-                    .font(.caption.weight(.medium))
-            }
-
-            Text("We track session length precisely. Per-app numbers are Apple's best estimate for the time window—not minute-by-minute.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 4)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 30)
@@ -496,7 +485,7 @@ func currentScreenTimeView(
     onStop: @escaping () -> Void
 ) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-        Text("Current Screen Time")
+        Text("Active Session")
             .font(.system(size: 20, weight: .semibold))
 
         HStack(alignment: .center, spacing: 8) {
@@ -575,7 +564,7 @@ func lastScreenTimeView(
     }()
 
     screenTimeBannerView(
-        title: "Last Screen Time",
+        title: "Last Session",
         total: total,
         progress: hasData ? coordinator.latestBannerProgress : 0,
         progressLabel: progressLabel

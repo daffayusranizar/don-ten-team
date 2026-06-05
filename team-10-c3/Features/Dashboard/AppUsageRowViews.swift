@@ -41,17 +41,9 @@ struct AppUsageListRow: View {
                 .frame(width: 30, height: 30)
                 .cornerRadius(10)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(app.displayName)
-                    .font(.system(size: 14, weight: .regular))
-                    .lineLimit(1)
-                #if DEBUG
-                Text(app.bundleIdentifier)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                #endif
-            }
+            Text(app.displayName)
+                .font(.system(size: 14, weight: .regular))
+                .lineLimit(1)
 
             Spacer()
 
