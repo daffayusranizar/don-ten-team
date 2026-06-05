@@ -20,6 +20,9 @@ public struct SessionAnalysisResult: Sendable {
     /// The full chronological breakdown of what happened every 3 seconds.
     public let timeline: [FrameClassificationSummary]
 
+    /// Educational / Entertainment / Commercial percentages for the Insight chart.
+    public let categoryBreakdown: UsageCategoryBreakdown
+
     /// Full-session speech excerpt when per-window transcripts are mostly empty but Whisper succeeded on the full track.
     public let sessionTranscriptExcerpt: String?
 
@@ -30,6 +33,7 @@ public struct SessionAnalysisResult: Sendable {
         concernSignals: [ConcernSignal],
         guidance: GuidanceSuggestion,
         timeline: [FrameClassificationSummary],
+        categoryBreakdown: UsageCategoryBreakdown,
         sessionTranscriptExcerpt: String? = nil
     ) {
         self.dominantCategory = dominantCategory
@@ -38,6 +42,7 @@ public struct SessionAnalysisResult: Sendable {
         self.concernSignals = concernSignals
         self.guidance = guidance
         self.timeline = timeline
+        self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
     }
 }

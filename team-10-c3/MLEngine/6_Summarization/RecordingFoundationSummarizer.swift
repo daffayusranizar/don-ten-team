@@ -82,6 +82,32 @@ public actor LLMSummarizer {
         }
     }
 
+    func summarizeDailyInsight(input: DailyInsightInput) async throws -> String {
+        guard #available(iOS 26, *) else {
+            throw SummarizerError.requiresIOS26
+        }
+        guard availability() == .available else {
+            throw SummarizerError.modelUnavailable(availability().statusMessage ?? "Model unavailable.")
+        }
+
+        guard input.totalSessionSeconds > 0 || !input.sessions.isEmpty else {
+            throw SummarizerError.emptyInput
+        }
+
+        let prompt = """
+        Write one daily overview for a parent based on today's data below.
+        Use 2-4 clear sentences. Mention total screen time and the main content themes (educational, entertainment, commercial).
+        If concern signals are listed, note them briefly. Use only the facts provided — do not invent apps, creators, or durations.
+
+        \(input.promptBody())
+        """
+
+        return try await respond(
+            prompt: prompt,
+            instructions: dailyInstructions(for: input)
+        )
+    }
+
     public func summarizeRecording(
         timeline: [FrameClassificationSummary],
         overallCategory: String?,
@@ -161,9 +187,30 @@ public actor LLMSummarizer {
         return try await respond(prompt: prompt, child: child)
     }
 
+    private func dailyInstructions(for input: DailyInsightInput) -> String {
+        if let name = input.childName, let age = input.childAge {
+            return """
+                You are a parental monitoring assistant writing a daily screen-time overview for a parent of \(name), age \(age).
+                Synthesize today's session summaries, category mix, and screen time into one cohesive paragraph.
+                Use \(name) when it reads naturally. Be objective and reassuring. Do not invent details.
+                Write 2-4 sentences only.
+                """
+        }
+        return """
+            You are a parental monitoring assistant writing a daily screen-time overview for a parent.
+            Synthesize today's session summaries, category mix, and screen time into one cohesive paragraph.
+            Be objective and reassuring. Do not invent details. Write 2-4 sentences only.
+            """
+    }
+
     @available(iOS 26, *)
-    private func respond(prompt: String, child: Child?) async throws -> String {
-        let session = LanguageModelSession(instructions: instructions(for: child))
+    private func respond(
+        prompt: String,
+        child: Child? = nil,
+        instructions customInstructions: String? = nil
+    ) async throws -> String {
+        let sessionInstructions = customInstructions ?? instructions(for: child)
+        let session = LanguageModelSession(instructions: sessionInstructions)
         let response = try await session.respond(to: prompt)
         return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
     }

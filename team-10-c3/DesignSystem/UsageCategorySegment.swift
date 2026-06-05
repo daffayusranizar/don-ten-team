@@ -44,10 +44,10 @@ extension UsageCategorySegment {
             systemImage: "book.fill"
         ),
         UsageCategorySegment(
-            title: "Games",
+            title: "Commercial",
             duration: 3 * 3600 + 12 * 60,
             color: .usageGames,
-            systemImage: "gamecontroller.fill"
+            systemImage: "cart.fill"
         )
     ]
 }

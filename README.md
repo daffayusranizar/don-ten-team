@@ -5,6 +5,7 @@ ParentGuide is a native iOS SwiftUI app that helps parents manage child screen t
 **Requirements:** Xcode 26.5+, iOS 26+ simulator or device.
 
 - [Screen Time data & limitations](docs/SCREEN_TIME.md) — how ParentGuide uses `activityData` and why numbers differ from session timer / Settings.
+- [Child data storage](docs/CHILD_DATA_STORAGE.md) — SwiftData schema, child profiles, session markers, and what is persisted vs in-memory.
 
 ## Building with your own Apple account
 

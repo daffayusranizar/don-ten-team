@@ -24,6 +24,8 @@ struct ParentGuideApp: App {
                 .environment(\.profileViewModel, container.profileViewModel)
                 .environment(\.sessionCoordinator, container.sessionCoordinator)
                 .environment(\.kidSessionViewModel, container.kidSessionViewModel)
+                .environment(\.weeklySummaryViewModel, container.weeklySummaryViewModel)
+                .environment(\.sessionAnalysisStore, container.sessionAnalysisStore)
                 .environment(\.suggestionHistoryRepository, container.suggestionHistoryRepository)
                 .environment(\.familyControlsAuth, container.familyControlsAuth)
         }

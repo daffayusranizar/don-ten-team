@@ -10,7 +10,7 @@ import SwiftUI
 
 enum AppTab: Int {
     case dashboard
-    case guidance
+    case insight
     case session
 }
 
@@ -28,8 +28,8 @@ struct RootView: View {
                     DashboardView()
                 }
 
-                Tab("Guidance", systemImage: "book.fill", value: AppTab.guidance.rawValue) {
-//                    GuidanceView()
+                Tab("Insight", systemImage: "chart.bar.fill", value: AppTab.insight.rawValue) {
+                    WeeklySummaryView()
                 }
                 Tab("Session", systemImage: "record.circle", value: AppTab.session.rawValue, role: .search) {
                     SessionSetupView(

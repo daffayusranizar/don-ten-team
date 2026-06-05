@@ -52,8 +52,15 @@ struct StoredPipelineResult: Codable {
     let conversationStarter: String?
     let conversationStarters: [String]?
     let offlineActivity: String
+    let categoryBreakdown: UsageCategoryBreakdown?
     let sessionTranscriptExcerpt: String?
     let screens: [StoredScreenBreakdown]
+
+    var resolvedCategoryBreakdown: UsageCategoryBreakdown {
+        let fromScreens = UsageCategoryBreakdown.from(screens: screens)
+        if !fromScreens.isEmpty { return fromScreens }
+        return categoryBreakdown ?? .empty
+    }
 
     var resolvedConversationStarters: [String] {
         if let conversationStarters, !conversationStarters.isEmpty {
@@ -68,7 +75,7 @@ struct StoredPipelineResult: Codable {
     enum CodingKeys: String, CodingKey {
         case category, summary, creators, signals
         case conversationStarter, conversationStarters
-        case offlineActivity, sessionTranscriptExcerpt, screens
+        case offlineActivity, categoryBreakdown, sessionTranscriptExcerpt, screens
     }
 }
 
@@ -94,6 +101,7 @@ extension StoredPipelineResult {
         conversationStarter = result.conversationStarter
         conversationStarters = result.conversationStarters
         offlineActivity = result.offlineActivity
+        categoryBreakdown = result.categoryBreakdown
         sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         screens = result.screens.map(StoredScreenBreakdown.init)
     }

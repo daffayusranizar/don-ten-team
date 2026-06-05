@@ -259,6 +259,7 @@ public actor PipelineOrchestrator {
         report(.generatingSummary, 0.82, "Grouping results by time…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⏱️ Step 5: Aggregating timeline (Fusion)...")
         let timeline = await aggregator.timeline(frames: rawFrames, fps: 1.0, intervalSeconds: 3)
+        let categoryBreakdown = UsageCategoryBreakdown.from(timeline: timeline)
         
         // 6. Generate the Final AI Summary
         report(.generatingSummary, 0.88, "Writing parent-friendly summary…")
@@ -365,6 +366,7 @@ public actor PipelineOrchestrator {
             concernSignals: concernSignals,
             guidance: insights.guidance,
             timeline: timeline,
+            categoryBreakdown: categoryBreakdown,
             sessionTranscriptExcerpt: sessionTranscriptExcerpt
         )
     }

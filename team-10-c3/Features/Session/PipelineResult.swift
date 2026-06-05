@@ -14,6 +14,7 @@ struct PipelineResult {
     let signals: [String]
     let conversationStarters: [String]
     let offlineActivity: String
+    let categoryBreakdown: UsageCategoryBreakdown
     let sessionTranscriptExcerpt: String?
     let screens: [ScreenBreakdownItem]
 
@@ -33,6 +34,7 @@ struct PipelineResult {
         let starters = result.guidance.conversationStarters
         self.conversationStarters = Array(starters.prefix(3))
         self.offlineActivity = result.guidance.offlineActivity
+        self.categoryBreakdown = result.categoryBreakdown
         self.sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         self.screens = result.timeline.map { ScreenBreakdownItem(frame: $0) }
     }
@@ -44,6 +46,7 @@ struct PipelineResult {
         signals = stored.signals
         conversationStarters = stored.resolvedConversationStarters
         offlineActivity = stored.offlineActivity
+        categoryBreakdown = stored.resolvedCategoryBreakdown
         sessionTranscriptExcerpt = stored.sessionTranscriptExcerpt
         screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
     }
@@ -173,6 +176,7 @@ extension PipelineResult {
         signals: [String],
         conversationStarter: String,
         offlineActivity: String,
+        categoryBreakdown: UsageCategoryBreakdown = .empty,
         screens: [ScreenBreakdownItem],
         sessionTranscriptExcerpt: String? = nil
     ) {
@@ -182,6 +186,7 @@ extension PipelineResult {
         self.signals = signals
         self.conversationStarters = [conversationStarter]
         self.offlineActivity = offlineActivity
+        self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
         self.screens = screens
     }

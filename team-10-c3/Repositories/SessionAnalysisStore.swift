@@ -77,6 +77,26 @@ final class SessionAnalysisStore {
         try modelContext.save()
     }
 
+    func loadResults(sessionIds: [UUID]) -> [UUID: PipelineResult] {
+        guard !sessionIds.isEmpty else { return [:] }
+
+        let idSet = Set(sessionIds)
+        let descriptor = FetchDescriptor<SessionAnalysisRecord>()
+        guard let records = try? modelContext.fetch(descriptor) else { return [:] }
+
+        var results: [UUID: PipelineResult] = [:]
+        for record in records where idSet.contains(record.sessionId) {
+            guard record.status == .completed,
+                  let payloadJSON = record.payloadJSON,
+                  let data = payloadJSON.data(using: .utf8),
+                  let stored = try? JSONDecoder().decode(StoredPipelineResult.self, from: data) else {
+                continue
+            }
+            results[record.sessionId] = PipelineResult(stored: stored)
+        }
+        return results
+    }
+
     private func fetchRecord(sessionId: UUID) throws -> SessionAnalysisRecord? {
         var descriptor = FetchDescriptor<SessionAnalysisRecord>(
             predicate: #Predicate { $0.sessionId == sessionId }

@@ -21,6 +21,7 @@ final class AppContainer {
     let sessionCoordinator: SessionCoordinator
     let sessionAnalysisStore: SessionAnalysisStore
     let kidSessionViewModel: KidSessionViewModel
+    let weeklySummaryViewModel: WeeklySummaryViewModel
     let suggestionHistoryRepository: SuggestionHistoryRepository
 
     init(
@@ -34,6 +35,7 @@ final class AppContainer {
         sessionCoordinator: SessionCoordinator? = nil,
         sessionAnalysisStore: SessionAnalysisStore? = nil,
         kidSessionViewModel: KidSessionViewModel? = nil,
+        weeklySummaryViewModel: WeeklySummaryViewModel? = nil,
         suggestionHistoryRepository: SuggestionHistoryRepository? = nil
     ) {
         self.featureFlags = featureFlags
@@ -61,10 +63,15 @@ final class AppContainer {
             sessionCoordinator: self.sessionCoordinator,
             sessionAnalysisStore: self.sessionAnalysisStore
         )
+        self.weeklySummaryViewModel = weeklySummaryViewModel ?? WeeklySummaryViewModel(
+            sessionRepository: self.sessionRepository,
+            sessionAnalysisStore: self.sessionAnalysisStore,
+            screenTimeService: self.screenTimeService,
+            familyControlsAuth: self.familyControlsAuth
+        )
         self.suggestionHistoryRepository = suggestionHistoryRepository
             ?? InMemorySuggestionHistoryRepository()
 
-        try? self.sessionRepository.purgeLegacyMockUsageSnapshots()
         self.screenTimeService.deactivateSessionRestrictions()
 
         self.profileViewModel.loadChildren()
