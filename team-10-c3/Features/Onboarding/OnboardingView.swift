@@ -9,7 +9,12 @@
 import SwiftUI
 
 struct OnboardingData {
-    // step 3 data
+    // step 1 data (parents)
+    var parentName = ""
+    var parentBirthdate: Date?
+    var parentPin: String?
+    
+    // step 3 data (child)
     var childName = ""
     var childBirthdate: Date?
     var childIsMale = true
@@ -28,7 +33,7 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            StepFiveView(data: $data)
+            ParentPinSetupView(data: $data)
         }
     }
 }
