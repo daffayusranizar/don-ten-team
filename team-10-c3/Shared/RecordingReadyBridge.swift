@@ -29,3 +29,28 @@ enum RecordingReadyBridge {
         ensureListening()
     }
 }
+
+/// Re-fires the extension's Darwin `sessionTimerFired` signal as a NotificationCenter event.
+enum SessionTimerFiredBridge {
+    static let notification = Notification.Name("SessionTimerFiredInternalNotification")
+    private static var isDarwinObserverRegistered = false
+
+    static func ensureListening() {
+        guard !isDarwinObserverRegistered else { return }
+        isDarwinObserverRegistered = true
+
+        let darwinName = "\(BroadcastAppGroup.identifier).sessionTimerFired" as CFString
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            nil,
+            { _, _, _, _, _ in
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: SessionTimerFiredBridge.notification, object: nil)
+                }
+            },
+            darwinName,
+            nil,
+            .deliverImmediately
+        )
+    }
+}

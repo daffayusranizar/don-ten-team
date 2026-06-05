@@ -17,6 +17,9 @@ struct KidSessionSetupView: View {
     @Environment(\.familyControlsAuth) private var familyControlsAuth
     @Environment(\.dismiss) private var dismiss
     @State private var showScreenTimeAuthAlert = false
+    @State private var showAlarmAuthAlert = false
+    @State private var alarmAuthorizationState = SessionEndAlarmScheduler.displayState
+    @State private var pendingSessionStartAfterAlarmAuth = false
     private var genderLabel: String {
         guard let gender = kidSessionViewModel.selectedChild?.gender else { return "" }
         switch gender {
@@ -105,8 +108,22 @@ struct KidSessionSetupView: View {
         .foregroundStyle(.textPrimary)
         .onAppear {
             familyControlsAuth.refreshAuthorizationStatus()
+            alarmAuthorizationState = SessionEndAlarmScheduler.displayState
+            if alarmAuthorizationState == .notDetermined {
+                showAlarmAuthAlert = true
+            }
             kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         }
+        .alarmAuthorizationAlert(
+            isPresented: $showAlarmAuthAlert,
+            onAuthorized: {
+                alarmAuthorizationState = SessionEndAlarmScheduler.displayState
+                if pendingSessionStartAfterAlarmAuth {
+                    pendingSessionStartAfterAlarmAuth = false
+                    startSession()
+                }
+            }
+        )
         .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
             startSessionAfterAuthorization()
         }
@@ -149,10 +166,18 @@ struct KidSessionSetupView: View {
     }
 
     private func startSession() {
-        ScreenTimePermissionGate.runIfAuthorized(
-            auth: familyControlsAuth,
-            showAlert: { showScreenTimeAuthAlert = true },
-            onAuthorized: { startSessionAfterAuthorization() }
+        SessionEndAlarmPermissionGate.runIfAuthorized(
+            showAlert: {
+                pendingSessionStartAfterAlarmAuth = true
+                showAlarmAuthAlert = true
+            },
+            onAuthorized: {
+                ScreenTimePermissionGate.runIfAuthorized(
+                    auth: familyControlsAuth,
+                    showAlert: { showScreenTimeAuthAlert = true },
+                    onAuthorized: { startSessionAfterAuthorization() }
+                )
+            }
         )
     }
 

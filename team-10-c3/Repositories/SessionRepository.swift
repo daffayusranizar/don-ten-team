@@ -19,6 +19,12 @@ struct SessionWindow: Sendable, Equatable {
     let stopAt: Date
 }
 
+struct CompletedSessionReference: Sendable, Equatable {
+    let sessionId: UUID
+    let startAt: Date
+    let stopAt: Date
+}
+
 struct DayActivitySummary: Sendable, Equatable {
     let day: Date
     let isToday: Bool
@@ -86,29 +92,49 @@ private enum SessionMarkerPairing {
         day: Date,
         calendar: Calendar = .current
     ) -> [SessionWindow] {
+        completedSessions(
+            markers: markers,
+            childId: childId,
+            day: day,
+            calendar: calendar
+        ).map { SessionWindow(startAt: $0.startAt, stopAt: $0.stopAt) }
+    }
+
+    static func completedSessions(
+        markers: [SessionMarker],
+        childId: UUID,
+        day: Date,
+        calendar: Calendar = .current
+    ) -> [CompletedSessionReference] {
         let childMarkers = markers
             .filter { $0.childId == childId }
             .sorted { $0.timestamp < $1.timestamp }
 
-        var windows: [SessionWindow] = []
-        var pendingStart: Date?
+        var sessions: [CompletedSessionReference] = []
+        var pendingStart: (id: UUID, timestamp: Date)?
 
         for marker in childMarkers {
             switch marker.type {
             case .start:
-                pendingStart = marker.timestamp
+                pendingStart = (marker.id, marker.timestamp)
             case .stop:
-                guard let start = pendingStart, start < marker.timestamp else {
+                guard let start = pendingStart, start.timestamp < marker.timestamp else {
                     pendingStart = nil
                     continue
                 }
                 if calendar.isDate(marker.timestamp, inSameDayAs: day) {
-                    windows.append(SessionWindow(startAt: start, stopAt: marker.timestamp))
+                    sessions.append(
+                        CompletedSessionReference(
+                            sessionId: start.id,
+                            startAt: start.timestamp,
+                            stopAt: marker.timestamp
+                        )
+                    )
                 }
                 pendingStart = nil
             }
         }
-        return windows
+        return sessions
     }
 }
 
@@ -155,12 +181,12 @@ protocol SessionRepository {
         screenTimeAppTotalSeconds: Int
     ) throws
     func completedSessionWindows(for childId: UUID, day: Date) throws -> [SessionWindow]
+    func completedSessions(for childId: UUID, day: Date) throws -> [CompletedSessionReference]
     func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot]
     func fetchSnapshots(for childId: UUID, month: String) throws -> [SessionUsageSnapshot]
     func availableMonths(for childId: UUID) throws -> [String]
     func dayActivitySummary(for childId: UUID, referenceDate: Date?) throws -> DayActivitySummary?
     func todayActivitySummary(for childId: UUID, referenceDate: Date?) throws -> DayActivitySummary?
-    func purgeLegacyMockUsageSnapshots() throws
 }
 
 @MainActor
@@ -238,6 +264,15 @@ final class SwiftDataSessionRepository: SessionRepository {
         )
     }
 
+    func completedSessions(for childId: UUID, day: Date) throws -> [CompletedSessionReference] {
+        let markers = try fetchMarkers(for: childId)
+        return SessionMarkerPairing.completedSessions(
+            markers: markers,
+            childId: childId,
+            day: day
+        )
+    }
+
     func saveUsageSnapshot(
         childId: UUID,
         startAt: Date,
@@ -284,30 +319,6 @@ final class SwiftDataSessionRepository: SessionRepository {
         snapshot.screenTimeAppTotalSeconds = max(0, screenTimeAppTotalSeconds)
         snapshot.fetchedAt = Date()
         try modelContext.save()
-    }
-
-    /// Rewrites snapshots that still contain pre-integration mock app rows (YouTube / TikTok / Games).
-    func purgeLegacyMockUsageSnapshots() throws {
-        let descriptor = FetchDescriptor<SessionUsageSnapshot>()
-        let snapshots = try modelContext.fetch(descriptor)
-        var didChange = false
-
-        for snapshot in snapshots {
-            guard let data = snapshot.appUsageJSON.data(using: .utf8),
-                  let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
-                continue
-            }
-            let apps = SessionUsageSanitizer.sanitizedApps(rows)
-            guard apps.count != rows.count else { continue }
-
-            snapshot.appUsageJSON = String(data: try JSONEncoder().encode(apps), encoding: .utf8) ?? "[]"
-            snapshot.totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
-            didChange = true
-        }
-
-        if didChange {
-            try modelContext.save()
-        }
     }
 
     func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot] {
@@ -498,6 +509,14 @@ final class InMemorySessionRepository: SessionRepository {
         )
     }
 
+    func completedSessions(for childId: UUID, day: Date) throws -> [CompletedSessionReference] {
+        SessionMarkerPairing.completedSessions(
+            markers: markers,
+            childId: childId,
+            day: day
+        )
+    }
+
     func saveUsageSnapshot(
         childId: UUID,
         startAt: Date,
@@ -541,19 +560,6 @@ final class InMemorySessionRepository: SessionRepository {
     ) throws {
         snapshot.screenTimeAppTotalSeconds = max(0, screenTimeAppTotalSeconds)
         snapshot.fetchedAt = Date()
-    }
-
-    func purgeLegacyMockUsageSnapshots() throws {
-        for snapshot in snapshots {
-            guard let data = snapshot.appUsageJSON.data(using: .utf8),
-                  let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
-                continue
-            }
-            let apps = SessionUsageSanitizer.sanitizedApps(rows)
-            guard apps.count != rows.count else { continue }
-            snapshot.appUsageJSON = String(data: try JSONEncoder().encode(apps), encoding: .utf8) ?? "[]"
-            snapshot.totalSeconds = apps.map(\.durationSeconds).reduce(0, +)
-        }
     }
 
     func snapshots(for childId: UUID, on day: Date) throws -> [SessionUsageSnapshot] {

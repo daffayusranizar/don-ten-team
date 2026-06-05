@@ -14,16 +14,21 @@ struct SessionScreenBreakdownView: View {
     var body: some View {
         List {
             Section {
-                ForEach(screens) { screen in
+                ForEach(Array(screens.enumerated()), id: \.element.id) { index, screen in
                     Button {
                         selectedScreen = screen
                     } label: {
-                        TimelineRowView(item: screen)
+                        TimelineRowView(
+                            item: screen,
+                            previousTranscript: index > 0
+                                ? screens[index - 1].meaningfulAudioTranscript
+                                : nil
+                        )
                     }
                     .buttonStyle(.plain)
                 }
             } footer: {
-                Text("Each entry is about 3 seconds of the recording. Analysis is available until you start a new session.")
+                Text("Each entry is about \(BroadcastConstants.classificationIntervalSeconds) seconds of the recording. Analysis is saved on this device and survives app restarts.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -48,7 +53,9 @@ struct SessionScreenBreakdownView: View {
             timestampLabel: "1:06",
             timestampSeconds: 66,
             categoryLabel: "Entertainment",
-            contentSummary: "Fast-paced gameplay montage.",
+            contentSummary: "Entertainment · Spoken: Let's go to the next level.",
+            videoMatchedPrompt: "Fast-paced gameplay montage",
+            matchedPrompt: nil,
             creatorHandle: nil,
             confidence: 0.71,
             thumbnail: nil,

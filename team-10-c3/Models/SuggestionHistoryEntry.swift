@@ -5,13 +5,6 @@
 
 import Foundation
 
-enum HistoryTab: String, CaseIterable, Identifiable, Sendable {
-    case screenTime = "Screen Time"
-    case suggestion = "Suggestion"
-
-    var id: String { rawValue }
-}
-
 struct SuggestionHistoryEntry: Identifiable, Equatable, Sendable {
     let id: UUID
     let date: Date

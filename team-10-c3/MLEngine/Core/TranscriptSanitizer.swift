@@ -12,6 +12,14 @@ public enum TranscriptSanitizer {
         "like and subscribe",
         "see you in the next",
         "you're watching",
+        "audio was not clear",
+        "audio wasnt clear",
+        "app audio was not clear",
+        "app audio wasnt clear",
+        "no clear app audio",
+        "unclear audio",
+        "could not hear audio",
+        "couldnt hear audio",
     ]
 
     public static func sanitize(_ text: String) -> String {
@@ -33,7 +41,7 @@ public enum TranscriptSanitizer {
 
     /// Common Whisper outputs on near-silent app audio.
     public static func isLikelyHallucination(_ text: String) -> Bool {
-        let lower = sanitize(text).lowercased()
+        let lower = normalizedForPhraseMatch(sanitize(text))
         guard !lower.isEmpty else { return true }
         if lower.count < 12 {
             return hallucinationPhrases.contains { lower == $0 || lower.hasPrefix($0) }
@@ -70,4 +78,34 @@ public enum TranscriptSanitizer {
         guard cleaned.count >= 40 else { return false }
         return isMeaningful(cleaned)
     }
+
+    private static func normalizedForPhraseMatch(_ text: String) -> String {
+        let lowered = text.lowercased()
+        var normalized = ""
+        normalized.reserveCapacity(lowered.count)
+
+        for char in lowered {
+            if char.isLetter || char.isNumber {
+                normalized.append(char)
+            } else {
+                normalized.append(" ")
+            }
+        }
+
+        return normalized
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .joined(separator: " ")
+    }
 }
+
+#if DEBUG
+extension TranscriptSanitizer {
+    static func runRegressionChecks() {
+        assert(meaningfulForStorage("audio was not clear") == nil)
+        assert(meaningfulForStorage("App audio wasn’t clear in this clip") == nil)
+        assert(meaningfulForStorage("No clear app audio detected") == nil)
+        assert(meaningfulForStorage("The speaker explains how planets orbit the sun.") != nil)
+    }
+}
+#endif

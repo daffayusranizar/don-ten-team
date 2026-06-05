@@ -33,7 +33,7 @@ struct ExplanationView: View {
         ),
         step(
             title: "One Suggestion, Once a Week",
-            description: "Based on what your child watches, you get one activity or conversation prompt to try together. Try it or skip, no pressure."
+            description: "Based on what your child watches, you get one activity suggestion to try together. Try it or skip, no pressure."
         ),
         step(
             title: "Track What Happens Next",

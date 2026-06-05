@@ -38,26 +38,13 @@ public enum SummarizerError: LocalizedError {
 /// A thread-safe actor that chunks up timeline data and feeds it into the iOS 26 on-device Language Model
 public actor LLMSummarizer {
     private func instructions(for child: Child?) -> String {
+        let childContext: String?
         if let child = child {
-            return """
-                You are a parental monitoring assistant analyzing a screen recording session for a \(child.currentAge)-year-old named \(child.name).
-                Summarize the activity clearly and objectively for a parent.
-                Use the child's name (\(child.name)) in the summary to make it personalized.
-                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
-                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
-                Use only the provided segment notes and session insights. Do not invent details.
-                Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
-                """
+            childContext = "The child is \(child.name), age \(child.currentAge)."
         } else {
-            return """
-                You are a parental monitoring assistant analyzing a child's screen recording session.
-                Summarize the activity clearly and objectively for a parent. 
-                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
-                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
-                Use only the provided segment notes and session insights. Do not invent details.
-                Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
-                """
+            childContext = nil
         }
+        return PromptLibrary.Summarization.analystFrameworkInstructions(childContext: childContext)
     }
 
     public init() {}
@@ -82,9 +69,112 @@ public actor LLMSummarizer {
         }
     }
 
+    func summarizeDailyInsight(input: DailyInsightInput) async throws -> String {
+        guard #available(iOS 26, *) else {
+            throw SummarizerError.requiresIOS26
+        }
+        guard availability() == .available else {
+            throw SummarizerError.modelUnavailable(availability().statusMessage ?? "Model unavailable.")
+        }
+
+        guard input.totalSessionSeconds > 0 || !input.sessions.isEmpty else {
+            throw SummarizerError.emptyInput
+        }
+
+        return try await summarizeDailyTopics(input: input)
+    }
+
+    @available(iOS 26, *)
+    private func summarizeDailyTopics(input: DailyInsightInput) async throws -> String {
+        let topicLines = DailyContentDigestBuilder.allTopicLines(from: input.sessions)
+        guard !topicLines.isEmpty else { return "" }
+
+        let chunks = chunkLines(topicLines, maxCharacters: 2_800)
+        var evidenceNotes: [String] = []
+
+        for chunk in chunks {
+            let summary = try await summarizeDailyTopicChunk(chunk, input: input)
+            if !summary.isEmpty {
+                evidenceNotes.append(summary)
+            }
+        }
+
+        guard !evidenceNotes.isEmpty else { return "" }
+
+        let mergePrompt = PromptLibrary.Summarization.dailyTopicMergePrompt(
+            metadata: dailyMetadataPrompt(for: input),
+            evidenceNotes: evidenceNotes
+        )
+        let merged = try await respond(
+            prompt: mergePrompt,
+            instructions: dailyTopicInstructions(for: input)
+        )
+        return sanitizeDailyReport(merged)
+    }
+
+    @available(iOS 26, *)
+    private func summarizeDailyTopicChunk(
+        _ lines: [String],
+        input: DailyInsightInput
+    ) async throws -> String {
+        let prompt = PromptLibrary.Summarization.dailyTopicChunkPrompt(
+            metadata: dailyMetadataPrompt(for: input),
+            lines: lines
+        )
+        return try await respond(
+            prompt: prompt,
+            instructions: dailyTopicInstructions(for: input)
+        )
+    }
+
+    /// Writes one brief parent-friendly on-screen summary per timeline segment from OCR text.
+    @available(iOS 26, *)
+    public func summarizeOnScreenBriefs(
+        segments: [(id: Int, ocr: String, category: String)]
+    ) async -> [Int: String] {
+        guard #available(iOS 26, *) else { return [:] }
+        guard availability() == .available, !segments.isEmpty else { return [:] }
+
+        let chunks = chunkLines(
+            segments.enumerated().map { offset, segment in
+                "\(offset + 1). [\(segment.category)] OCR: \(truncate(segment.ocr, limit: 360))"
+            },
+            maxCharacters: 2_400
+        )
+
+        var summaries: [Int: String] = [:]
+        var segmentOffset = 0
+
+        for chunk in chunks {
+            let prompt = PromptLibrary.Summarization.onScreenBriefPrompt(chunk: chunk)
+            do {
+                let response = try await respond(
+                    prompt: prompt,
+                    instructions: PromptLibrary.Summarization.onScreenBriefInstructions()
+                )
+                let parsed = parseNumberedOnScreenBriefs(response)
+                for (lineNumber, summary) in parsed {
+                    let index = segmentOffset + lineNumber - 1
+                    guard segments.indices.contains(index) else { continue }
+                    let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { continue }
+                    summaries[segments[index].id] = trimmed
+                }
+            } catch {
+                continue
+            }
+            segmentOffset += chunk.count
+        }
+
+        return summaries
+    }
+
     public func summarizeRecording(
         timeline: [FrameClassificationSummary],
         overallCategory: String?,
+        transcriptBrief: String? = nil,
+        fullTrackTranscript: String? = nil,
+        transcriptEvidence: String? = nil,
         child: Child? = nil
     ) async throws -> String {
         guard #available(iOS 26, *) else {
@@ -102,68 +192,199 @@ public actor LLMSummarizer {
         }
 
         let chunks = chunkLines(segmentLines, maxCharacters: 2_800)
-        var chunkSummaries: [String] = []
+        var supportingEvidenceNotes: [String] = []
 
         for chunk in chunks {
             let summary = try await summarizeChunk(
                 chunk,
                 overallCategory: overallCategory,
-                statsString: statsString,
-                isFinalPass: chunks.count == 1,
                 child: child
             )
             if !summary.isEmpty {
-                chunkSummaries.append(summary)
+                supportingEvidenceNotes.append(summary)
             }
         }
 
-        guard !chunkSummaries.isEmpty else {
+        let fullTrackEvidenceNotes = try await summarizeFullTrackEvidenceNotes(
+            fullTrackTranscript: fullTrackTranscript,
+            overallCategory: overallCategory,
+            statsString: statsString,
+            child: child
+        )
+
+        guard !supportingEvidenceNotes.isEmpty || !fullTrackEvidenceNotes.isEmpty else {
             throw SummarizerError.emptyInput
         }
 
-        if chunkSummaries.count == 1 {
-            return chunkSummaries[0]
-        }
-
-        let mergePrompt = """
-        \(statsString)
-        Combine these partial summaries of one screen recording into one cohesive 2-4 sentence overview. Incorporate key statistics like duration and percentages from the stats above.
-        Partial summaries:
-        \(chunkSummaries.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
-        """
-        return try await respond(prompt: mergePrompt, child: child)
+        let sessionMetadata = PromptLibrary.Summarization.sessionMetadataPrompt(
+            statsString: statsString,
+            overallCategory: overallCategory,
+            transcriptBrief: transcriptBrief,
+            transcriptEvidence: transcriptEvidence
+        )
+        let merged = try await respond(
+            prompt: PromptLibrary.Summarization.parentFacingSessionSummaryPrompt(
+                sessionMetadata: sessionMetadata,
+                fullTrackNotes: fullTrackEvidenceNotes,
+                evidenceNotes: supportingEvidenceNotes
+            ),
+            instructions: instructions(for: child)
+        )
+        return sanitizeDailyReport(merged)
     }
 
     @available(iOS 26, *)
     private func summarizeChunk(
         _ lines: [String],
         overallCategory: String?,
-        statsString: String,
-        isFinalPass: Bool,
         child: Child?
     ) async throws -> String {
         let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
-        let statsLine = isFinalPass ? "\n\(statsString)\n" : ""
-        let prompt: String
-        if isFinalPass {
-            prompt = """
-            \(categoryLine)\(statsLine)Summarize what the user watched in this screen recording based on these time-stamped segment notes and statistics. Make sure to naturally mention the duration, percentages, and creators:
-
-            \(lines.joined(separator: "\n"))
-            """
-        } else {
-            prompt = """
-            \(categoryLine)Summarize this portion of a screen recording in 1-2 sentences:
-
-            \(lines.joined(separator: "\n"))
-            """
-        }
-        return try await respond(prompt: prompt, child: child)
+        let prompt = PromptLibrary.Summarization.recordingChunkEvidencePrompt(
+            categoryLine: categoryLine,
+            lines: lines
+        )
+        return try await respond(
+            prompt: prompt,
+            instructions: instructions(for: child)
+        )
     }
 
     @available(iOS 26, *)
-    private func respond(prompt: String, child: Child?) async throws -> String {
-        let session = LanguageModelSession(instructions: instructions(for: child))
+    private func summarizeFullTrackEvidenceNotes(
+        fullTrackTranscript: String?,
+        overallCategory: String?,
+        statsString: String,
+        child: Child?
+    ) async throws -> [String] {
+        guard let fullTrackTranscript else { return [] }
+        let cleaned = TranscriptSanitizer.sanitize(fullTrackTranscript)
+        guard TranscriptSanitizer.isMeaningful(cleaned) else { return [] }
+
+        let chunks = fullTrackTranscriptChunks(cleaned, maxCharacters: 2_800)
+        guard !chunks.isEmpty else { return [] }
+
+        let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
+        var notes: [String] = []
+        for chunk in chunks {
+            let prompt = PromptLibrary.Summarization.fullTrackEvidencePrompt(
+                categoryLine: categoryLine,
+                statsString: statsString,
+                chunk: chunk
+            )
+            let response = try await respond(
+                prompt: prompt,
+                instructions: instructions(for: child)
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !response.isEmpty {
+                notes.append(response)
+            }
+        }
+        return notes
+    }
+
+    private func dailyTopicInstructions(for input: DailyInsightInput) -> String {
+        let childContext: String?
+        if let name = input.childName, let age = input.childAge {
+            childContext = "The child is \(name), age \(age)."
+        } else {
+            childContext = nil
+        }
+        return PromptLibrary.Summarization.analystFrameworkInstructions(childContext: childContext)
+    }
+
+    private func dailyMetadataPrompt(for input: DailyInsightInput) -> String {
+        let categoryBreakdown: String?
+        if input.mergedCategoryBreakdown.isEmpty {
+            categoryBreakdown = nil
+        } else {
+            categoryBreakdown = input.mergedCategoryBreakdown.items
+                .map { "\($0.name) \($0.percentage)%" }
+                .joined(separator: ", ")
+        }
+
+        let appUsageEstimate: String?
+        let topApps: String?
+        if input.hasScreenTimeData {
+            appUsageEstimate = DurationFormatting.verbose(seconds: input.screenTimeAppTotalSeconds)
+            topApps = input.topApps.prefix(3).map {
+                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
+            }.joined(separator: ", ")
+        } else {
+            appUsageEstimate = nil
+            topApps = nil
+        }
+
+        return PromptLibrary.Summarization.dailyMetadataPrompt(
+            dayLabel: input.dayLabel,
+            childAgeText: input.childAge.map { String($0) } ?? "unknown",
+            totalSessionTime: DurationFormatting.verbose(seconds: input.totalSessionSeconds),
+            sessionCount: input.sessionCount,
+            categoryBreakdown: categoryBreakdown,
+            appUsageEstimate: appUsageEstimate,
+            topApps: topApps
+        )
+    }
+
+    private func parseNumberedOnScreenBriefs(_ text: String) -> [Int: String] {
+        var result: [Int: String] = [:]
+        let pattern = #"(?m)^\s*(\d+)\s*:\s*(.+)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return result }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        regex.enumerateMatches(in: text, range: range) { match, _, _ in
+            guard let match,
+                  match.numberOfRanges >= 3,
+                  let numberRange = Range(match.range(at: 1), in: text),
+                  let summaryRange = Range(match.range(at: 2), in: text),
+                  let number = Int(text[numberRange]) else { return }
+            result[number] = String(text[summaryRange])
+        }
+        return result
+    }
+
+    private func sanitizeDailyReport(_ text: String) -> String {
+        let patterns = [
+            #"\b\d{1,2}:\d{2}\b"#,
+            #"\b\d{1,2}\s*[—-]\s*"#
+        ]
+        let forbiddenSentencePatterns = [
+            #"[^.!?]*screen\s*[- ]?\s*by\s*[- ]?\s*screen\s+breakdown[^.!?]*[.!?]?"#,
+            #"[^.!?]*(open|view|check|see)\s+[^.!?]*breakdown[^.!?]*[.!?]?"#
+        ]
+
+        var cleaned = text
+        for pattern in patterns {
+            cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        for pattern in forbiddenSentencePatterns {
+            cleaned = cleaned.replacingOccurrences(
+                of: pattern,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+
+        cleaned = cleaned
+            .replacingOccurrences(of: "visual:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "spoken:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "on-screen:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "audio:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+([.,!?])"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return cleaned
+    }
+
+    @available(iOS 26, *)
+    private func respond(
+        prompt: String,
+        child: Child? = nil,
+        instructions customInstructions: String? = nil
+    ) async throws -> String {
+        let sessionInstructions = customInstructions ?? instructions(for: child)
+        let session = LanguageModelSession(instructions: sessionInstructions)
         let response = try await session.respond(to: prompt)
         return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -176,7 +397,7 @@ public actor LLMSummarizer {
         if timeline.count > 1 {
             interval = timeline[1].timestamp - timeline[0].timestamp
         } else {
-            interval = 3.0 // default fallback
+            interval = Double(BroadcastConstants.classificationIntervalSeconds)
         }
         
         let totalDurationSeconds = totalItems * interval
@@ -185,13 +406,9 @@ public actor LLMSummarizer {
         let durationString = String(format: "%d:%02d", minutes, seconds)
         
         var categoryCounts: [String: Int] = [:]
-        var creatorCounts: [String: Int] = [:]
         
         for item in timeline {
             categoryCounts[item.label, default: 0] += 1
-            if let creator = item.creatorHandle {
-                creatorCounts[creator, default: 0] += 1
-            }
         }
         
         var statsString = "Session Statistics:\n"
@@ -208,18 +425,6 @@ public actor LLMSummarizer {
             statsString += "  * \(category): \(String(format: "%.0f", percentage))% (\(timeStr))\n"
         }
         
-        if !creatorCounts.isEmpty {
-            let sortedCreators = creatorCounts.sorted { $0.value > $1.value }
-            statsString += "- Creators watched:\n"
-            for (creator, count) in sortedCreators {
-                let duration = Double(count) * interval
-                let mins = Int(duration) / 60
-                let secs = Int(duration) % 60
-                let timeStr = mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
-                statsString += "  * \(creator): \(timeStr)\n"
-            }
-        }
-        
         return statsString
     }
 
@@ -231,19 +436,46 @@ public actor LLMSummarizer {
             }
 
             var parts: [String] = [entry.label]
-            if let transcript = entry.audioTranscript {
-                let spoken = TranscriptSanitizer.sanitize(transcript)
-                if TranscriptSanitizer.isMeaningful(spoken) {
-                    parts.append("spoken: \(truncate(spoken, limit: 120))")
-                }
-            }
-            if let prompt = entry.videoMatchedPrompt ?? entry.matchedPrompt {
+            if let onScreen = entry.onScreenBriefSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !onScreen.isEmpty {
+                parts.append("on-screen: \(truncate(onScreen, limit: 120))")
+            } else if let ocr = entry.onScreenTranscript?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      OnScreenTextSanitizer.isUsefulOnScreenContent(ocr) {
+                parts.append("on-screen OCR: \(truncate(ocr, limit: 100))")
+            } else if let prompt = entry.videoMatchedPrompt ?? entry.matchedPrompt {
                 parts.append("visual: \(truncate(prompt, limit: 100))")
             }
             guard parts.count > 1 else { return "\(timestamp) — \(parts[0])" }
             return "\(timestamp) — \(parts.joined(separator: "; "))"
         }
     }
+
+    private func fullTrackTranscriptChunks(_ text: String, maxCharacters: Int) -> [String] {
+        guard maxCharacters > 0 else { return [] }
+        let words = text.split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return [] }
+
+        var chunks: [String] = []
+        var current = ""
+        for word in words {
+            let token = String(word)
+            let candidateLength = current.isEmpty ? token.count : current.count + 1 + token.count
+            if candidateLength > maxCharacters, !current.isEmpty {
+                chunks.append(current)
+                current = token
+            } else if current.isEmpty {
+                current = token
+            } else {
+                current += " " + token
+            }
+        }
+
+        if !current.isEmpty {
+            chunks.append(current)
+        }
+        return chunks
+    }
+
     private func chunkLines(_ lines: [String], maxCharacters: Int) -> [[String]] {
         guard !lines.isEmpty else { return [] }
 

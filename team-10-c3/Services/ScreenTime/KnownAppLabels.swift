@@ -12,6 +12,7 @@ enum KnownAppLabels {
         ("aweme", "TikTok"),
         ("tiktokv", "TikTok"),
         ("ss.iphone.ugc", "TikTok"),
+        ("ss.iphone", "TikTok"),
         ("youtube", "YouTube"),
         ("snapchat", "Snapchat"),
         ("facebook", "Facebook"),
@@ -55,10 +56,30 @@ enum KnownAppLabels {
         case .tiktok:
             return bundle.contains("tiktok") || bundle.contains("musically") || bundle.contains("zhiliao")
                 || bundle.contains("trill") || bundle.contains("aweme") || bundle.contains("tiktokv")
-                || bundle.contains("ss.iphone.ugc")
+                || bundle.contains("ss.iphone")
         case .youtube:
             return bundle.contains("youtube")
         }
+    }
+
+    static func looksLikeBundleIdentifier(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return false }
+
+        if trimmed.contains("com.") || trimmed.contains("org.") || trimmed.contains("net.") {
+            let segments = trimmed.split(separator: ".").map(String.init)
+            if segments.count >= 3 {
+                return true
+            }
+        }
+
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "."))
+        if trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }),
+           trimmed.contains(".") {
+            return true
+        }
+
+        return false
     }
 
     enum KnownApp {

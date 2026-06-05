@@ -11,40 +11,17 @@ struct SessionScreenDetailView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
-                SessionResultCard(
-                    icon: "clock.fill",
-                    iconColor: .primaryMediumBlue,
-                    title: "When",
-                    content: "\(screen.timestampLabel) into the session"
-                )
-
-                SessionResultCard(
-                    icon: "chart.bar.fill",
-                    iconColor: .decorativeSkyBlue,
-                    title: "Category",
-                    content: categoryContent
-                )
-
-                if let summary = screen.contentSummary, !summary.isEmpty {
+                ForEach(screen.analysisFields) { field in
                     SessionResultCard(
-                        icon: "text.alignleft",
-                        iconColor: .primaryMediumBlue,
-                        title: "What we saw",
-                        content: summary
+                        icon: field.icon,
+                        iconColor: field.iconColor,
+                        title: field.title,
+                        content: field.content
                     )
                 }
 
                 if screen.hasScreenshots {
                     screenshotsSection
-                }
-
-                if screen.hasAudioDetails {
-                    SessionResultCard(
-                        icon: "waveform",
-                        iconColor: .decorativeSunnyYellow,
-                        title: "Audio",
-                        content: audioContent
-                    )
                 }
             }
             .padding(.horizontal, 24)
@@ -55,37 +32,6 @@ struct SessionScreenDetailView: View {
         .navigationTitle(screen.timestampLabel)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-    }
-
-    private var categoryContent: String {
-        if let confidence = screen.confidencePercentText {
-            return "\(screen.categoryLabel)\n\(confidence)"
-        }
-        return screen.categoryLabel
-    }
-
-    private var audioContent: String {
-        var lines: [String] = []
-        if let label = screen.audioLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
-            lines.append("Label: \(label)")
-        }
-
-        let transcript = screen.meaningfulAudioTranscript
-        let tone = screen.audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if screen.isSilentOrUnreadableTone, transcript == nil {
-            lines.append(
-                "App audio wasn’t clear in this clip (Screen Time captures app sound only, not the microphone)."
-            )
-        } else if !tone.isEmpty {
-            lines.append("Tone: \(tone)")
-        }
-
-        if let transcript {
-            lines.append("Transcript: \(transcript)")
-        }
-
-        return lines.joined(separator: "\n\n")
     }
 
     @ViewBuilder
@@ -104,10 +50,7 @@ struct SessionScreenDetailView: View {
 
             VStack(spacing: 12) {
                 if let thumbnail = screen.thumbnail {
-                    screenshotImage(thumbnail, caption: "Full frame")
-                }
-                if let crop = screen.bottomCropThumbnail {
-                    screenshotImage(crop, caption: "Caption area")
+                    screenshotImage(thumbnail, caption: "Screenshot")
                 }
             }
         }
@@ -126,6 +69,72 @@ struct SessionScreenDetailView: View {
                 .scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
+    }
+}
+
+private struct ScreenAnalysisField: Identifiable {
+    let id: String
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let content: String
+}
+
+extension ScreenBreakdownItem {
+    fileprivate var analysisFields: [ScreenAnalysisField] {
+        var fields: [ScreenAnalysisField] = [
+            ScreenAnalysisField(
+                id: "when",
+                icon: "clock.fill",
+                iconColor: .primaryMediumBlue,
+                title: "When",
+                content: "\(timestampLabel) into the session (\(Int(timestampSeconds))s)"
+            ),
+            ScreenAnalysisField(
+                id: "category",
+                icon: "chart.bar.fill",
+                iconColor: .decorativeSkyBlue,
+                title: "Category",
+                content: categoryDetailText
+            )
+        ]
+
+        if let visual = onScreenContent {
+            fields.append(ScreenAnalysisField(
+                id: "visual",
+                icon: "eye.fill",
+                iconColor: .decorativeMintGreen,
+                title: "On-screen content",
+                content: visual
+            ))
+        }
+
+        if let summary = trimmed(contentSummary) {
+            fields.append(ScreenAnalysisField(
+                id: "summary",
+                icon: "text.alignleft",
+                iconColor: .primaryMediumBlue,
+                title: "Segment summary",
+                content: summary
+            ))
+        }
+
+        return fields
+    }
+
+    private var categoryDetailText: String {
+        var lines = [categoryLabel]
+        if let confidencePercentText {
+            lines.append(confidencePercentText)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 }
 

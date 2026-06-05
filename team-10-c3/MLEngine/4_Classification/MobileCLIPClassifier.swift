@@ -230,7 +230,7 @@ public actor MobileCLIPClassifier {
         let imageEmbeddings = try buffers.map { try encodeImage(from: $0) }
 
         let promptSimilarities = zip(Self.allPrompts, cachedTextEmbeddings).map { prompt, textEmb in
-            let similarity = dualCropSimilarity(imageEmbeddings: imageEmbeddings, textEmbedding: textEmb)
+            let similarity = singleFrameSimilarity(imageEmbeddings: imageEmbeddings, textEmbedding: textEmb)
             return (prompt: prompt, similarity: similarity)
         }
 
@@ -266,16 +266,9 @@ public actor MobileCLIPClassifier {
         return ClassificationResult(categories: categoryMatches, prompts: promptMatches)
     }
 
-    /// Tall screenshots: full frame sees talking head + clean bg; caption crop sees on-screen text.
-    private func dualCropSimilarity(imageEmbeddings: [[Float]], textEmbedding: [Float]) -> Float {
-        guard imageEmbeddings.count == 2 else {
-            guard let imageEmbedding = imageEmbeddings.first else { return 0 }
-            return CosineSimilarity.score(imageEmbedding, textEmbedding)
-        }
-
-        let captionScore = CosineSimilarity.score(imageEmbeddings[0], textEmbedding)
-        let fullFrameScore = CosineSimilarity.score(imageEmbeddings[1], textEmbedding)
-        return 0.45 * captionScore + 0.55 * fullFrameScore
+    private func singleFrameSimilarity(imageEmbeddings: [[Float]], textEmbedding: [Float]) -> Float {
+        guard let imageEmbedding = imageEmbeddings.first else { return 0 }
+        return CosineSimilarity.score(imageEmbedding, textEmbedding)
     }
 
     private func rollUpToCategories(

@@ -14,6 +14,9 @@ final class SessionAnalysisRecord {
     var statusRaw: String
     var errorMessage: String?
     var payloadJSON: String?
+    var summaryPreview: String?
+    var dominantCategory: String?
+    var screenCount: Int
     var analyzedAt: Date
 
     init(
@@ -22,6 +25,9 @@ final class SessionAnalysisRecord {
         status: SessionAnalysisStatus,
         errorMessage: String? = nil,
         payloadJSON: String? = nil,
+        summaryPreview: String? = nil,
+        dominantCategory: String? = nil,
+        screenCount: Int = 0,
         analyzedAt: Date = Date()
     ) {
         self.sessionId = sessionId
@@ -29,6 +35,9 @@ final class SessionAnalysisRecord {
         self.statusRaw = status.rawValue
         self.errorMessage = errorMessage
         self.payloadJSON = payloadJSON
+        self.summaryPreview = summaryPreview
+        self.dominantCategory = dominantCategory
+        self.screenCount = screenCount
         self.analyzedAt = analyzedAt
     }
 
@@ -43,32 +52,83 @@ enum SessionAnalysisStatus: String, Codable {
     case failed
 }
 
+@Model
+final class DailyInsightCacheRecord {
+    var childId: UUID
+    var dayKey: String
+    var sessionSignature: String
+    var summary: String
+    var builtAt: Date
+
+    init(
+        childId: UUID,
+        dayKey: String,
+        sessionSignature: String,
+        summary: String,
+        builtAt: Date = Date()
+    ) {
+        self.childId = childId
+        self.dayKey = dayKey
+        self.sessionSignature = sessionSignature
+        self.summary = summary
+        self.builtAt = builtAt
+    }
+}
+
 /// JSON-safe pipeline snapshot (no thumbnails).
 struct StoredPipelineResult: Codable {
     let category: String
     let summary: String
     let creators: [String]
     let signals: [String]
-    let conversationStarter: String?
-    let conversationStarters: [String]?
     let offlineActivity: String
+    let categoryBreakdown: UsageCategoryBreakdown?
     let sessionTranscriptExcerpt: String?
+    let sessionTranscriptDigest: String?
+    let sessionTranscriptBriefSummary: String?
     let screens: [StoredScreenBreakdown]
 
-    var resolvedConversationStarters: [String] {
-        if let conversationStarters, !conversationStarters.isEmpty {
-            return Array(conversationStarters.prefix(3))
-        }
-        if let conversationStarter, !conversationStarter.isEmpty {
-            return [conversationStarter]
-        }
-        return ["—"]
+    var resolvedCategoryBreakdown: UsageCategoryBreakdown {
+        let fromScreens = UsageCategoryBreakdown.from(screens: screens)
+        if !fromScreens.isEmpty { return fromScreens }
+        return categoryBreakdown ?? .empty
     }
 
     enum CodingKeys: String, CodingKey {
         case category, summary, creators, signals
         case conversationStarter, conversationStarters
-        case offlineActivity, sessionTranscriptExcerpt, screens
+        case offlineActivity, categoryBreakdown, sessionTranscriptExcerpt
+        case sessionTranscriptDigest, sessionTranscriptBriefSummary, screens
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        category = try container.decode(String.self, forKey: .category)
+        summary = try container.decode(String.self, forKey: .summary)
+        creators = try container.decode([String].self, forKey: .creators)
+        signals = try container.decode([String].self, forKey: .signals)
+        _ = try container.decodeIfPresent(String.self, forKey: .conversationStarter)
+        _ = try container.decodeIfPresent([String].self, forKey: .conversationStarters)
+        offlineActivity = try container.decode(String.self, forKey: .offlineActivity)
+        categoryBreakdown = try container.decodeIfPresent(UsageCategoryBreakdown.self, forKey: .categoryBreakdown)
+        sessionTranscriptExcerpt = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptExcerpt)
+        sessionTranscriptDigest = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptDigest)
+        sessionTranscriptBriefSummary = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptBriefSummary)
+        screens = try container.decode([StoredScreenBreakdown].self, forKey: .screens)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(category, forKey: .category)
+        try container.encode(summary, forKey: .summary)
+        try container.encode(creators, forKey: .creators)
+        try container.encode(signals, forKey: .signals)
+        try container.encode(offlineActivity, forKey: .offlineActivity)
+        try container.encodeIfPresent(categoryBreakdown, forKey: .categoryBreakdown)
+        try container.encodeIfPresent(sessionTranscriptExcerpt, forKey: .sessionTranscriptExcerpt)
+        try container.encodeIfPresent(sessionTranscriptDigest, forKey: .sessionTranscriptDigest)
+        try container.encodeIfPresent(sessionTranscriptBriefSummary, forKey: .sessionTranscriptBriefSummary)
+        try container.encode(screens, forKey: .screens)
     }
 }
 
@@ -78,11 +138,58 @@ struct StoredScreenBreakdown: Codable {
     let timestampSeconds: Double
     let categoryLabel: String
     let contentSummary: String?
+    let videoMatchedPrompt: String?
+    let matchedPrompt: String?
+    let onScreenTranscript: String?
+    let onScreenBriefSummary: String?
     let creatorHandle: String?
     let confidence: Float?
     let audioTranscript: String?
     let audioTone: String?
     let audioLabel: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        timestampLabel = try container.decode(String.self, forKey: .timestampLabel)
+        timestampSeconds = try container.decode(Double.self, forKey: .timestampSeconds)
+        categoryLabel = try container.decode(String.self, forKey: .categoryLabel)
+        contentSummary = try container.decodeIfPresent(String.self, forKey: .contentSummary)
+        videoMatchedPrompt = try container.decodeIfPresent(String.self, forKey: .videoMatchedPrompt)
+        matchedPrompt = try container.decodeIfPresent(String.self, forKey: .matchedPrompt)
+        onScreenTranscript = try container.decodeIfPresent(String.self, forKey: .onScreenTranscript)
+        onScreenBriefSummary = try container.decodeIfPresent(String.self, forKey: .onScreenBriefSummary)
+        creatorHandle = try container.decodeIfPresent(String.self, forKey: .creatorHandle)
+        confidence = try container.decodeIfPresent(Float.self, forKey: .confidence)
+        audioTranscript = try container.decodeIfPresent(String.self, forKey: .audioTranscript)
+        audioTone = try container.decodeIfPresent(String.self, forKey: .audioTone)
+        audioLabel = try container.decodeIfPresent(String.self, forKey: .audioLabel)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, timestampLabel, timestampSeconds, categoryLabel, contentSummary
+        case videoMatchedPrompt, matchedPrompt, onScreenTranscript, onScreenBriefSummary
+        case creatorHandle, confidence
+        case audioTranscript, audioTone, audioLabel
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(timestampLabel, forKey: .timestampLabel)
+        try container.encode(timestampSeconds, forKey: .timestampSeconds)
+        try container.encode(categoryLabel, forKey: .categoryLabel)
+        try container.encodeIfPresent(contentSummary, forKey: .contentSummary)
+        try container.encodeIfPresent(videoMatchedPrompt, forKey: .videoMatchedPrompt)
+        try container.encodeIfPresent(matchedPrompt, forKey: .matchedPrompt)
+        try container.encodeIfPresent(onScreenTranscript, forKey: .onScreenTranscript)
+        try container.encodeIfPresent(onScreenBriefSummary, forKey: .onScreenBriefSummary)
+        try container.encodeIfPresent(creatorHandle, forKey: .creatorHandle)
+        try container.encodeIfPresent(confidence, forKey: .confidence)
+        try container.encodeIfPresent(audioTranscript, forKey: .audioTranscript)
+        try container.encodeIfPresent(audioTone, forKey: .audioTone)
+        try container.encodeIfPresent(audioLabel, forKey: .audioLabel)
+    }
 }
 
 extension StoredPipelineResult {
@@ -91,10 +198,11 @@ extension StoredPipelineResult {
         summary = result.summary
         creators = result.creators
         signals = result.signals
-        conversationStarter = result.conversationStarter
-        conversationStarters = result.conversationStarters
         offlineActivity = result.offlineActivity
+        categoryBreakdown = result.categoryBreakdown
         sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
+        sessionTranscriptDigest = result.sessionTranscriptDigest
+        sessionTranscriptBriefSummary = result.sessionTranscriptBriefSummary
         screens = result.screens.map(StoredScreenBreakdown.init)
     }
 }
@@ -106,6 +214,10 @@ extension StoredScreenBreakdown {
         timestampSeconds = item.timestampSeconds
         categoryLabel = item.categoryLabel
         contentSummary = item.contentSummary
+        videoMatchedPrompt = item.videoMatchedPrompt
+        matchedPrompt = item.matchedPrompt
+        onScreenTranscript = item.onScreenTranscript
+        onScreenBriefSummary = item.onScreenBriefSummary
         creatorHandle = item.creatorHandle
         confidence = item.confidence
         audioTranscript = item.audioTranscript

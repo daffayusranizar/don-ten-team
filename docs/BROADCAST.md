@@ -8,7 +8,7 @@ and how every piece fits together.
 
 ## 1. What the app does (big picture)
 
-**don-ten-team** is a parental-guidance app called **ParentGuide**. A parent sets up a
+**don-ten-team** is a parental-guidance app called **Kiddly**. A parent sets up a
 "screen session" for a child. During the session:
 
 1. The child's device is partially locked (ManagedSettings shields unwanted apps).
@@ -229,7 +229,7 @@ ScreenRecordingFrameExtractor  →  extracts frames at 3s intervals
           ├── VisionAnalyzer.analyze()         — OCR, scene hints
           ├── CreatorHandleExtractor.extract() — @handles (pipeline still runs; UI hidden)
           └── AudioProcessor (Whisper)         — transcript, tone
-        └── LLMSummaryGenerator               — prose summary, conversation starter
+        └── LLMSummaryGenerator               — prose summary, offline activity suggestion
 ```
 
 ---

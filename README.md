@@ -1,10 +1,11 @@
-# ParentGuide
+# Kiddly
 
-ParentGuide is a native iOS SwiftUI app that helps parents manage child screen time — starting sessions, monitoring usage, setting rules, and getting parenting guidance. The codebase follows MVVM with dependency injection via `AppContainer`, on-device persistence via SwiftData, and a typed local feature flag system for toggling work-in-progress features.
+Kiddly is a native iOS SwiftUI app that helps parents manage child screen time — starting sessions, monitoring usage, setting rules, and getting parenting guidance. The codebase follows MVVM with dependency injection via `AppContainer`, on-device persistence via SwiftData, and a typed local feature flag system for toggling work-in-progress features.
 
 **Requirements:** Xcode 26.5+, iOS 26+ simulator or device.
 
-- [Screen Time data & limitations](docs/SCREEN_TIME.md) — how ParentGuide uses `activityData` and why numbers differ from session timer / Settings.
+- [Screen Time data & limitations](docs/SCREEN_TIME.md) — how Kiddly uses `activityData` and why numbers differ from session timer / Settings.
+- [Child data storage](docs/CHILD_DATA_STORAGE.md) — SwiftData schema, child profiles, session markers, and what is persisted vs in-memory.
 
 ## Building with your own Apple account
 
@@ -71,7 +72,7 @@ Do **not** commit `Config/Signing.local.xcconfig`.
 ## Project Structure
 
 ```text
-ParentGuide/
+Kiddly/
 │
 ├── App/                    Entry point, routing, and dependency setup
 │

@@ -19,13 +19,11 @@ public struct ScreenRecordingFrame: Sendable {
     public let index: Int
     public let timestamp: TimeInterval
     public let pixelBuffer: CVPixelBuffer
-    public let isDuplicateOfPrevious: Bool
     
-    public init(index: Int, timestamp: TimeInterval, pixelBuffer: CVPixelBuffer, isDuplicateOfPrevious: Bool = false) {
+    public init(index: Int, timestamp: TimeInterval, pixelBuffer: CVPixelBuffer) {
         self.index = index
         self.timestamp = timestamp
         self.pixelBuffer = pixelBuffer
-        self.isDuplicateOfPrevious = isDuplicateOfPrevious
     }
 }
 
@@ -68,12 +66,12 @@ public actor ScreenRecordingFrameExtractor {
     }
 
     public func estimatedClassificationFrameCount(durationSeconds: TimeInterval) -> Int {
-        let interval = 3
+        let interval = BroadcastConstants.classificationIntervalSeconds
         return max(1, Int(floor(durationSeconds / Double(interval))) + 1)
     }
 
     public func shouldClassify(at timestamp: TimeInterval) -> Bool {
-        let interval = 3
+        let interval = BroadcastConstants.classificationIntervalSeconds
         let second = Int(timestamp.rounded(.down))
         return second % interval == 0
     }
@@ -102,7 +100,6 @@ public actor ScreenRecordingFrameExtractor {
         }
 
         var index = 0
-        var previousBuffer: CVPixelBuffer?
         
         while reader.status == .reading {
             guard let sampleBuffer = output.copyNextSampleBuffer(),
@@ -112,19 +109,14 @@ public actor ScreenRecordingFrameExtractor {
 
             let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
             
-            // We only yield the frame if it matches our 3-second interval rule
             if shouldClassify(at: timestamp) {
                 let resizedBuffer = downscale(pixelBuffer: pixelBuffer)
-                
-                let isDup = previousBuffer != nil ? isDuplicate(bufferA: previousBuffer!, bufferB: resizedBuffer) : false
-                previousBuffer = resizedBuffer
                 
                 try await body(
                     ScreenRecordingFrame(
                         index: index,
                         timestamp: timestamp,
-                        pixelBuffer: resizedBuffer,
-                        isDuplicateOfPrevious: isDup
+                        pixelBuffer: resizedBuffer
                     )
                 )
             }
@@ -143,7 +135,6 @@ public actor ScreenRecordingFrameExtractor {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         
-        // If it's already small enough (e.g. 720p or less), don't resize it
         if width <= 720 { return pixelBuffer }
         
         let scale: Double = 720.0 / Double(width)
@@ -166,56 +157,5 @@ public actor ScreenRecordingFrameExtractor {
         VTPixelTransferSessionTransferImage(session, from: pixelBuffer, to: outBuffer)
         
         return outBuffer
-    }
-    
-    private func isDuplicate(bufferA: CVPixelBuffer, bufferB: CVPixelBuffer) -> Bool {
-        guard CVPixelBufferGetWidth(bufferA) == CVPixelBufferGetWidth(bufferB),
-              CVPixelBufferGetHeight(bufferA) == CVPixelBufferGetHeight(bufferB) else {
-            return false
-        }
-        
-        CVPixelBufferLockBaseAddress(bufferA, .readOnly)
-        CVPixelBufferLockBaseAddress(bufferB, .readOnly)
-        defer {
-            CVPixelBufferUnlockBaseAddress(bufferA, .readOnly)
-            CVPixelBufferUnlockBaseAddress(bufferB, .readOnly)
-        }
-        
-        guard let baseA = CVPixelBufferGetBaseAddress(bufferA)?.assumingMemoryBound(to: UInt8.self),
-              let baseB = CVPixelBufferGetBaseAddress(bufferB)?.assumingMemoryBound(to: UInt8.self) else {
-            return false
-        }
-        
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(bufferA)
-        let height = CVPixelBufferGetHeight(bufferA)
-        let width = CVPixelBufferGetWidth(bufferA)
-        
-        var diffSum: Int = 0
-        var samples = 0
-        
-        // Sample roughly 100 pixels across the screen
-        let stepY = max(1, height / 10)
-        let stepX = max(1, width / 10)
-        
-        for y in stride(from: 0, to: height, by: stepY) {
-            for x in stride(from: 0, to: width, by: stepX) {
-                let offset = y * bytesPerRow + x * 4
-                let bA = Int(baseA[offset])
-                let gA = Int(baseA[offset + 1])
-                let rA = Int(baseA[offset + 2])
-                
-                let bB = Int(baseB[offset])
-                let gB = Int(baseB[offset + 1])
-                let rB = Int(baseB[offset + 2])
-                
-                let diff = abs(bA - bB) + abs(gA - gB) + abs(rA - rB)
-                diffSum += diff
-                samples += 1
-            }
-        }
-        
-        let avgDiff = samples > 0 ? (diffSum / samples) : 0
-        // If average absolute difference across RGB channels is small, it's effectively identical
-        return avgDiff < 15
     }
 }

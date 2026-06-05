@@ -8,6 +8,7 @@ import SwiftUI
 /// Per-screen row for session breakdown list.
 struct TimelineRowView: View {
     let item: ScreenBreakdownItem
+    var previousTranscript: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -23,16 +24,32 @@ struct TimelineRowView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.textPrimary)
                         .lineLimit(1)
+
+                    if let confidence = item.confidencePercentText {
+                        Text(confidence)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                if let onScreen = item.onScreenContent {
+                    Text("On screen: \(onScreen)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
                 if let summary = item.contentSummary, !summary.isEmpty {
-                    Text(summary)
+                    Text("Summary: \(summary)")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
-
+                Text(heardLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
@@ -43,6 +60,16 @@ struct TimelineRowView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+
+    private var heardLine: String {
+        if let transcript = item.meaningfulAudioTranscript {
+            if transcript == previousTranscript {
+                return "Heard: (same as previous)"
+            }
+            return "Heard: \"\(transcript)\""
+        }
+        return "Heard: (no clear app audio in this clip)"
     }
 
     @ViewBuilder

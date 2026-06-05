@@ -27,7 +27,7 @@ public actor ScreenRecordingAudioExtractor {
     }
 
     private let whisperSampleRate: Double = 16_000
-    private let windowDuration: TimeInterval = 3.0
+    private let windowDuration: TimeInterval = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
 
     public init() {}
 
@@ -49,14 +49,8 @@ public actor ScreenRecordingAudioExtractor {
             throw ExtractionError.unreadableAudio
         }
         
-        let tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("screen-recording-audio", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
-        
+        let tempDirectory = try makeRunTempDirectory(prefix: "full")
         let outputURL = tempDirectory.appendingPathComponent("full_audio.wav")
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try? FileManager.default.removeItem(at: outputURL)
-        }
         
         let exported = try exportWAVSegment(
             asset: asset,
@@ -84,9 +78,7 @@ public actor ScreenRecordingAudioExtractor {
         let timestamps = classificationTimestamps(until: durationSeconds)
         guard !timestamps.isEmpty else { return [] }
 
-        let tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("screen-recording-audio", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        let tempDirectory = try makeRunTempDirectory(prefix: "windows")
 
         var segments: [ScreenRecordingAudioSegment] = []
 
@@ -97,10 +89,6 @@ public actor ScreenRecordingAudioExtractor {
 
             let outputURL = tempDirectory
                 .appendingPathComponent("audio-\(Int(timestamp * 1000)).wav")
-
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                try? FileManager.default.removeItem(at: outputURL)
-            }
 
             let exported = try exportWAVSegment(
                 asset: asset,
@@ -221,5 +209,15 @@ public actor ScreenRecordingAudioExtractor {
         }
 
         try audioFile.write(from: buffer)
+    }
+
+    private func makeRunTempDirectory(prefix: String) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("screen-recording-audio", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let directory = root.appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 }

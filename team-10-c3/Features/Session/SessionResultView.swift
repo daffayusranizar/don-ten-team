@@ -111,7 +111,7 @@ struct SessionResultView: View {
                         icon: "chart.bar.fill",
                         iconColor: .decorativeSkyBlue,
                         title: "Dominant Category",
-                        content: result.category
+                        content: result.dominantCategoryDisplay
                     )
 
                     SessionResultCard(
@@ -121,33 +121,13 @@ struct SessionResultView: View {
                         content: result.summary
                     )
 
-                    if !result.signals.isEmpty {
-                        SessionResultCard(
-                            icon: "exclamationmark.circle.fill",
-                            iconColor: .decorativeCoralPink,
-                            title: "Concern Signals",
-                            content: result.signals.joined(separator: "\n")
-                        )
-                    }
-
-                    SessionResultCard(
-                        icon: "bubble.left.and.bubble.right.fill",
-                        iconColor: .decorativeSunnyYellow,
-                        title: result.conversationStarters.count > 1
-                            ? "Conversation Starters"
-                            : "Conversation Starter",
-                        content: result.conversationStarters
-                            .map { "• \($0)" }
-                            .joined(separator: "\n\n")
-                    )
-
-                    if let excerpt = result.sessionTranscriptExcerpt,
-                       TranscriptSanitizer.isMeaningful(excerpt) {
+                    if let transcript = result.sessionTranscriptForDisplay,
+                       TranscriptSanitizer.isMeaningful(transcript) {
                         SessionResultCard(
                             icon: "waveform",
                             iconColor: .primaryMediumBlue,
                             title: "What we heard (session)",
-                            content: excerpt
+                            content: transcript
                         )
                     }
 
@@ -172,7 +152,7 @@ struct SessionResultView: View {
                 }
 
                 // Start new session button
-                PrimaryButton(title: "Start New Session", size: .large, action: onStartNew)
+                PrimaryButton(title: "Nice Work!", size: .large, action: onStartNew)
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
@@ -218,14 +198,6 @@ struct SessionResultCard: View {
 
 // MARK: - Preview
 
-#Preview("With breakdown") {
-    NavigationStack {
-        SessionResultView(onStartNew: {})
-            .environment(\.kidSessionViewModel, SessionResultView_Previews.viewModel)
-    }
-}
-
-#if DEBUG
 private enum SessionResultView_Previews {
     @MainActor static var viewModel: KidSessionViewModel {
         let coordinator = SessionCoordinator(
@@ -233,21 +205,14 @@ private enum SessionResultView_Previews {
             screenTimeService: ScreenTimeService(),
             familyControlsAuth: PreviewFamilyControlsAuthService()
         )
-        let vm = KidSessionViewModel(sessionCoordinator: coordinator)
-        let id = UUID()
-        vm.configureForPreview(
-            sessionId: id,
-            result: PipelineResult(
-                category: "Educational",
-                summary: "Mostly learning content.",
-                creators: ["@Example"],
-                signals: [],
-                conversationStarter: "What did you learn?",
-                offlineActivity: "Draw what you learned.",
-                screens: [.preview]
-            )
-        )
-        return vm
+        return KidSessionViewModel(sessionCoordinator: coordinator)
     }
 }
-#endif
+
+#Preview("With breakdown") {
+    NavigationStack {
+        SessionResultView(onStartNew: {})
+            .environment(\.kidSessionViewModel, SessionResultView_Previews.viewModel)
+    }
+}
+

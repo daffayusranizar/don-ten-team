@@ -4,4 +4,4 @@
 //
 //  Created by Huy Tran on 26/05/26.
 //
-//  [P2] Advice feed + conversation starters + offline activities
+//  [P2] Advice feed + offline activities

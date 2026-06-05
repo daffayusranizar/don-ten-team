@@ -11,7 +11,6 @@ import SwiftData
 
 @MainActor
 final class AppContainer {
-    let featureFlags: FeatureFlagService
     let modelContainer: ModelContainer
     let childRepository: ChildRepository
     let sessionRepository: SessionRepository
@@ -21,10 +20,10 @@ final class AppContainer {
     let sessionCoordinator: SessionCoordinator
     let sessionAnalysisStore: SessionAnalysisStore
     let kidSessionViewModel: KidSessionViewModel
+    let weeklySummaryViewModel: WeeklySummaryViewModel
     let suggestionHistoryRepository: SuggestionHistoryRepository
 
     init(
-        featureFlags: FeatureFlagService,
         modelContainer: ModelContainer,
         childRepository: ChildRepository? = nil,
         sessionRepository: SessionRepository? = nil,
@@ -34,9 +33,9 @@ final class AppContainer {
         sessionCoordinator: SessionCoordinator? = nil,
         sessionAnalysisStore: SessionAnalysisStore? = nil,
         kidSessionViewModel: KidSessionViewModel? = nil,
+        weeklySummaryViewModel: WeeklySummaryViewModel? = nil,
         suggestionHistoryRepository: SuggestionHistoryRepository? = nil
     ) {
-        self.featureFlags = featureFlags
         self.modelContainer = modelContainer
         self.childRepository = childRepository ?? SwiftDataChildRepository(
             modelContext: modelContainer.mainContext
@@ -61,10 +60,15 @@ final class AppContainer {
             sessionCoordinator: self.sessionCoordinator,
             sessionAnalysisStore: self.sessionAnalysisStore
         )
+        self.weeklySummaryViewModel = weeklySummaryViewModel ?? WeeklySummaryViewModel(
+            sessionRepository: self.sessionRepository,
+            sessionAnalysisStore: self.sessionAnalysisStore,
+            screenTimeService: self.screenTimeService,
+            familyControlsAuth: self.familyControlsAuth
+        )
         self.suggestionHistoryRepository = suggestionHistoryRepository
             ?? InMemorySuggestionHistoryRepository()
 
-        try? self.sessionRepository.purgeLegacyMockUsageSnapshots()
         self.screenTimeService.deactivateSessionRestrictions()
 
         self.profileViewModel.loadChildren()
@@ -74,7 +78,7 @@ final class AppContainer {
     convenience init() {
         do {
             let modelContainer = try Self.makeModelContainer()
-            self.init(featureFlags: FeatureFlagService(), modelContainer: modelContainer)
+            self.init(modelContainer: modelContainer)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
@@ -86,6 +90,7 @@ final class AppContainer {
             SessionMarker.self,
             SessionUsageSnapshot.self,
             SessionAnalysisRecord.self,
+            DailyInsightCacheRecord.self,
         ])
         let configuration = ModelConfiguration()
         do {
