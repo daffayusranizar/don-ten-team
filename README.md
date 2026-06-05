@@ -26,7 +26,7 @@ Each teammate can build with their **own** signing identity. Shared defaults liv
    Find your **Team ID** in Xcode → Settings → Accounts → your team → Team ID.
 4. Register an **App Group** at [developer.apple.com](https://developer.apple.com) → Identifiers → App Groups:
    - Identifier: `group.yourname.don-ten-team.shared` (derived from your prefix)
-5. In Xcode, for all three targets (`team-10-c3`, `ScreenRecorderExtension`, `ScreenRecorderExtensionSetupUI`):
+5. In Xcode, for all targets (`team-10-c3`, `ScreenRecorderExtension`, `DeviceActivityMonitorExtension`):
    - **Signing & Capabilities** → enable **Automatically manage signing**
    - Confirm **Team** matches your local config
    - Add the App Group capability if Xcode prompts you

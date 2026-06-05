@@ -422,7 +422,5 @@ A healthy end-of-log looks like:
 
 ## 11. Out of scope
 
-- `ScreenRecorderExtensionSetupUI` (`BroadcastSetupViewController`) — not wired to the
-  upload extension; ignore for now.
 - In-app ReplayKit stop UI — all stop is via Darwin notify from `RecordingManager`.
 - Screen flow changes (`SessionSetupView`, `KidSessionActiveView`, navigation).
