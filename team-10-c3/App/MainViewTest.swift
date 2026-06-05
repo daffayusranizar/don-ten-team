@@ -76,15 +76,6 @@ struct MainViewTest: View {
                             value: result.summary
                         )
 
-                        // Concern Signals
-                        if !result.signals.isEmpty {
-                            ResultCard(
-                                icon: "⚠️",
-                                title: "Concern Signals",
-                                value: result.signals.joined(separator: "\n")
-                            )
-                        }
-
                         // Guidance
                         ResultCard(
                             icon: "💡",
@@ -132,9 +123,6 @@ struct MainViewTest: View {
                         === AI Result ===
                         Category: \(result.category)
                         AI Summary: \(result.summary)
-                        Creators Seen: \(result.creators.isEmpty ? "None" : result.creators.joined(separator: ", "))
-                        Concern Signals:
-                        \(result.signals.isEmpty ? "None" : result.signals.joined(separator: "\n"))
                         Conversation Starter: \(result.conversationStarter)
                         Offline Activity: \(result.offlineActivity)
                         """)

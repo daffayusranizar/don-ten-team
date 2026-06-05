@@ -18,7 +18,6 @@ struct ParentGuideApp: App {
             RootView()
                 .onAppear { RecordingReadyBridge.ensureListening() }
                 .preferredColorScheme(.light)
-                .environment(\.featureFlags, container.featureFlags)
                 .environment(\.childRepository, container.childRepository)
                 .environment(\.sessionRepository, container.sessionRepository)
                 .environment(\.profileViewModel, container.profileViewModel)

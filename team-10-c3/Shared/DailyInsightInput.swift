@@ -10,10 +10,7 @@ struct DailySessionInsight: Sendable {
     let durationSeconds: Int
     let dominantCategory: String
     let aiSummary: String
-    let transcriptDigest: String?
-    let toneSummary: String?
-    let signals: [String]
-    let creators: [String]
+    let transcriptBriefSummary: String?
 }
 
 struct DailyInsightInput: Sendable {
@@ -44,13 +41,14 @@ struct DailyInsightInput: Sendable {
                 durationSeconds: snapshotDuration(for: entry.session, snapshots: snapshots),
                 dominantCategory: entry.result.category,
                 aiSummary: entry.result.summary,
-                transcriptDigest: TranscriptDigestBuilder.resolvedDigest(
-                    stored: entry.result.sessionTranscriptDigest,
-                    screens: entry.result.screens
-                ),
-                toneSummary: entry.result.sessionToneSummary?.parentFacingSummary,
-                signals: entry.result.signals,
-                creators: entry.result.creators
+                transcriptBriefSummary: entry.result.sessionTranscriptBriefSummary
+                    ?? TranscriptDigestBuilder.buildBriefSummary(
+                        fullTrackText: nil,
+                        digest: TranscriptDigestBuilder.resolvedDigest(
+                            stored: entry.result.sessionTranscriptDigest,
+                            screens: entry.result.screens
+                        )
+                    )
             )
         }
 
@@ -114,17 +112,8 @@ extension DailyInsightInput {
             Session \(session.index) (\(DurationFormatting.compact(seconds: session.durationSeconds)), \(session.dominantCategory)):
             AI summary: \(session.aiSummary)
             """
-            if let digest = session.transcriptDigest, TranscriptSanitizer.isMeaningful(digest) {
-                block += "\nSpoken content: \"\(digest)\""
-            }
-            if let tone = session.toneSummary, !tone.isEmpty {
-                block += "\nHow it sounded: \(tone)"
-            }
-            if !session.creators.isEmpty {
-                block += "\nCreators: \(session.creators.joined(separator: ", "))"
-            }
-            if !session.signals.isEmpty {
-                block += "\nSignals: \(session.signals.joined(separator: "; "))"
+            if let brief = session.transcriptBriefSummary, TranscriptSanitizer.isMeaningful(brief) {
+                block += "\nSpoken content summary: \(brief)"
             }
             lines.append(block)
         }

@@ -24,10 +24,24 @@ struct TimelineRowView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.textPrimary)
                         .lineLimit(1)
+
+                    if let confidence = item.confidencePercentText {
+                        Text(confidence)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                if let visual = item.videoMatchedPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !visual.isEmpty {
+                    Text("Visual: \(visual)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
                 if let summary = item.contentSummary, !summary.isEmpty {
-                    Text("What we saw: \(summary)")
+                    Text("Summary: \(summary)")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -37,13 +51,6 @@ struct TimelineRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-
-                if let toneLine = toneLine {
-                    Text(toneLine)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                }
             }
 
             Spacer(minLength: 0)
@@ -63,23 +70,7 @@ struct TimelineRowView: View {
             }
             return "Heard: \"\(transcript)\""
         }
-        if item.isSilentOrUnreadableTone {
-            return "Heard: (no clear app audio in this clip)"
-        }
         return "Heard: (no clear app audio in this clip)"
-    }
-
-    private var toneLine: String? {
-        guard item.hasAudioDetails, !item.isSilentOrUnreadableTone else { return nil }
-        let tone = item.audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !tone.isEmpty else { return nil }
-        if let friendly = SessionToneSummarizer.frameDisplayTone(
-            audioTone: item.audioTone,
-            transcript: item.audioTranscript
-        ) {
-            return "Tone: \(friendly)"
-        }
-        return "Tone: \(tone)"
     }
 
     @ViewBuilder

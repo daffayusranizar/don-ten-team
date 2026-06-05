@@ -18,7 +18,6 @@ public actor PipelineOrchestrator {
 
         report(.preparingModels, 0.12, "Loading on-device models…")
         
-        // 1. Boot up the engines (This happens in the background)
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⚙️ Step 1: Booting up engines...")
         let frameExtractor = ScreenRecordingFrameExtractor()
         let audioExtractor = ScreenRecordingAudioExtractor()
@@ -27,23 +26,17 @@ public actor PipelineOrchestrator {
         
         let clipClassifier = try await MobileCLIPClassifier()
         let whisper = try await ScreenRecordingWhisperTranscriber()
-        let toneAnalyzer = ScreenRecordingAudioToneAnalyzer()
-        let visionAnalyzer = VisionFrameContentAnalyzer()
-        let handleExtractor = CreatorHandleExtractor()
-        let sentimentAnalyzer = ScreenRecordingSentimentAnalyzer()
 
         let metadata = try await frameExtractor.loadMetadata(from: videoURL)
         let estimatedFrameCount = max(1, metadata.estimatedFrameCount)
         
-        // 2. Extract Audio First
         report(.extractingAudio, 0.18, "Pulling audio from the recording…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🔊 Step 2: Extracting audio windows and full audio track...")
         let audioSegments = try await audioExtractor.exportClassificationWindows(from: videoURL)
         let fullAudioURL = try await audioExtractor.exportFullAudio(from: videoURL)
         let hasAudioTrack = await audioExtractor.hasAudioTrack(in: videoURL)
 
-        // 3. Process Audio (Full Transcript + per-window tone/transcript)
-        report(.transcribing, 0.28, "Listening with on-device speech recognition…")
+        report(.transcribing, 0.35, "Listening with on-device speech recognition…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing audio (\(audioSegments.count) windows, hasAudioTrack=\(hasAudioTrack))...")
         let windowDuration: TimeInterval = 3.0
         let fullTranscripts: [SegmentedTranscript]
@@ -52,12 +45,11 @@ public actor PipelineOrchestrator {
         } else {
             fullTranscripts = []
         }
+        let hasFullTrack = !fullTranscripts.isEmpty
 
-        var audioResults: [TimeInterval: (transcript: String, pcmTone: String)] = [:]
+        var audioResults: [TimeInterval: String] = [:]
 
-        try await withThrowingTaskGroup(
-            of: (TimeInterval, String, String).self
-        ) { group in
+        try await withThrowingTaskGroup(of: (TimeInterval, String).self) { group in
             for segment in audioSegments {
                 group.addTask {
                     let segmentStart = segment.timestamp
@@ -68,29 +60,24 @@ public actor PipelineOrchestrator {
                     }.map(\.text)
                     var rawTranscript = TranscriptSanitizer.sanitize(matchedTexts.joined(separator: " "))
 
-                    if rawTranscript.isEmpty || !TranscriptSanitizer.isMeaningful(rawTranscript) {
-                        if let fallback = try? await whisper.transcribe(wavURL: segment.wavURL),
-                           !fallback.isEmpty {
-                            rawTranscript = fallback
-                        }
+                    if !hasFullTrack,
+                       rawTranscript.isEmpty || !TranscriptSanitizer.isMeaningful(rawTranscript),
+                       let fallback = try? await whisper.transcribe(wavURL: segment.wavURL),
+                       !fallback.isEmpty {
+                        rawTranscript = fallback
                     }
 
-                    let storedTranscript = AudioToneResolver.storageTranscript(rawTranscript) ?? ""
-                    let analysis = await toneAnalyzer.analyze(
-                        wavURL: segment.wavURL,
-                        transcript: storedTranscript,
-                        durationSeconds: windowDuration
-                    )
-                    return (segmentStart, storedTranscript, analysis.description)
+                    let storedTranscript = TranscriptSanitizer.meaningfulForStorage(rawTranscript) ?? ""
+                    return (segmentStart, storedTranscript)
                 }
             }
 
             for try await item in group {
-                audioResults[item.0] = (transcript: item.1, pcmTone: item.2)
+                audioResults[item.0] = item.1
             }
         }
 
-        let windowsWithTranscript = audioResults.values.filter { !$0.transcript.isEmpty }.count
+        let windowsWithTranscript = audioResults.values.filter { !$0.isEmpty }.count
         print(
             "[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Audio: \(windowsWithTranscript)/\(audioSegments.count) windows with transcript, full segments=\(fullTranscripts.count)"
         )
@@ -101,7 +88,6 @@ public actor PipelineOrchestrator {
             windowsWithTranscript: windowsWithTranscript
         )
         
-        // 4. Process Video Frames
         report(.analyzingScreens, 0.38, "Starting screen analysis…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🎞️ Step 4: Processing video frames in parallel batches...")
         typealias RawFrameType = (
@@ -115,8 +101,7 @@ public actor PipelineOrchestrator {
             videoMatchedPrompt: String?,
             audioMatchedPrompt: String?,
             contentSummary: String?,
-            creatorHandle: String?,
-            isDuplicate: Bool
+            creatorHandle: String?
         )
         
         var rawFrames: [RawFrameType] = []
@@ -128,36 +113,8 @@ public actor PipelineOrchestrator {
                 for frame in batch {
                     group.addTask {
                         let timestamp = frame.timestamp
-                        let audioInfo = audioResults[timestamp] ?? (transcript: "", pcmTone: AudioToneLabels.silentDescription)
-                        
-                        if frame.isDuplicateOfPrevious {
-                            let displayTone = AudioToneResolver.resolveDisplayTone(
-                                pcmDescription: audioInfo.pcmTone,
-                                transcript: audioInfo.transcript,
-                                categoryLabel: nil,
-                                contentSummary: nil
-                            )
-                            print("[\(Date().formatted(date: .omitted, time: .standard))]      ⚡️ Skipped ML for duplicate frame at \(timestamp)s")
-                            return (
-                                timestamp: timestamp,
-                                matches: [],
-                                thumbnail: nil,
-                                bottomCropThumbnail: nil,
-                                audioTranscript: audioInfo.transcript.isEmpty ? nil : audioInfo.transcript,
-                                audioTone: displayTone,
-                                audioLabel: nil,
-                                videoMatchedPrompt: nil,
-                                audioMatchedPrompt: nil,
-                                contentSummary: nil,
-                                creatorHandle: nil,
-                                isDuplicate: true
-                            )
-                        }
-                        
-                        // Run ML sequentially per frame to avoid Neural Engine thrashing, 
-                        // but the batch of 3 frames will still process concurrently!
-                        let vision = await visionAnalyzer.analyze(pixelBuffer: frame.pixelBuffer)
-                        let handle = await handleExtractor.extract(from: frame.pixelBuffer)
+                        let transcript = audioResults[timestamp] ?? ""
+
                         let clip = try await clipClassifier.classify(
                             pixelBuffer: frame.pixelBuffer,
                             temperature: 100,
@@ -166,24 +123,9 @@ public actor PipelineOrchestrator {
 
                         let frameImages = ImagePreprocessor.frameDisplayImages(from: frame.pixelBuffer)
                         let categoryLabel = clip.categories.first?.label
-                        let displayTone = AudioToneResolver.resolveDisplayTone(
-                            pcmDescription: audioInfo.pcmTone,
-                            transcript: audioInfo.transcript,
-                            categoryLabel: categoryLabel,
-                            contentSummary: nil
-                        )
                         let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
                             label: categoryLabel ?? "Unknown",
-                            onScreenText: vision.onScreenText,
-                            sceneHints: vision.sceneHints,
-                            transcript: audioInfo.transcript,
-                            audioTone: displayTone
-                        )
-                        let resolvedTone = AudioToneResolver.resolveDisplayTone(
-                            pcmDescription: audioInfo.pcmTone,
-                            transcript: audioInfo.transcript,
-                            categoryLabel: categoryLabel,
-                            contentSummary: contentSummary
+                            transcript: transcript.isEmpty ? nil : transcript
                         )
                         
                         return (
@@ -191,14 +133,13 @@ public actor PipelineOrchestrator {
                             matches: clip.categories,
                             thumbnail: frameImages.thumbnail,
                             bottomCropThumbnail: frameImages.bottomCropThumbnail,
-                            audioTranscript: audioInfo.transcript.isEmpty ? nil : audioInfo.transcript,
-                            audioTone: resolvedTone,
-                            audioLabel: nil, 
+                            audioTranscript: transcript.isEmpty ? nil : transcript,
+                            audioTone: nil,
+                            audioLabel: nil,
                             videoMatchedPrompt: clip.prompts.first?.matchedPrompt,
                             audioMatchedPrompt: nil,
                             contentSummary: contentSummary,
-                            creatorHandle: handle.handle,
-                            isDuplicate: false
+                            creatorHandle: nil
                         )
                     }
                 }
@@ -237,39 +178,32 @@ public actor PipelineOrchestrator {
             )
         }
         
-        // Ensure chronological order after parallel execution
         rawFrames.sort { $0.timestamp < $1.timestamp }
         
-        // Resolve duplicates sequentially
-        for i in 1..<rawFrames.count {
-            if rawFrames[i].isDuplicate {
-                rawFrames[i].matches = rawFrames[i-1].matches
-                rawFrames[i].videoMatchedPrompt = rawFrames[i-1].videoMatchedPrompt
-                rawFrames[i].contentSummary = rawFrames[i-1].contentSummary
-                rawFrames[i].creatorHandle = rawFrames[i-1].creatorHandle
-                rawFrames[i].thumbnail = rawFrames[i-1].thumbnail
-                rawFrames[i].bottomCropThumbnail = rawFrames[i-1].bottomCropThumbnail
-                rawFrames[i].audioTranscript = rawFrames[i-1].audioTranscript
-                rawFrames[i].audioTone = rawFrames[i-1].audioTone
-                rawFrames[i].audioLabel = rawFrames[i-1].audioLabel
-            }
-        }
-        
-        // 5. Aggregate Timeline (Fuse Audio and Video mathematically)
         report(.generatingSummary, 0.82, "Grouping results by time…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⏱️ Step 5: Aggregating timeline (Fusion)...")
         let timeline = await aggregator.timeline(frames: rawFrames, fps: 1.0, intervalSeconds: 3)
         let categoryBreakdown = UsageCategoryBreakdown.from(timeline: timeline)
-        
-        // 6. Generate the Final AI Summary
+        let dominantCategory = categoryBreakdown.dominantCategoryName ?? "Mixed content"
+
+        let fullTrackText = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
+        let sessionTranscriptDigest = TranscriptDigestBuilder.buildDigest(
+            timeline: timeline,
+            fullTrackText: fullTrackText
+        )
+        let sessionTranscriptBriefSummary = TranscriptDigestBuilder.buildBriefSummary(
+            fullTrackText: fullTrackText,
+            digest: sessionTranscriptDigest
+        )
+
         report(.generatingSummary, 0.88, "Writing parent-friendly summary…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🧠 Step 6: Generating AI Summary...")
-        let dominantCategory = timeline.first?.label ?? "Mixed content"
         let aiProseSummary: String
         do {
             var llmSummary = try await summarizer.summarizeRecording(
                 timeline: timeline,
                 overallCategory: dominantCategory,
+                transcriptBrief: sessionTranscriptBriefSummary,
                 child: child
             )
             if Self.looksLikeRawSegmentDump(llmSummary) {
@@ -291,65 +225,18 @@ public actor PipelineOrchestrator {
             )
         }
         
-        // 7. Extract Top Creators
-        print("[\(Date().formatted(date: .omitted, time: .standard))] 👤 Step 7: Extracting top creators...")
-        let allHandles = rawFrames.compactMap { $0.creatorHandle }
-        let handleCounts = Dictionary(allHandles.map { ($0, Int(1)) }, uniquingKeysWith: +)
-        let topCreators = handleCounts.sorted { $0.value > $1.value }.prefix(3).map { $0.key }
-        
-        // 8. Generate Guidance
         report(.finalizing, 0.94, "Preparing session insights…")
-        print("[\(Date().formatted(date: .omitted, time: .standard))] 💡 Step 8: Generating insights and guidance...")
+        print("[\(Date().formatted(date: .omitted, time: .standard))] 💡 Step 7: Generating guidance...")
         let guidanceEngine = GuidanceEngine()
-        let insights = await guidanceEngine.generateInsights(
-            timeline: timeline, 
+        let guidance = await guidanceEngine.generateGuidance(
+            timeline: timeline,
             dominantCategory: dominantCategory,
             child: child
         )
         
-        var concernSignals = insights.signals
-        let fullTranscriptString = TranscriptSanitizer.sanitize(
-            fullTranscripts.map(\.text).joined(separator: " ")
-        )
-        let sentimentInput: String
-        if TranscriptSanitizer.isSubstantialForSentiment(fullTranscriptString) {
-            sentimentInput = fullTranscriptString
-        } else if let excerpt = sessionTranscriptExcerpt,
-                  TranscriptSanitizer.isSubstantialForSentiment(excerpt) {
-            sentimentInput = excerpt
-        } else {
-            sentimentInput = ""
-        }
-        let silentFrameCount = timeline.filter {
-            AudioToneLabels.isSilentDescription($0.audioTone ?? "")
-        }.count
-        let silentMajority = !timeline.isEmpty && silentFrameCount > timeline.count / 2
-
-        let sentimentResult = await sentimentAnalyzer.analyze(transcript: sentimentInput)
-        if sentimentResult.isHighlyNegative,
-           !sentimentInput.isEmpty,
-           !silentMajority {
-            let description: String
-            if let snippet = sentimentResult.mostNegativeSnippet,
-               TranscriptSanitizer.isQuotableSnippet(snippet) {
-                description = """
-                Highly negative sentiment was detected in the video's audio. For example: "\(snippet)"
-                """
-            } else {
-                description = "Highly negative sentiment was detected in the video's audio."
-            }
-            concernSignals.append(ConcernSignal(
-                title: "Negative Audio Detected",
-                description: description,
-                severity: .high
-            ))
-        }
-        
         report(.finalizing, 1.0, "Almost done…")
-        // 9. Cleanup & Return the beautiful result to the UI!
         print("[\(Date().formatted(date: .omitted, time: .standard))] ✅ Pipeline complete! Returning results.")
         
-        // Auto-delete the video file to save disk space
         do {
             if FileManager.default.fileExists(atPath: videoURL.path) {
                 try FileManager.default.removeItem(at: videoURL)
@@ -358,32 +245,22 @@ public actor PipelineOrchestrator {
         } catch {
             print("⚠️ Failed to delete processed video: \(error)")
         }
-        
-        let fullTrackText = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
-        let sessionTranscriptDigest = TranscriptDigestBuilder.buildDigest(
-            timeline: timeline,
-            fullTrackText: fullTrackText
-        )
-        let sessionToneSummary = SessionToneSummarizer.summarize(timeline: timeline)
 
         return SessionAnalysisResult(
             dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []),
             aiProseSummary: aiProseSummary,
-            topCreatorsSeen: topCreators,
-            concernSignals: concernSignals,
-            guidance: insights.guidance,
+            guidance: guidance,
             timeline: timeline,
             categoryBreakdown: categoryBreakdown,
             sessionTranscriptExcerpt: sessionTranscriptExcerpt,
             sessionTranscriptDigest: sessionTranscriptDigest,
-            sessionToneSummary: sessionToneSummary
+            sessionTranscriptBriefSummary: sessionTranscriptBriefSummary
         )
     }
 
-    /// When per-window alignment is sparse but full-track Whisper succeeded, surface a short excerpt on the result screen.
     private static func sessionTranscriptExcerpt(
         fullTranscripts: [SegmentedTranscript],
-        audioResults: [TimeInterval: (transcript: String, pcmTone: String)],
+        audioResults: [TimeInterval: String],
         windowsWithTranscript: Int
     ) -> String? {
         let joined = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
@@ -399,7 +276,6 @@ public actor PipelineOrchestrator {
         return String(joined[..<end]).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 
-    /// Detects the old fallback format (newline-joined segment OCR) mistakenly shown as AI Summary.
     private static func looksLikeRawSegmentDump(_ text: String) -> Bool {
         let lower = text.lowercased()
         if lower.contains("on screen:") && lower.contains("spoken:") { return true }

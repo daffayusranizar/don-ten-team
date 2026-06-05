@@ -31,10 +31,7 @@ public class EngineTestRunner {
                 let whisper = try await ScreenRecordingWhisperTranscriber()
                 print("✅ Whisper loaded")
 
-                print("⚙️ Step 4: Creating remaining actors...")
-                let toneAnalyzer = ScreenRecordingAudioToneAnalyzer()
-                let visionAnalyzer = VisionFrameContentAnalyzer()
-                let handleExtractor = CreatorHandleExtractor()
+                print("⚙️ Step 4: Creating summarizer...")
                 let summarizer = LLMSummarizer()
                 print("✅ All actors ready")
 

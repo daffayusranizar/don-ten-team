@@ -54,6 +54,17 @@ public struct UsageCategoryBreakdown: Codable, Equatable, Sendable {
         items.isEmpty || items.allSatisfy { $0.frameCount == 0 }
     }
 
+    /// Top chart bucket by frame count (e.g. "Educational").
+    public var dominantCategoryName: String? {
+        items.first?.name
+    }
+
+    /// Parent-facing label with share of session, e.g. "Educational · 67%".
+    public var dominantDisplayLabel: String? {
+        guard let top = items.first else { return nil }
+        return "\(top.name) · \(top.percentage)%"
+    }
+
     public static func from(timeline: [FrameClassificationSummary], intervalSeconds: Double = 3.0) -> UsageCategoryBreakdown {
         fromScreens(
             timeline.map { ScreenLike(label: $0.label) },
@@ -165,18 +176,6 @@ enum InsightProseBuilder {
         "Explore the recommended offline activity that we already provide for you to do it with your child!"
 
     static func weeklySuggestion(from conversationStarters: [String]) -> String {
-        weeklySuggestion(fromToneVerdict: nil, conversationStarters: conversationStarters)
-    }
-
-    static func weeklySuggestion(
-        fromToneVerdict toneVerdict: String?,
-        conversationStarters: [String] = []
-    ) -> String {
-        if let toneVerdict, !toneVerdict.isEmpty {
-            return """
-            \(toneVerdict) When you talk about the week, ask how that kind of content felt to watch and whether they'd like more calm or more active viewing next time.
-            """
-        }
         if let starter = conversationStarters.first, !starter.isEmpty {
             return """
             Spend 15–20 minutes talking with your child about what they watched this week. For example: "\(starter)" These small conversations help you understand their interests while encouraging healthier screen habits.

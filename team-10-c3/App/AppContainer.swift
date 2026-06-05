@@ -11,7 +11,6 @@ import SwiftData
 
 @MainActor
 final class AppContainer {
-    let featureFlags: FeatureFlagService
     let modelContainer: ModelContainer
     let childRepository: ChildRepository
     let sessionRepository: SessionRepository
@@ -25,7 +24,6 @@ final class AppContainer {
     let suggestionHistoryRepository: SuggestionHistoryRepository
 
     init(
-        featureFlags: FeatureFlagService,
         modelContainer: ModelContainer,
         childRepository: ChildRepository? = nil,
         sessionRepository: SessionRepository? = nil,
@@ -38,7 +36,6 @@ final class AppContainer {
         weeklySummaryViewModel: WeeklySummaryViewModel? = nil,
         suggestionHistoryRepository: SuggestionHistoryRepository? = nil
     ) {
-        self.featureFlags = featureFlags
         self.modelContainer = modelContainer
         self.childRepository = childRepository ?? SwiftDataChildRepository(
             modelContext: modelContainer.mainContext
@@ -81,7 +78,7 @@ final class AppContainer {
     convenience init() {
         do {
             let modelContainer = try Self.makeModelContainer()
-            self.init(featureFlags: FeatureFlagService(), modelContainer: modelContainer)
+            self.init(modelContainer: modelContainer)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

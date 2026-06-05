@@ -1,5 +1,22 @@
 import Foundation
 
+/// Legacy tone types kept for decoding stored session payloads.
+public enum SessionToneConfidence: String, Codable, Sendable, Equatable {
+    case low
+    case medium
+    case high
+}
+
+public struct SessionToneSummary: Codable, Equatable, Sendable {
+    public let parentFacingSummary: String
+    public let confidence: SessionToneConfidence
+
+    public init(parentFacingSummary: String, confidence: SessionToneConfidence) {
+        self.parentFacingSummary = parentFacingSummary
+        self.confidence = confidence
+    }
+}
+
 /// This is the final object your ParentingEngine will return to the UI team.
 public struct SessionAnalysisResult: Sendable {
     /// The overarching category (e.g., .educational, .entertainment, .commercial)
@@ -7,12 +24,6 @@ public struct SessionAnalysisResult: Sendable {
     
     /// The final, parent-friendly AI written paragraph.
     public let aiProseSummary: String
-    
-    /// The top creator handles found on the screen (e.g., "@MrBeast", "@MsRachel")
-    public let topCreatorsSeen: [String]
-    
-    /// Detailed flags triggered by this session (e.g., heavy commercial exposure)
-    public let concernSignals: [ConcernSignal]
     
     /// Suggested actions and advice for the parent based on the session.
     public let guidance: GuidanceSuggestion
@@ -29,35 +40,46 @@ public struct SessionAnalysisResult: Sendable {
     /// Bounded digest of per-window and full-track speech for daily insight and session review.
     public let sessionTranscriptDigest: String?
 
-    /// Parent-facing session audio tone verdict with confidence gating.
+    /// Short sanitized transcript summary safe for LLM prompts.
+    public let sessionTranscriptBriefSummary: String?
+
+    /// Deprecated — kept for stored JSON compatibility.
+    public let topCreatorsSeen: [String]
+
+    /// Deprecated — kept for stored JSON compatibility.
+    public let concernSignals: [ConcernSignal]
+
+    /// Deprecated — kept for stored JSON compatibility.
     public let sessionToneSummary: SessionToneSummary?
 
     public init(
         dominantCategory: ClassificationCategory,
         aiProseSummary: String,
-        topCreatorsSeen: [String],
-        concernSignals: [ConcernSignal],
         guidance: GuidanceSuggestion,
         timeline: [FrameClassificationSummary],
         categoryBreakdown: UsageCategoryBreakdown,
         sessionTranscriptExcerpt: String? = nil,
         sessionTranscriptDigest: String? = nil,
+        sessionTranscriptBriefSummary: String? = nil,
+        topCreatorsSeen: [String] = [],
+        concernSignals: [ConcernSignal] = [],
         sessionToneSummary: SessionToneSummary? = nil
     ) {
         self.dominantCategory = dominantCategory
         self.aiProseSummary = aiProseSummary
-        self.topCreatorsSeen = topCreatorsSeen
-        self.concernSignals = concernSignals
         self.guidance = guidance
         self.timeline = timeline
         self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
         self.sessionTranscriptDigest = sessionTranscriptDigest
+        self.sessionTranscriptBriefSummary = sessionTranscriptBriefSummary
+        self.topCreatorsSeen = topCreatorsSeen
+        self.concernSignals = concernSignals
         self.sessionToneSummary = sessionToneSummary
     }
 }
 
-/// Represents a specific issue detected during the session that the parent should know about.
+/// Deprecated — kept for stored JSON compatibility.
 public struct ConcernSignal: Sendable {
     public let id = UUID()
     public let title: String

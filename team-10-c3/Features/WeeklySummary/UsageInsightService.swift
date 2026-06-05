@@ -51,9 +51,7 @@ struct UsageInsightService {
         var totalSeconds = 0
         var mergedBreakdown = UsageCategoryBreakdown.empty
         var sessionResults: [(session: CompletedSessionReference, result: PipelineResult)] = []
-        var allSignals: [String] = []
         var conversationStarters: [String] = []
-        var toneSummaries: [SessionToneSummary] = []
         var latestOfflineActivity = "Let's take a 15-minute screen break together."
         var todaySnapshots: [SessionUsageSnapshot] = []
         var todaySessions: [CompletedSessionReference] = []
@@ -73,11 +71,7 @@ struct UsageInsightService {
                 guard let result = resultsById[session.sessionId] else { continue }
                 sessionResults.append((session, result))
                 mergedBreakdown = mergedBreakdown.merged(with: result.categoryBreakdown)
-                allSignals.append(contentsOf: result.signals)
                 conversationStarters.append(contentsOf: result.conversationStarters)
-                if let tone = result.sessionToneSummary {
-                    toneSummaries.append(tone)
-                }
             }
         }
 
@@ -122,10 +116,7 @@ struct UsageInsightService {
                 totalSeconds: totalSeconds,
                 breakdown: mergedBreakdown
             )
-            weeklySuggestion = InsightProseBuilder.weeklySuggestion(
-                fromToneVerdict: SessionToneSummarizer.weeklyVerdict(from: toneSummaries),
-                conversationStarters: conversationStarters
-            )
+            weeklySuggestion = InsightProseBuilder.weeklySuggestion(from: conversationStarters)
         }
 
         return UsageInsightReport(
@@ -134,7 +125,7 @@ struct UsageInsightService {
             aiSummary: aiSummary,
             offlineActivityTeaser: InsightProseBuilder.offlineActivityTeaser,
             offlineActivity: latestOfflineActivity,
-            needsAttention: needsAttention(from: allSignals),
+            needsAttention: false,
             weeklySuggestion: weeklySuggestion,
             conversationStarters: Array(conversationStarters.prefix(3))
         )
@@ -256,13 +247,6 @@ struct UsageInsightService {
                 value: Double(item.percentage),
                 color: category.color
             )
-        }
-    }
-
-    private func needsAttention(from signals: [String]) -> Bool {
-        signals.contains { signal in
-            let lower = signal.lowercased()
-            return lower.contains("[high]") || lower.contains("negative audio")
         }
     }
 }

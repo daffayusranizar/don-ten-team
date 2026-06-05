@@ -111,7 +111,7 @@ struct SessionResultView: View {
                         icon: "chart.bar.fill",
                         iconColor: .decorativeSkyBlue,
                         title: "Dominant Category",
-                        content: result.category
+                        content: result.dominantCategoryDisplay
                     )
 
                     SessionResultCard(
@@ -120,24 +120,6 @@ struct SessionResultView: View {
                         title: "AI Summary",
                         content: result.summary
                     )
-
-                    if !result.signals.isEmpty {
-                        SessionResultCard(
-                            icon: "exclamationmark.circle.fill",
-                            iconColor: .decorativeCoralPink,
-                            title: "Concern Signals",
-                            content: result.signals.joined(separator: "\n")
-                        )
-                    }
-
-                    if let tone = result.sessionToneSummary {
-                        SessionResultCard(
-                            icon: "speaker.wave.2.fill",
-                            iconColor: .decorativeSunnyYellow,
-                            title: "How it sounded",
-                            content: tone.parentFacingSummary
-                        )
-                    }
 
                     if let transcript = result.sessionTranscriptForDisplay,
                        TranscriptSanitizer.isMeaningful(transcript) {

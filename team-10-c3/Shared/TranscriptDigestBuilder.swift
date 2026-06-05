@@ -9,6 +9,7 @@ import Foundation
 enum TranscriptDigestBuilder {
     static let defaultMaxLength = 1200
     static let sessionCardExcerptLength = 280
+    static let briefSummaryMaxLength = 300
 
     static func buildDigest(
         perWindowTranscripts: [String?],
@@ -81,6 +82,44 @@ enum TranscriptDigestBuilder {
             return stored
         }
         return buildDigest(from: screens)
+    }
+
+    /// Bounded thematic summary safe to pass into on-device LLM prompts.
+    static func buildBriefSummary(
+        fullTrackText: String?,
+        digest: String?,
+        maxLength: Int = briefSummaryMaxLength
+    ) -> String? {
+        let source: String?
+        if let fullTrackText, TranscriptSanitizer.isMeaningful(fullTrackText) {
+            source = fullTrackText
+        } else if let digest, TranscriptSanitizer.isMeaningful(digest) {
+            source = digest
+        } else {
+            source = nil
+        }
+        guard let source else { return nil }
+
+        let cleaned = TranscriptSanitizer.sanitize(source)
+        let sentences = cleaned
+            .split(whereSeparator: { $0 == "." || $0 == "!" || $0 == "?" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { TranscriptSanitizer.isMeaningful($0) }
+
+        var unique: [String] = []
+        for sentence in sentences {
+            let normalized = sentence.lowercased()
+            if !unique.contains(where: { $0.lowercased() == normalized }) {
+                unique.append(sentence)
+            }
+        }
+
+        let joined = unique.joined(separator: ". ")
+        guard TranscriptSanitizer.isMeaningful(joined) else { return nil }
+        let withPunctuation = joined.hasSuffix(".") || joined.hasSuffix("!") || joined.hasSuffix("?")
+            ? joined
+            : joined + "."
+        return cap(withPunctuation, maxLength: maxLength)
     }
 
     private static func cap(_ text: String, maxLength: Int) -> String {

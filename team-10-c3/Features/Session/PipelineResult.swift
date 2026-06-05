@@ -10,15 +10,22 @@ import UIKit
 struct PipelineResult {
     let category: String
     let summary: String
-    let creators: [String]
-    let signals: [String]
     let conversationStarters: [String]
     let offlineActivity: String
     let categoryBreakdown: UsageCategoryBreakdown
     let sessionTranscriptExcerpt: String?
     let sessionTranscriptDigest: String?
-    let sessionToneSummary: SessionToneSummary?
+    let sessionTranscriptBriefSummary: String?
     let screens: [ScreenBreakdownItem]
+
+    /// Deprecated — kept for stored JSON compatibility.
+    let creators: [String]
+
+    /// Deprecated — kept for stored JSON compatibility.
+    let signals: [String]
+
+    /// Deprecated — kept for stored JSON compatibility.
+    let sessionToneSummary: SessionToneSummary?
 
     /// Transcript text for session-complete card (excerpt or digest prefix).
     var sessionTranscriptForDisplay: String? {
@@ -40,34 +47,48 @@ struct PipelineResult {
     /// Kept for older call sites; prefer `screens`.
     var timelineItems: [ScreenBreakdownItem] { screens }
 
+    /// Dominant category from breakdown percentages (fixes legacy first-frame category).
+    var dominantCategoryDisplay: String {
+        if let label = categoryBreakdown.dominantDisplayLabel {
+            return label
+        }
+        return category
+    }
+
     init(from result: SessionAnalysisResult) {
-        self.category = result.dominantCategory.name
+        self.categoryBreakdown = result.categoryBreakdown
+        self.category = result.categoryBreakdown.dominantDisplayLabel
+            ?? result.dominantCategory.name
         self.summary = result.aiProseSummary
         self.creators = result.topCreatorsSeen
         self.signals = result.concernSignals.map { "[\($0.severity)] \($0.title): \($0.description)" }
         let starters = result.guidance.conversationStarters
         self.conversationStarters = Array(starters.prefix(3))
         self.offlineActivity = result.guidance.offlineActivity
-        self.categoryBreakdown = result.categoryBreakdown
         self.sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         self.sessionTranscriptDigest = result.sessionTranscriptDigest
+        self.sessionTranscriptBriefSummary = result.sessionTranscriptBriefSummary
         self.sessionToneSummary = result.sessionToneSummary
         self.screens = result.timeline.map { ScreenBreakdownItem(frame: $0) }
     }
 
     init(stored: StoredPipelineResult) {
-        category = stored.category
+        categoryBreakdown = stored.resolvedCategoryBreakdown
+        category = categoryBreakdown.dominantDisplayLabel ?? stored.category
         summary = stored.summary
         creators = stored.creators
         signals = stored.signals
         conversationStarters = stored.resolvedConversationStarters
         offlineActivity = stored.offlineActivity
-        categoryBreakdown = stored.resolvedCategoryBreakdown
         sessionTranscriptExcerpt = stored.sessionTranscriptExcerpt
         sessionTranscriptDigest = stored.sessionTranscriptDigest
             ?? TranscriptDigestBuilder.buildDigest(from: stored.screens)
+        sessionTranscriptBriefSummary = stored.sessionTranscriptBriefSummary
+            ?? TranscriptDigestBuilder.buildBriefSummary(
+                fullTrackText: nil,
+                digest: sessionTranscriptDigest
+            )
         sessionToneSummary = stored.sessionToneSummary
-            ?? SessionToneSummarizer.summarize(screens: stored.screens)
         screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
     }
 }
@@ -79,6 +100,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
     let timestampSeconds: TimeInterval
     let categoryLabel: String
     let contentSummary: String?
+    let videoMatchedPrompt: String?
+    let matchedPrompt: String?
     let creatorHandle: String?
     let confidence: Float?
     let thumbnail: UIImage?
@@ -93,6 +116,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         timestampLabel = Self.formatTimestamp(frame.timestamp)
         categoryLabel = frame.label
         contentSummary = frame.contentSummary
+        videoMatchedPrompt = frame.videoMatchedPrompt
+        matchedPrompt = frame.matchedPrompt
         creatorHandle = frame.creatorHandle
         confidence = frame.probability
         thumbnail = frame.thumbnail
@@ -108,6 +133,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         timestampSeconds = stored.timestampSeconds
         categoryLabel = stored.categoryLabel
         contentSummary = stored.contentSummary
+        videoMatchedPrompt = stored.videoMatchedPrompt
+        matchedPrompt = stored.matchedPrompt
         creatorHandle = stored.creatorHandle
         confidence = stored.confidence
         thumbnail = nil
@@ -123,6 +150,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         timestampSeconds: TimeInterval,
         categoryLabel: String,
         contentSummary: String?,
+        videoMatchedPrompt: String? = nil,
+        matchedPrompt: String? = nil,
         creatorHandle: String?,
         confidence: Float?,
         thumbnail: UIImage?,
@@ -136,6 +165,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         self.timestampSeconds = timestampSeconds
         self.categoryLabel = categoryLabel
         self.contentSummary = contentSummary
+        self.videoMatchedPrompt = videoMatchedPrompt
+        self.matchedPrompt = matchedPrompt
         self.creatorHandle = creatorHandle
         self.confidence = confidence
         self.thumbnail = thumbnail
@@ -154,18 +185,8 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
         TranscriptSanitizer.meaningfulForStorage(audioTranscript ?? "")
     }
 
-    var isSilentOrUnreadableTone: Bool {
-        AudioToneLabels.isSilentDescription(audioTone ?? "")
-    }
-
     var hasAudioDetails: Bool {
-        if meaningfulAudioTranscript != nil { return true }
-        if let label = audioLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
-            return true
-        }
-        let tone = audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !tone.isEmpty else { return false }
-        return !isSilentOrUnreadableTone
+        meaningfulAudioTranscript != nil
     }
 
     var hasScreenshots: Bool {
@@ -192,14 +213,15 @@ extension PipelineResult {
     init(
         category: String,
         summary: String,
-        creators: [String],
-        signals: [String],
+        creators: [String] = [],
+        signals: [String] = [],
         conversationStarter: String,
         offlineActivity: String,
         categoryBreakdown: UsageCategoryBreakdown = .empty,
         screens: [ScreenBreakdownItem],
         sessionTranscriptExcerpt: String? = nil,
         sessionTranscriptDigest: String? = nil,
+        sessionTranscriptBriefSummary: String? = nil,
         sessionToneSummary: SessionToneSummary? = nil
     ) {
         self.category = category
@@ -211,6 +233,7 @@ extension PipelineResult {
         self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
         self.sessionTranscriptDigest = sessionTranscriptDigest
+        self.sessionTranscriptBriefSummary = sessionTranscriptBriefSummary
         self.sessionToneSummary = sessionToneSummary
         self.screens = screens
     }
@@ -223,14 +246,16 @@ extension ScreenBreakdownItem {
             timestampLabel: "1:03",
             timestampSeconds: 63,
             categoryLabel: "Educational",
-            contentSummary: "Creator explains a science concept with on-screen captions.",
-            creatorHandle: "@ExampleCreator",
+            contentSummary: "Educational · Spoken: Today we're learning about plants.",
+            videoMatchedPrompt: "A tutorial video explaining science concepts",
+            matchedPrompt: nil,
+            creatorHandle: nil,
             confidence: 0.82,
             thumbnail: nil,
             bottomCropThumbnail: nil,
             audioTranscript: "Today we're learning about plants.",
-            audioTone: "Calm",
-            audioLabel: "Educational speech"
+            audioTone: nil,
+            audioLabel: nil
         )
     }
 

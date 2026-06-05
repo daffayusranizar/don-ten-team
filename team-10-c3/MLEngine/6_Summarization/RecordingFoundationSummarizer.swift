@@ -43,8 +43,8 @@ public actor LLMSummarizer {
                 You are a parental monitoring assistant analyzing a screen recording session for a \(child.currentAge)-year-old named \(child.name).
                 Summarize the activity clearly and objectively for a parent.
                 Use the child's name (\(child.name)) in the summary to make it personalized.
-                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
-                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
+                Highlight the main apps used and the general themes of the content watched (e.g., educational, gaming, entertainment).
+                If session statistics (like duration and percentages) are provided, incorporate them naturally into the summary.
                 Use only the provided segment notes and session insights. Do not invent details.
                 Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
                 """
@@ -52,8 +52,8 @@ public actor LLMSummarizer {
             return """
                 You are a parental monitoring assistant analyzing a child's screen recording session.
                 Summarize the activity clearly and objectively for a parent. 
-                Highlight the main apps used, the general themes of the content watched (e.g., educational, gaming, entertainment), and any specific creators or channels.
-                If session statistics (like duration, percentages, and creators' watch time) are provided, incorporate them naturally into the summary.
+                Highlight the main apps used and the general themes of the content watched (e.g., educational, gaming, entertainment).
+                If session statistics (like duration and percentages) are provided, incorporate them naturally into the summary.
                 Use only the provided segment notes and session insights. Do not invent details.
                 Write clear, factual prose in 2-4 sentences for a full recording, or 1 sentence for a chunk of segments.
                 """
@@ -97,9 +97,8 @@ public actor LLMSummarizer {
         let prompt = """
         Write one daily overview for a parent based on today's data below.
         Use 2-4 clear sentences. Mention total screen time and the main content themes (educational, entertainment, commercial).
-        When spoken content is provided, ground the overview in those excerpts alongside each session AI summary.
-        If how-it-sounded notes are provided, mention audio patterns only when supported by the data.
-        If concern signals are listed, note them briefly. Use only the facts provided — do not invent apps, creators, dialogue, or durations.
+        When spoken content summaries are provided, ground the overview in those brief notes alongside each session AI summary.
+        Use only the facts provided — do not invent apps, dialogue, or durations.
 
         \(input.promptBody())
         """
@@ -113,6 +112,7 @@ public actor LLMSummarizer {
     public func summarizeRecording(
         timeline: [FrameClassificationSummary],
         overallCategory: String?,
+        transcriptBrief: String? = nil,
         child: Child? = nil
     ) async throws -> String {
         guard #available(iOS 26, *) else {
@@ -137,6 +137,7 @@ public actor LLMSummarizer {
                 chunk,
                 overallCategory: overallCategory,
                 statsString: statsString,
+                transcriptBrief: transcriptBrief,
                 isFinalPass: chunks.count == 1,
                 child: child
             )
@@ -167,21 +168,28 @@ public actor LLMSummarizer {
         _ lines: [String],
         overallCategory: String?,
         statsString: String,
+        transcriptBrief: String?,
         isFinalPass: Bool,
         child: Child?
     ) async throws -> String {
         let categoryLine = overallCategory.map { "Overall classification: \($0)\n" } ?? ""
         let statsLine = isFinalPass ? "\n\(statsString)\n" : ""
+        let transcriptLine: String
+        if let transcriptBrief, TranscriptSanitizer.isMeaningful(transcriptBrief) {
+            transcriptLine = "Spoken content summary: \(transcriptBrief)\n"
+        } else {
+            transcriptLine = ""
+        }
         let prompt: String
         if isFinalPass {
             prompt = """
-            \(categoryLine)\(statsLine)Summarize what the user watched in this screen recording based on these time-stamped segment notes and statistics. Make sure to naturally mention the duration, percentages, and creators:
+            \(categoryLine)\(statsLine)\(transcriptLine)Summarize what the user watched in this screen recording based on these time-stamped segment notes and statistics. Naturally mention duration and category percentages when available:
 
             \(lines.joined(separator: "\n"))
             """
         } else {
             prompt = """
-            \(categoryLine)Summarize this portion of a screen recording in 1-2 sentences:
+            \(categoryLine)\(transcriptLine)Summarize this portion of a screen recording in 1-2 sentences:
 
             \(lines.joined(separator: "\n"))
             """
@@ -234,13 +242,9 @@ public actor LLMSummarizer {
         let durationString = String(format: "%d:%02d", minutes, seconds)
         
         var categoryCounts: [String: Int] = [:]
-        var creatorCounts: [String: Int] = [:]
         
         for item in timeline {
             categoryCounts[item.label, default: 0] += 1
-            if let creator = item.creatorHandle {
-                creatorCounts[creator, default: 0] += 1
-            }
         }
         
         var statsString = "Session Statistics:\n"
@@ -255,18 +259,6 @@ public actor LLMSummarizer {
             let secs = Int(duration) % 60
             let timeStr = mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
             statsString += "  * \(category): \(String(format: "%.0f", percentage))% (\(timeStr))\n"
-        }
-        
-        if !creatorCounts.isEmpty {
-            let sortedCreators = creatorCounts.sorted { $0.value > $1.value }
-            statsString += "- Creators watched:\n"
-            for (creator, count) in sortedCreators {
-                let duration = Double(count) * interval
-                let mins = Int(duration) / 60
-                let secs = Int(duration) % 60
-                let timeStr = mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
-                statsString += "  * \(creator): \(timeStr)\n"
-            }
         }
         
         return statsString

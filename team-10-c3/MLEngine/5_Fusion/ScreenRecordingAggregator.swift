@@ -120,7 +120,7 @@ public actor ScreenRecordingAggregator {
         if MobileCLIPClassifier.isInstructionalTranscript(trimmed) {
             return (0.25, 0.75)
         }
-        if MobileCLIPClassifier.toneSuggestsMusic(audioTone ?? "") || trimmed.split(whereSeparator: \.isWhitespace).count < 8 {
+        if trimmed.split(whereSeparator: \.isWhitespace).count < 8 {
             return (0.62, 0.38)
         }
         return (videoWeight, audioWeight)
@@ -138,8 +138,7 @@ public actor ScreenRecordingAggregator {
             videoMatchedPrompt: String?,
             audioMatchedPrompt: String?,
             contentSummary: String?,
-            creatorHandle: String?,
-            isDuplicate: Bool
+            creatorHandle: String?
         )],
         fps: Float,
         intervalSeconds: Int = 3
@@ -201,16 +200,8 @@ public actor ScreenRecordingAggregator {
                 contentSummary: ScreenContentSummaryBuilder.mergeSegmentSummaries(
                     bucket.compactMap(\.contentSummary)
                 ),
-                creatorHandle: preferredCreatorHandle(in: bucket)
+                creatorHandle: nil
             )
         }
-    }
-
-    private func preferredCreatorHandle(in bucket: [FrameClassificationSummary]) -> String? {
-        let handles = bucket.compactMap(\.creatorHandle)
-        guard !handles.isEmpty else { return nil }
-
-        let counts = Dictionary(handles.map { ($0, 1) }, uniquingKeysWith: +)
-        return counts.max { $0.value < $1.value }?.key
     }
 }
