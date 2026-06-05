@@ -15,7 +15,10 @@ struct SessionAnalysisHistoryItem: Identifiable {
     let sessionId: UUID
     let childId: UUID
     let analyzedAt: Date
-    let cacheEntry: SessionAnalysisCacheEntry
+    let summaryPreview: String?
+    let dominantCategory: String?
+    let screenCount: Int
+    let errorMessage: String?
 
     var id: UUID { sessionId }
 }
@@ -72,14 +75,18 @@ final class SessionAnalysisStore {
                 sessionId: sessionId,
                 childId: childId,
                 status: .completed,
-                payloadJSON: String(data: data, encoding: .utf8)
+                payloadJSON: String(data: data, encoding: .utf8),
+                summaryPreview: result.summary,
+                dominantCategory: result.dominantCategoryDisplay,
+                screenCount: result.screens.count
             )
         } else {
             record = SessionAnalysisRecord(
                 sessionId: sessionId,
                 childId: childId,
                 status: .failed,
-                errorMessage: errorMessage
+                errorMessage: errorMessage,
+                screenCount: 0
             )
         }
         modelContext.insert(record)
@@ -88,13 +95,15 @@ final class SessionAnalysisStore {
 
     func loadResults(sessionIds: [UUID]) -> [UUID: PipelineResult] {
         guard !sessionIds.isEmpty else { return [:] }
-
         let idSet = Set(sessionIds)
-        let descriptor = FetchDescriptor<SessionAnalysisRecord>()
+        let ids = Array(idSet)
+        let descriptor = FetchDescriptor<SessionAnalysisRecord>(
+            predicate: #Predicate { ids.contains($0.sessionId) }
+        )
         guard let records = try? modelContext.fetch(descriptor) else { return [:] }
 
         var results: [UUID: PipelineResult] = [:]
-        for record in records where idSet.contains(record.sessionId) {
+        for record in records {
             guard record.status == .completed,
                   let payloadJSON = record.payloadJSON,
                   let data = payloadJSON.data(using: .utf8),
@@ -103,6 +112,8 @@ final class SessionAnalysisStore {
             }
             results[record.sessionId] = PipelineResult(stored: stored)
         }
+        print("⏱️ SessionAnalysisStore.loadResults " +
+              "requested=\(idSet.count) fetched=\(records.count) decoded=\(results.count)")
         return results
     }
 
@@ -122,15 +133,50 @@ final class SessionAnalysisStore {
                 guard let month else { return true }
                 return formatter.string(from: record.analyzedAt) == month
             }
-            .compactMap { record in
-                guard let cacheEntry = cacheEntry(from: record) else { return nil }
-                return SessionAnalysisHistoryItem(
-                    sessionId: record.sessionId,
-                    childId: record.childId,
-                    analyzedAt: record.analyzedAt,
-                    cacheEntry: cacheEntry
-                )
+            .compactMap(buildHistoryItem(from:))
+    }
+
+    func loadResult(sessionId: UUID) -> PipelineResult? {
+        guard let entry = load(sessionId: sessionId) else { return nil }
+        return entry.result
+    }
+
+    func dailyInsightCache(childId: UUID, dayKey: String, sessionSignature: String) -> String? {
+        var descriptor = FetchDescriptor<DailyInsightCacheRecord>(
+            predicate: #Predicate {
+                $0.childId == childId && $0.dayKey == dayKey && $0.sessionSignature == sessionSignature
             }
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first?.summary
+    }
+
+    func saveDailyInsightCache(
+        childId: UUID,
+        dayKey: String,
+        sessionSignature: String,
+        summary: String
+    ) {
+        var descriptor = FetchDescriptor<DailyInsightCacheRecord>(
+            predicate: #Predicate {
+                $0.childId == childId && $0.dayKey == dayKey && $0.sessionSignature == sessionSignature
+            }
+        )
+        descriptor.fetchLimit = 1
+        let existing = try? modelContext.fetch(descriptor).first
+        if let existing {
+            existing.summary = summary
+            existing.builtAt = Date()
+        } else {
+            let record = DailyInsightCacheRecord(
+                childId: childId,
+                dayKey: dayKey,
+                sessionSignature: sessionSignature,
+                summary: summary
+            )
+            modelContext.insert(record)
+        }
+        try? modelContext.save()
     }
 
     private func fetchRecords(for childId: UUID) -> [SessionAnalysisRecord] {
@@ -145,9 +191,7 @@ final class SessionAnalysisStore {
     private func cacheEntry(from record: SessionAnalysisRecord) -> SessionAnalysisCacheEntry? {
         switch record.status {
         case .completed:
-            guard let payloadJSON = record.payloadJSON,
-                  let data = payloadJSON.data(using: .utf8),
-                  let stored = try? JSONDecoder().decode(StoredPipelineResult.self, from: data) else {
+            guard let stored = decodeStoredPipelineResult(from: record) else {
                 return nil
             }
             return SessionAnalysisCacheEntry(
@@ -168,5 +212,50 @@ final class SessionAnalysisStore {
         )
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
+    }
+
+    private func decodeStoredPipelineResult(from record: SessionAnalysisRecord) -> StoredPipelineResult? {
+        guard let payloadJSON = record.payloadJSON,
+              let data = payloadJSON.data(using: .utf8),
+              let stored = try? JSONDecoder().decode(StoredPipelineResult.self, from: data) else {
+            return nil
+        }
+        return stored
+    }
+
+    private func buildHistoryItem(from record: SessionAnalysisRecord) -> SessionAnalysisHistoryItem? {
+        switch record.status {
+        case .failed:
+            return SessionAnalysisHistoryItem(
+                sessionId: record.sessionId,
+                childId: record.childId,
+                analyzedAt: record.analyzedAt,
+                summaryPreview: nil,
+                dominantCategory: nil,
+                screenCount: 0,
+                errorMessage: record.errorMessage ?? "Analysis failed."
+            )
+        case .completed:
+            var summary = record.summaryPreview
+            var category = record.dominantCategory
+            var count = record.screenCount
+
+            if summary == nil || category == nil || count == 0,
+               let stored = decodeStoredPipelineResult(from: record) {
+                summary = summary ?? stored.summary
+                category = category ?? (stored.resolvedCategoryBreakdown.dominantDisplayLabel ?? stored.category)
+                count = max(count, stored.screens.count)
+            }
+
+            return SessionAnalysisHistoryItem(
+                sessionId: record.sessionId,
+                childId: record.childId,
+                analyzedAt: record.analyzedAt,
+                summaryPreview: summary,
+                dominantCategory: category,
+                screenCount: count,
+                errorMessage: nil
+            )
+        }
     }
 }

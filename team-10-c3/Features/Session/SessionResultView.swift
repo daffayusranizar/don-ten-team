@@ -198,14 +198,6 @@ struct SessionResultCard: View {
 
 // MARK: - Preview
 
-#Preview("With breakdown") {
-    NavigationStack {
-        SessionResultView(onStartNew: {})
-            .environment(\.kidSessionViewModel, SessionResultView_Previews.viewModel)
-    }
-}
-
-#if DEBUG
 private enum SessionResultView_Previews {
     @MainActor static var viewModel: KidSessionViewModel {
         let coordinator = SessionCoordinator(
@@ -213,21 +205,14 @@ private enum SessionResultView_Previews {
             screenTimeService: ScreenTimeService(),
             familyControlsAuth: PreviewFamilyControlsAuthService()
         )
-        let vm = KidSessionViewModel(sessionCoordinator: coordinator)
-        let id = UUID()
-        vm.configureForPreview(
-            sessionId: id,
-            result: PipelineResult(
-                category: "Educational",
-                summary: "Mostly learning content.",
-                creators: ["@Example"],
-                signals: [],
-                conversationStarter: "What did you learn?",
-                offlineActivity: "Draw what you learned.",
-                screens: [.preview]
-            )
-        )
-        return vm
+        return KidSessionViewModel(sessionCoordinator: coordinator)
     }
 }
-#endif
+
+#Preview("With breakdown") {
+    NavigationStack {
+        SessionResultView(onStartNew: {})
+            .environment(\.kidSessionViewModel, SessionResultView_Previews.viewModel)
+    }
+}
+

@@ -99,14 +99,10 @@ public struct ConcernSignal: Sendable {
 
 /// Actionable advice given to the parent.
 public struct GuidanceSuggestion: Sendable {
-    /// Questions a parent can ask the child (e.g., "What was your favorite part of that Minecraft video?")
-    public let conversationStarters: [String]
-    
     /// A suggested real-world activity to transition them off the screen.
     public let offlineActivity: String
     
-    public init(conversationStarters: [String], offlineActivity: String) {
-        self.conversationStarters = conversationStarters
+    public init(offlineActivity: String) {
         self.offlineActivity = offlineActivity
     }
 }
@@ -122,11 +118,6 @@ extension SessionAnalysisResult {
 
         let breakdown = categoryBreakdown.items
             .map { "\($0.name): \($0.percentage)% (\($0.frameCount) frames)" }
-            .joined(separator: "\n  ")
-
-        let starters = guidance.conversationStarters
-            .enumerated()
-            .map { "\($0.offset + 1). \($0.element)" }
             .joined(separator: "\n  ")
 
         let timelinePreview = timeline.prefix(maxTimelineRows).map { frame in
@@ -150,8 +141,6 @@ extension SessionAnalysisResult {
         \(aiProseSummary)
 
         Guidance:
-          Conversation starters:
-          \(starters.isEmpty ? "(none)" : starters)
           Offline activity: \(guidance.offlineActivity)
 
         Transcript excerpt: \(sessionTranscriptExcerpt.map { truncate($0, max: maxTranscriptChars) } ?? "(none)")

@@ -25,15 +25,18 @@ public enum WhisperTranscriberError: LocalizedError {
 /// Converted to an actor for safe background thread execution.
 public actor ScreenRecordingWhisperTranscriber {
     private let sharedModelName = "base"
+    nonisolated private static let transcriptionLanguage = "id"
     private let whisperKit: WhisperKit
     private let windowDecodeOptions = DecodingOptions(
         task: .transcribe,
+        language: ScreenRecordingWhisperTranscriber.transcriptionLanguage,
         skipSpecialTokens: true,
         withoutTimestamps: true
     )
 
     private let fullTrackDecodeOptions = DecodingOptions(
         task: .transcribe,
+        language: ScreenRecordingWhisperTranscriber.transcriptionLanguage,
         skipSpecialTokens: true,
         withoutTimestamps: false
     )

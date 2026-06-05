@@ -78,11 +78,6 @@ struct MainViewTest: View {
 
                         // Guidance
                         ResultCard(
-                            icon: "💡",
-                            title: "Conversation Starter",
-                            value: result.conversationStarter
-                        )
-                        ResultCard(
                             icon: "🌿",
                             title: "Offline Activity",
                             value: result.offlineActivity
@@ -123,7 +118,6 @@ struct MainViewTest: View {
                         === AI Result ===
                         Category: \(result.category)
                         AI Summary: \(result.summary)
-                        Conversation Starter: \(result.conversationStarter)
                         Offline Activity: \(result.offlineActivity)
                         """)
                     }

@@ -6,18 +6,7 @@ import Vision
 /// Extracts on-screen text from recording frames using Vision OCR.
 public enum ScreenTextRecognizer {
     public static func recognizeText(in pixelBuffer: CVPixelBuffer) async -> String? {
-        var parts: [String] = []
-
-        if let full = await recognizeText(in: pixelBuffer, recognitionLevel: .accurate) {
-            parts.append(full)
-        }
-
-        if let overlayBuffer = ImagePreprocessor.overlayCrop(from: pixelBuffer),
-           let overlay = await recognizeText(in: overlayBuffer, recognitionLevel: .fast) {
-            parts.append(overlay)
-        }
-
-        return mergedUnique(parts)
+        await recognizeText(in: pixelBuffer, recognitionLevel: .accurate)
     }
 
     public static func recognizeText(in image: UIImage) async -> String? {

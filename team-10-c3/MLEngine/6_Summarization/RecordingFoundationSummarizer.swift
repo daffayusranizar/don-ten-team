@@ -239,6 +239,7 @@ public actor LLMSummarizer {
         timeline: [FrameClassificationSummary],
         overallCategory: String?,
         transcriptBrief: String? = nil,
+        transcriptEvidence: String? = nil,
         child: Child? = nil
     ) async throws -> String {
         guard #available(iOS 26, *) else {
@@ -264,6 +265,7 @@ public actor LLMSummarizer {
                 overallCategory: overallCategory,
                 statsString: statsString,
                 transcriptBrief: transcriptBrief,
+                transcriptEvidence: transcriptEvidence,
                 isFinalPass: chunks.count == 1,
                 child: child
             )
@@ -276,10 +278,15 @@ public actor LLMSummarizer {
             throw SummarizerError.emptyInput
         }
 
+        if chunks.count == 1, let only = chunkSummaries.first {
+            return sanitizeDailyReport(only)
+        }
+
         let sessionMetadata = sessionMetadataPrompt(
             statsString: statsString,
             overallCategory: overallCategory,
-            transcriptBrief: transcriptBrief
+            transcriptBrief: transcriptBrief,
+            transcriptEvidence: transcriptEvidence
         )
 
         let mergePrompt = """
@@ -343,6 +350,7 @@ public actor LLMSummarizer {
         overallCategory: String?,
         statsString: String,
         transcriptBrief: String?,
+        transcriptEvidence: String?,
         isFinalPass: Bool,
         child: Child?
     ) async throws -> String {
@@ -354,10 +362,16 @@ public actor LLMSummarizer {
         } else {
             transcriptLine = ""
         }
+        let transcriptEvidenceLine: String
+        if let transcriptEvidence, TranscriptSanitizer.isMeaningful(transcriptEvidence) {
+            transcriptEvidenceLine = "Transcript evidence:\n\(transcriptEvidence)\n"
+        } else {
+            transcriptEvidenceLine = ""
+        }
         let prompt: String
         if isFinalPass {
             prompt = """
-            \(categoryLine)\(statsLine)\(transcriptLine)
+            \(categoryLine)\(statsLine)\(transcriptLine)\(transcriptEvidenceLine)
             Extract concise evidence bullets from this recording for a later parent-facing report.
             Keep only observations that identify repeated topics, repeated messages, attention signals, and evidence-based concerns.
             Use up to 8 bullet points.
@@ -371,7 +385,7 @@ public actor LLMSummarizer {
             """
         } else {
             prompt = """
-            \(categoryLine)\(transcriptLine)
+            \(categoryLine)\(transcriptLine)\(transcriptEvidenceLine)
             Extract concise evidence bullets from this recording chunk for a later parent-facing report.
             Keep only observations that identify repeated topics, repeated messages, attention signals, and evidence-based concerns.
             Use up to 6 bullet points.
@@ -469,7 +483,8 @@ public actor LLMSummarizer {
     private func sessionMetadataPrompt(
         statsString: String,
         overallCategory: String?,
-        transcriptBrief: String?
+        transcriptBrief: String?,
+        transcriptEvidence: String?
     ) -> String {
         var lines: [String] = []
         if !statsString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -483,6 +498,12 @@ public actor LLMSummarizer {
             let trimmed = transcriptBrief.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
                 lines.append("Spoken content summary: \(trimmed)")
+            }
+        }
+        if let transcriptEvidence {
+            let trimmed = transcriptEvidence.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                lines.append("Transcript evidence:\n\(trimmed)")
             }
         }
         return lines.joined(separator: "\n")

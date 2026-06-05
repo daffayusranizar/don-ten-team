@@ -14,7 +14,6 @@ struct UsageInsightReport: Equatable {
     let offlineActivity: String
     let needsAttention: Bool
     let weeklySuggestion: String?
-    let conversationStarters: [String]
 }
 
 struct UsageChartItem: Identifiable, Equatable {
@@ -51,27 +50,33 @@ struct UsageInsightService {
         var totalSeconds = 0
         var mergedBreakdown = UsageCategoryBreakdown.empty
         var sessionResults: [(session: CompletedSessionReference, result: PipelineResult)] = []
-        var conversationStarters: [String] = []
         var latestOfflineActivity = "Let's take a 15-minute screen break together."
         var todaySnapshots: [SessionUsageSnapshot] = []
         var todaySessions: [CompletedSessionReference] = []
+        var sessionsByDay: [(day: Date, sessions: [CompletedSessionReference], snapshots: [SessionUsageSnapshot])] = []
 
         for day in days {
             let sessions = try sessionRepository.completedSessions(for: childId, day: day)
             let snapshots = try sessionRepository.snapshots(for: childId, on: day)
+            sessionsByDay.append((day: day, sessions: sessions, snapshots: snapshots))
             totalSeconds += snapshots.map(\.totalSeconds).reduce(0, +)
 
             if period == .daily, calendar.isDate(day, inSameDayAs: referenceDate) {
                 todaySnapshots = snapshots
                 todaySessions = sessions
             }
+        }
 
-            let resultsById = sessionAnalysisStore.loadResults(sessionIds: sessions.map(\.sessionId))
-            for session in sessions {
+        let allSessionIds = sessionsByDay
+            .flatMap(\.sessions)
+            .map(\.sessionId)
+        let resultsById = sessionAnalysisStore.loadResults(sessionIds: allSessionIds)
+
+        for dayData in sessionsByDay {
+            for session in dayData.sessions {
                 guard let result = resultsById[session.sessionId] else { continue }
                 sessionResults.append((session, result))
                 mergedBreakdown = mergedBreakdown.merged(with: result.categoryBreakdown)
-                conversationStarters.append(contentsOf: result.conversationStarters)
             }
         }
 
@@ -116,7 +121,7 @@ struct UsageInsightService {
                 totalSeconds: totalSeconds,
                 breakdown: mergedBreakdown
             )
-            weeklySuggestion = InsightProseBuilder.weeklySuggestion(from: conversationStarters)
+            weeklySuggestion = InsightProseBuilder.weeklySuggestion()
         }
 
         return UsageInsightReport(
@@ -126,8 +131,7 @@ struct UsageInsightService {
             offlineActivityTeaser: InsightProseBuilder.offlineActivityTeaser,
             offlineActivity: latestOfflineActivity,
             needsAttention: false,
-            weeklySuggestion: weeklySuggestion,
-            conversationStarters: Array(conversationStarters.prefix(3))
+            weeklySuggestion: weeklySuggestion
         )
     }
 
@@ -141,7 +145,18 @@ struct UsageInsightService {
         sessions: [CompletedSessionReference],
         childId: UUID
     ) async -> String {
+        let startedAt = ContinuousClock.now
+        var lastCheckpoint = startedAt
+        func logTiming(_ label: String) {
+            let now = ContinuousClock.now
+            let delta = lastCheckpoint.duration(to: now)
+            let total = startedAt.duration(to: now)
+            print("⏱️ Daily insight timing: \(label) +\(delta) total \(total)")
+            lastCheckpoint = now
+        }
+
         let topApps = await fetchTopApps(childId: childId, sessions: sessions, snapshots: snapshots)
+        logTiming("fetchTopApps")
 
         let input = DailyInsightInput.make(
             child: child,
@@ -153,26 +168,48 @@ struct UsageInsightService {
             snapshots: snapshots,
             topApps: topApps
         )
+        logTiming("buildDailyInput")
         #if DEBUG
         input.logToXcodeConsole()
         #endif
 
+        let dayKey = Self.dayCacheKey(from: sessions, fallbackLabel: dayLabel)
+        let sessionSignature = Self.sessionSignature(from: sessionResults)
+        if let cached = sessionAnalysisStore.dailyInsightCache(
+            childId: childId,
+            dayKey: dayKey,
+            sessionSignature: sessionSignature
+        ) {
+            logTiming("dailyCacheHit")
+            return cached
+        }
+
         let summarizer = LLMSummarizer()
         do {
             let summary = try await summarizer.summarizeDailyInsight(input: input)
+            logTiming("dailyLLM")
             if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sessionAnalysisStore.saveDailyInsightCache(
+                    childId: childId,
+                    dayKey: dayKey,
+                    sessionSignature: sessionSignature,
+                    summary: summary
+                )
+                logTiming("saveDailyCache")
                 return summary
             }
         } catch {
             // Fall through to template summary.
         }
 
-        return InsightProseBuilder.dailySummary(
+        let fallback = InsightProseBuilder.dailySummary(
             childName: child?.name,
             totalSeconds: totalSeconds,
             breakdown: mergedBreakdown,
             sessions: input.sessions
         )
+        logTiming("fallbackSummary")
+        return fallback
     }
 
     private func fetchTopApps(
@@ -253,5 +290,24 @@ struct UsageInsightService {
                 color: category.color
             )
         }
+    }
+
+    private static func dayCacheKey(from sessions: [CompletedSessionReference], fallbackLabel: String) -> String {
+        guard let latest = sessions.max(by: { $0.stopAt < $1.stopAt }) else {
+            return fallbackLabel
+        }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: latest.stopAt)
+    }
+
+    private static func sessionSignature(
+        from sessionResults: [(session: CompletedSessionReference, result: PipelineResult)]
+    ) -> String {
+        sessionResults
+            .map { "\($0.session.sessionId.uuidString):\($0.session.stopAt.timeIntervalSince1970)" }
+            .sorted()
+            .joined(separator: "|")
     }
 }

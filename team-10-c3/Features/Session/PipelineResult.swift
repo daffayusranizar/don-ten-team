@@ -10,7 +10,6 @@ import UIKit
 struct PipelineResult {
     let category: String
     let summary: String
-    let conversationStarters: [String]
     let offlineActivity: String
     let categoryBreakdown: UsageCategoryBreakdown
     let sessionTranscriptExcerpt: String?
@@ -39,11 +38,6 @@ struct PipelineResult {
             )
     }
 
-    /// First starter for older call sites.
-    var conversationStarter: String {
-        conversationStarters.first ?? "—"
-    }
-
     /// Kept for older call sites; prefer `screens`.
     var timelineItems: [ScreenBreakdownItem] { screens }
 
@@ -62,8 +56,6 @@ struct PipelineResult {
         self.summary = result.aiProseSummary
         self.creators = result.topCreatorsSeen
         self.signals = result.concernSignals.map { "[\($0.severity)] \($0.title): \($0.description)" }
-        let starters = result.guidance.conversationStarters
-        self.conversationStarters = Array(starters.prefix(3))
         self.offlineActivity = result.guidance.offlineActivity
         self.sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         self.sessionTranscriptDigest = result.sessionTranscriptDigest
@@ -78,7 +70,6 @@ struct PipelineResult {
         summary = stored.summary
         creators = stored.creators
         signals = stored.signals
-        conversationStarters = stored.resolvedConversationStarters
         offlineActivity = stored.offlineActivity
         sessionTranscriptExcerpt = stored.sessionTranscriptExcerpt
         sessionTranscriptDigest = stored.sessionTranscriptDigest
@@ -88,7 +79,7 @@ struct PipelineResult {
                 fullTrackText: nil,
                 digest: sessionTranscriptDigest
             )
-        sessionToneSummary = stored.sessionToneSummary
+        sessionToneSummary = nil
         screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
     }
 }
@@ -233,14 +224,12 @@ struct ScreenBreakdownItem: Identifiable, Hashable {
     }
 }
 
-#if DEBUG
 extension PipelineResult {
     init(
         category: String,
         summary: String,
         creators: [String] = [],
         signals: [String] = [],
-        conversationStarter: String,
         offlineActivity: String,
         categoryBreakdown: UsageCategoryBreakdown = .empty,
         screens: [ScreenBreakdownItem],
@@ -253,7 +242,6 @@ extension PipelineResult {
         self.summary = summary
         self.creators = creators
         self.signals = signals
-        self.conversationStarters = [conversationStarter]
         self.offlineActivity = offlineActivity
         self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
@@ -285,4 +273,3 @@ extension ScreenBreakdownItem {
     }
 
 }
-#endif

@@ -4,7 +4,22 @@ import UIKit
 
 public actor PipelineOrchestrator {
     public init() {}
-    
+
+    private typealias RawFrameType = (
+        timestamp: TimeInterval,
+        matches: [ClassificationMatch],
+        thumbnail: UIImage?,
+        bottomCropThumbnail: UIImage?,
+        audioTranscript: String?,
+        audioTone: String?,
+        audioLabel: String?,
+        videoMatchedPrompt: String?,
+        audioMatchedPrompt: String?,
+        contentSummary: String?,
+        onScreenTranscript: String?,
+        creatorHandle: String?
+    )
+
     /// The main entry point for the UI team to call
     public func processSession(
         videoURL: URL,
@@ -16,6 +31,15 @@ public actor PipelineOrchestrator {
         func report(_ phase: SessionAnalysisProgress.Phase, _ fraction: Double, _ detail: String? = nil) {
             onProgress?(SessionAnalysisProgress(phase: phase, fraction: min(1, max(0, fraction)), detail: detail))
         }
+        let pipelineStartedAt = ContinuousClock.now
+        var lastCheckpoint = pipelineStartedAt
+        func logTiming(_ label: String) {
+            let now = ContinuousClock.now
+            let delta = lastCheckpoint.duration(to: now)
+            let total = pipelineStartedAt.duration(to: now)
+            print("⏱️ Analysis timing: \(label) +\(delta) total \(total)")
+            lastCheckpoint = now
+        }
 
         report(.preparingModels, 0.12, "Loading on-device models…")
         
@@ -24,94 +48,37 @@ public actor PipelineOrchestrator {
         let audioExtractor = ScreenRecordingAudioExtractor()
         let aggregator = ScreenRecordingAggregator()
         let summarizer = LLMSummarizer()
+        let audioTranscriptAnalyzer = AudioTranscriptAnalyzer(window: .defaultPhase2)
+        let visualTranscriptAnalyzer = VisualTranscriptAnalyzer(window: .defaultPhase2)
+        let transcriptFusionAnalyzer = TranscriptFusionAnalyzer()
         
         let clipClassifier = try await MobileCLIPClassifier()
         let whisper = try await ScreenRecordingWhisperTranscriber()
+        logTiming("model load")
 
         let metadata = try await frameExtractor.loadMetadata(from: videoURL)
         let estimatedFrameCount = max(1, metadata.estimatedFrameCount)
-        
-        report(.extractingAudio, 0.18, "Pulling audio from the recording…")
-        print("[\(Date().formatted(date: .omitted, time: .standard))] 🔊 Step 2: Extracting audio windows and full audio track...")
-        let audioSegments = try await audioExtractor.exportClassificationWindows(from: videoURL)
-        let fullAudioURL = try await audioExtractor.exportFullAudio(from: videoURL)
-        let hasAudioTrack = await audioExtractor.hasAudioTrack(in: videoURL)
+        logTiming("metadata load")
+
+        let windowDuration = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
+        report(.extractingAudio, 0.18, "Preparing audio transcription…")
+        print("[\(Date().formatted(date: .omitted, time: .standard))] 🔊 Step 2: Preparing audio pipeline...")
+        async let audioProcessing = audioTranscriptAnalyzer.analyze(
+            videoURL: videoURL,
+            duration: metadata.duration,
+            audioExtractor: audioExtractor,
+            whisper: whisper,
+            windowDuration: windowDuration
+        )
+        logTiming("audio task started")
 
         report(.transcribing, 0.35, "Listening with on-device speech recognition…")
-        print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing audio (\(audioSegments.count) windows, hasAudioTrack=\(hasAudioTrack))...")
-        let windowDuration = TimeInterval(BroadcastConstants.classificationIntervalSeconds)
-        let fullTranscripts: [SegmentedTranscript]
-        if let fullAudioURL {
-            fullTranscripts = try await whisper.transcribeFull(wavURL: fullAudioURL)
-        } else {
-            fullTranscripts = []
-        }
-        let hasFullTrack = !fullTranscripts.isEmpty
-
-        var audioResultsByBucket: [Int: String] = [:]
-
-        try await withThrowingTaskGroup(of: (Int, String).self) { group in
-            for segment in audioSegments {
-                group.addTask {
-                    let segmentStart = segment.timestamp
-                    let segmentEnd = segmentStart + windowDuration
-                    let bucket = Self.audioBucketKey(for: segmentStart, windowDuration: windowDuration)
-
-                    var matchedTexts = fullTranscripts.filter { entry in
-                        max(entry.start, segmentStart) < min(entry.end, segmentEnd)
-                    }.map(\.text)
-                    var rawTranscript = TranscriptSanitizer.sanitize(matchedTexts.joined(separator: " "))
-
-                    if !hasFullTrack,
-                       rawTranscript.isEmpty || !TranscriptSanitizer.isMeaningful(rawTranscript),
-                       let fallback = try? await whisper.transcribe(wavURL: segment.wavURL),
-                       !fallback.isEmpty {
-                        rawTranscript = fallback
-                    }
-
-                    let storedTranscript = TranscriptSanitizer.meaningfulForStorage(rawTranscript) ?? ""
-                    return (bucket, storedTranscript)
-                }
-            }
-
-            for try await item in group {
-                guard !item.1.isEmpty else { continue }
-                if let existing = audioResultsByBucket[item.0], existing.count >= item.1.count {
-                    continue
-                }
-                audioResultsByBucket[item.0] = item.1
-            }
-        }
-
-        let windowsWithTranscript = audioResultsByBucket.count
-        print(
-            "[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Audio: \(windowsWithTranscript)/\(audioSegments.count) windows with transcript, full segments=\(fullTranscripts.count)"
-        )
-
-        let sessionTranscriptExcerpt = Self.sessionTranscriptExcerpt(
-            fullTranscripts: fullTranscripts,
-            audioResultsByBucket: audioResultsByBucket,
-            windowsWithTranscript: windowsWithTranscript
-        )
+        print("[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Step 3: Processing audio and video in parallel...")
         
         report(.analyzingScreens, 0.38, "Starting screen analysis…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🎞️ Step 4: Processing video frames in parallel batches...")
-        typealias RawFrameType = (
-            timestamp: TimeInterval,
-            matches: [ClassificationMatch],
-            thumbnail: UIImage?,
-            bottomCropThumbnail: UIImage?,
-            audioTranscript: String?,
-            audioTone: String?,
-            audioLabel: String?,
-            videoMatchedPrompt: String?,
-            audioMatchedPrompt: String?,
-            contentSummary: String?,
-            onScreenTranscript: String?,
-            creatorHandle: String?
-        )
-        
         var rawFrames: [RawFrameType] = []
+        var visualCandidates: [VisualTranscriptCandidate] = []
         var frameBatch: [ScreenRecordingFrame] = []
         
         @Sendable func processBatch(_ batch: [ScreenRecordingFrame]) async throws -> [RawFrameType] {
@@ -120,11 +87,6 @@ public actor PipelineOrchestrator {
                 for frame in batch {
                     group.addTask {
                         let timestamp = frame.timestamp
-                        let transcript = Self.resolvedTranscript(
-                            at: timestamp,
-                            from: audioResultsByBucket,
-                            windowDuration: windowDuration
-                        )
 
                         let clip = try await clipClassifier.classify(
                             pixelBuffer: frame.pixelBuffer,
@@ -134,13 +96,10 @@ public actor PipelineOrchestrator {
 
                         let frameImages = ImagePreprocessor.frameDisplayImages(from: frame.pixelBuffer)
                         let categoryLabel = clip.categories.first?.label
-                        let onScreenTranscript = await Self.recognizedOnScreenText(
-                            pixelBuffer: frame.pixelBuffer,
-                            bottomCrop: frameImages.bottomCropThumbnail
-                        )
+                        let onScreenTranscript = await ScreenTextRecognizer.recognizeText(in: frame.pixelBuffer)
                         let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
                             label: categoryLabel ?? "Unknown",
-                            transcript: transcript.isEmpty ? nil : transcript,
+                            transcript: nil,
                             onScreenTranscript: onScreenTranscript
                         )
                         
@@ -149,7 +108,7 @@ public actor PipelineOrchestrator {
                             matches: clip.categories,
                             thumbnail: frameImages.thumbnail,
                             bottomCropThumbnail: frameImages.bottomCropThumbnail,
-                            audioTranscript: transcript.isEmpty ? nil : transcript,
+                            audioTranscript: nil,
                             audioTone: nil,
                             audioLabel: nil,
                             videoMatchedPrompt: clip.prompts.first?.matchedPrompt,
@@ -196,6 +155,66 @@ public actor PipelineOrchestrator {
         }
         
         rawFrames.sort { $0.timestamp < $1.timestamp }
+        visualCandidates = rawFrames.map { frame in
+            let segmentKey = Self.audioBucketKey(for: frame.timestamp, windowDuration: windowDuration)
+            return VisualTranscriptCandidate(
+                segmentKey: segmentKey,
+                timestamp: frame.timestamp,
+                text: frame.onScreenTranscript ?? ""
+            )
+        }
+        logTiming("frame analysis")
+
+        let audioResult = try await audioProcessing
+        let visualResult = await visualTranscriptAnalyzer.analyze(
+            candidates: visualCandidates,
+            totalDuration: metadata.duration
+        )
+        logTiming("audio processing complete")
+        print(
+            "[\(Date().formatted(date: .omitted, time: .standard))] 🗣️ Audio: buckets=\(audioResult.bucketedTranscripts.count), fallback=\(audioResult.usedFallbackWindows), coverage=\(audioResult.coverage), hasAudioTrack=\(audioResult.hasAudioTrack), fullSegments=\(audioResult.fullTrackSegments.count)"
+        )
+        print(
+            "[\(Date().formatted(date: .omitted, time: .standard))] 👀 Visual: useful=\(visualResult.usefulSegmentCount), dropped=\(visualResult.lowSignalDropCount)"
+        )
+
+        rawFrames = rawFrames.map { frame in
+            let segmentKey = Self.audioBucketKey(for: frame.timestamp, windowDuration: windowDuration)
+            let transcript = Self.resolvedTranscript(
+                at: frame.timestamp,
+                from: audioResult.bucketedTranscripts,
+                windowDuration: windowDuration
+            )
+            let visualText = visualResult.segmentVisualText[segmentKey]
+            let categoryLabel = frame.matches.first?.label ?? "Unknown"
+            let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
+                label: categoryLabel,
+                transcript: transcript.isEmpty ? nil : transcript,
+                onScreenTranscript: visualText
+            )
+            return (
+                timestamp: frame.timestamp,
+                matches: frame.matches,
+                thumbnail: frame.thumbnail,
+                bottomCropThumbnail: frame.bottomCropThumbnail,
+                audioTranscript: transcript.isEmpty ? nil : transcript,
+                audioTone: frame.audioTone,
+                audioLabel: frame.audioLabel,
+                videoMatchedPrompt: frame.videoMatchedPrompt,
+                audioMatchedPrompt: frame.audioMatchedPrompt,
+                contentSummary: contentSummary,
+                onScreenTranscript: visualText,
+                creatorHandle: frame.creatorHandle
+            )
+        }
+        logTiming("attach transcripts")
+
+        let windowsWithTranscript = audioResult.bucketedTranscripts.count
+        let sessionTranscriptExcerpt = Self.sessionTranscriptExcerpt(
+            fullTranscripts: audioResult.fullTrackSegments,
+            audioResultsByBucket: audioResult.bucketedTranscripts,
+            windowsWithTranscript: windowsWithTranscript
+        )
         
         report(.generatingSummary, 0.82, "Grouping results by time…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ⏱️ Step 5: Aggregating timeline (Fusion)...")
@@ -204,19 +223,30 @@ public actor PipelineOrchestrator {
             fps: 1.0,
             intervalSeconds: BroadcastConstants.classificationIntervalSeconds
         )
-        timeline = await Self.timelineWithOnScreenBriefs(timeline: timeline, summarizer: summarizer)
+        if Self.shouldGenerateOnScreenBriefs(for: timeline) {
+            timeline = await Self.timelineWithOnScreenBriefs(timeline: timeline, summarizer: summarizer)
+        }
+        logTiming("timeline aggregation")
         let categoryBreakdown = UsageCategoryBreakdown.from(timeline: timeline)
         let dominantCategory = categoryBreakdown.dominantCategoryName ?? "Mixed content"
 
-        let fullTrackText = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
-        let sessionTranscriptDigest = TranscriptDigestBuilder.buildDigest(
-            timeline: timeline,
-            fullTrackText: fullTrackText
+        let fusionSegments = timeline.map { entry in
+            TranscriptFusionSegment(
+                id: entry.id,
+                timestamp: entry.timestamp,
+                audioText: entry.audioTranscript,
+                visualText: entry.onScreenTranscript
+            )
+        }
+        let transcriptFusion = await transcriptFusionAnalyzer.fuse(segments: fusionSegments)
+        print(
+            "[\(Date().formatted(date: .omitted, time: .standard))] 🔀 Fusion: audioDominant=\(transcriptFusion.fusionStats.audioDominantSegments), visualFallback=\(transcriptFusion.fusionStats.visualFallbackSegments), dropped=\(transcriptFusion.fusionStats.droppedSegments)"
         )
-        let sessionTranscriptBriefSummary = TranscriptDigestBuilder.buildBriefSummary(
-            fullTrackText: fullTrackText,
-            digest: sessionTranscriptDigest
-        )
+        let fullTrackText = TranscriptSanitizer.sanitize(audioResult.fullTrackSegments.map(\.text).joined(separator: " "))
+        let transcriptDigestFallback = TranscriptDigestBuilder.buildDigest(timeline: timeline, fullTrackText: fullTrackText)
+        let sessionTranscriptDigest = transcriptFusion.sessionDigest ?? transcriptDigestFallback
+        let sessionTranscriptBriefSummary = transcriptFusion.sessionBrief
+            ?? TranscriptDigestBuilder.buildBriefSummary(fullTrackText: fullTrackText, digest: sessionTranscriptDigest)
 
         report(.generatingSummary, 0.88, "Writing parent-friendly summary…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 🧠 Step 6: Generating AI Summary...")
@@ -226,6 +256,7 @@ public actor PipelineOrchestrator {
                 timeline: timeline,
                 overallCategory: dominantCategory,
                 transcriptBrief: sessionTranscriptBriefSummary,
+                transcriptEvidence: transcriptFusion.summaryEvidence,
                 child: child
             )
             if Self.looksLikeRawSegmentDump(llmSummary) {
@@ -246,6 +277,7 @@ public actor PipelineOrchestrator {
                 dominantCategory: dominantCategory
             )
         }
+        logTiming("session summary")
         
         report(.finalizing, 0.94, "Preparing session insights…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 💡 Step 7: Generating guidance...")
@@ -255,6 +287,7 @@ public actor PipelineOrchestrator {
             dominantCategory: dominantCategory,
             child: child
         )
+        logTiming("guidance")
         
         report(.finalizing, 1.0, "Almost done…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] ✅ Pipeline complete! Returning results.")
@@ -281,6 +314,7 @@ public actor PipelineOrchestrator {
         #if DEBUG
         result.logToXcodeConsole()
         #endif
+        logTiming("final result")
         return result
     }
 
@@ -320,23 +354,6 @@ public actor PipelineOrchestrator {
         ) ?? "We analyzed the recording but could not generate a detailed summary."
     }
 
-    private static func recognizedOnScreenText(
-        pixelBuffer: CVPixelBuffer,
-        bottomCrop: UIImage?
-    ) async -> String? {
-        var parts: [String] = []
-        if let full = await ScreenTextRecognizer.recognizeText(in: pixelBuffer) {
-            parts.append(full)
-        }
-        if let bottomCrop,
-           let cropText = await ScreenTextRecognizer.recognizeText(in: bottomCrop),
-           !parts.contains(where: { $0.localizedCaseInsensitiveContains(cropText) }) {
-            parts.append(cropText)
-        }
-        guard !parts.isEmpty else { return nil }
-        return parts.joined(separator: " · ")
-    }
-
     private static func timelineWithOnScreenBriefs(
         timeline: [FrameClassificationSummary],
         summarizer: LLMSummarizer
@@ -372,6 +389,16 @@ public actor PipelineOrchestrator {
                 creatorHandle: entry.creatorHandle
             )
         }
+    }
+
+    private static func shouldGenerateOnScreenBriefs(for timeline: [FrameClassificationSummary]) -> Bool {
+        let usefulOCRCount = timeline.reduce(into: 0) { count, entry in
+            if let ocr = entry.onScreenTranscript,
+               OnScreenTextSanitizer.isUsefulOnScreenContent(ocr) {
+                count += 1
+            }
+        }
+        return usefulOCRCount >= 30
     }
 
     private static func audioBucketKey(for timestamp: TimeInterval, windowDuration: TimeInterval) -> Int {

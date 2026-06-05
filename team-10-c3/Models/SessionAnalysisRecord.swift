@@ -14,6 +14,9 @@ final class SessionAnalysisRecord {
     var statusRaw: String
     var errorMessage: String?
     var payloadJSON: String?
+    var summaryPreview: String?
+    var dominantCategory: String?
+    var screenCount: Int
     var analyzedAt: Date
 
     init(
@@ -22,6 +25,9 @@ final class SessionAnalysisRecord {
         status: SessionAnalysisStatus,
         errorMessage: String? = nil,
         payloadJSON: String? = nil,
+        summaryPreview: String? = nil,
+        dominantCategory: String? = nil,
+        screenCount: Int = 0,
         analyzedAt: Date = Date()
     ) {
         self.sessionId = sessionId
@@ -29,6 +35,9 @@ final class SessionAnalysisRecord {
         self.statusRaw = status.rawValue
         self.errorMessage = errorMessage
         self.payloadJSON = payloadJSON
+        self.summaryPreview = summaryPreview
+        self.dominantCategory = dominantCategory
+        self.screenCount = screenCount
         self.analyzedAt = analyzedAt
     }
 
@@ -43,20 +52,40 @@ enum SessionAnalysisStatus: String, Codable {
     case failed
 }
 
+@Model
+final class DailyInsightCacheRecord {
+    var childId: UUID
+    var dayKey: String
+    var sessionSignature: String
+    var summary: String
+    var builtAt: Date
+
+    init(
+        childId: UUID,
+        dayKey: String,
+        sessionSignature: String,
+        summary: String,
+        builtAt: Date = Date()
+    ) {
+        self.childId = childId
+        self.dayKey = dayKey
+        self.sessionSignature = sessionSignature
+        self.summary = summary
+        self.builtAt = builtAt
+    }
+}
+
 /// JSON-safe pipeline snapshot (no thumbnails).
 struct StoredPipelineResult: Codable {
     let category: String
     let summary: String
     let creators: [String]
     let signals: [String]
-    let conversationStarter: String?
-    let conversationStarters: [String]?
     let offlineActivity: String
     let categoryBreakdown: UsageCategoryBreakdown?
     let sessionTranscriptExcerpt: String?
     let sessionTranscriptDigest: String?
     let sessionTranscriptBriefSummary: String?
-    let sessionToneSummary: SessionToneSummary?
     let screens: [StoredScreenBreakdown]
 
     var resolvedCategoryBreakdown: UsageCategoryBreakdown {
@@ -65,21 +94,11 @@ struct StoredPipelineResult: Codable {
         return categoryBreakdown ?? .empty
     }
 
-    var resolvedConversationStarters: [String] {
-        if let conversationStarters, !conversationStarters.isEmpty {
-            return Array(conversationStarters.prefix(3))
-        }
-        if let conversationStarter, !conversationStarter.isEmpty {
-            return [conversationStarter]
-        }
-        return ["—"]
-    }
-
     enum CodingKeys: String, CodingKey {
         case category, summary, creators, signals
         case conversationStarter, conversationStarters
         case offlineActivity, categoryBreakdown, sessionTranscriptExcerpt
-        case sessionTranscriptDigest, sessionTranscriptBriefSummary, sessionToneSummary, screens
+        case sessionTranscriptDigest, sessionTranscriptBriefSummary, screens
     }
 
     init(from decoder: Decoder) throws {
@@ -88,15 +107,28 @@ struct StoredPipelineResult: Codable {
         summary = try container.decode(String.self, forKey: .summary)
         creators = try container.decode([String].self, forKey: .creators)
         signals = try container.decode([String].self, forKey: .signals)
-        conversationStarter = try container.decodeIfPresent(String.self, forKey: .conversationStarter)
-        conversationStarters = try container.decodeIfPresent([String].self, forKey: .conversationStarters)
+        _ = try container.decodeIfPresent(String.self, forKey: .conversationStarter)
+        _ = try container.decodeIfPresent([String].self, forKey: .conversationStarters)
         offlineActivity = try container.decode(String.self, forKey: .offlineActivity)
         categoryBreakdown = try container.decodeIfPresent(UsageCategoryBreakdown.self, forKey: .categoryBreakdown)
         sessionTranscriptExcerpt = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptExcerpt)
         sessionTranscriptDigest = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptDigest)
         sessionTranscriptBriefSummary = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptBriefSummary)
-        sessionToneSummary = try container.decodeIfPresent(SessionToneSummary.self, forKey: .sessionToneSummary)
         screens = try container.decode([StoredScreenBreakdown].self, forKey: .screens)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(category, forKey: .category)
+        try container.encode(summary, forKey: .summary)
+        try container.encode(creators, forKey: .creators)
+        try container.encode(signals, forKey: .signals)
+        try container.encode(offlineActivity, forKey: .offlineActivity)
+        try container.encodeIfPresent(categoryBreakdown, forKey: .categoryBreakdown)
+        try container.encodeIfPresent(sessionTranscriptExcerpt, forKey: .sessionTranscriptExcerpt)
+        try container.encodeIfPresent(sessionTranscriptDigest, forKey: .sessionTranscriptDigest)
+        try container.encodeIfPresent(sessionTranscriptBriefSummary, forKey: .sessionTranscriptBriefSummary)
+        try container.encode(screens, forKey: .screens)
     }
 }
 
@@ -166,14 +198,11 @@ extension StoredPipelineResult {
         summary = result.summary
         creators = result.creators
         signals = result.signals
-        conversationStarter = result.conversationStarter
-        conversationStarters = result.conversationStarters
         offlineActivity = result.offlineActivity
         categoryBreakdown = result.categoryBreakdown
         sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
         sessionTranscriptDigest = result.sessionTranscriptDigest
         sessionTranscriptBriefSummary = result.sessionTranscriptBriefSummary
-        sessionToneSummary = result.sessionToneSummary
         screens = result.screens.map(StoredScreenBreakdown.init)
     }
 }

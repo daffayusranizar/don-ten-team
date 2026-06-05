@@ -37,24 +37,24 @@ struct DailyInsightInput: Sendable {
         topApps: [AppUsageRow]
     ) -> DailyInsightInput {
         let sessionInsights = sessionResults.enumerated().map { offset, entry in
-            let digest = TranscriptDigestBuilder.resolvedDigest(
-                stored: entry.result.sessionTranscriptDigest,
-                screens: entry.result.screens
-            )
             let brief = entry.result.sessionTranscriptBriefSummary
-                ?? TranscriptDigestBuilder.buildBriefSummary(
-                    fullTrackText: nil,
-                    digest: digest
-                )
+                ?? entry.result.sessionTranscriptDigest
+            let aiSummary = entry.result.summary
+            let frameLines: [String]
+            if TranscriptSanitizer.isMeaningful(aiSummary) {
+                frameLines = []
+            } else {
+                frameLines = DailyContentDigestBuilder.sessionFrameLines(screens: entry.result.screens)
+            }
 
             return DailySessionInsight(
                 index: offset + 1,
                 durationSeconds: snapshotDuration(for: entry.session, snapshots: snapshots),
                 dominantCategory: entry.result.category,
-                aiSummary: entry.result.summary,
-                frameLines: DailyContentDigestBuilder.sessionFrameLines(screens: entry.result.screens),
+                aiSummary: aiSummary,
+                frameLines: frameLines,
                 transcriptNotes: DailyContentDigestBuilder.sessionTranscriptNotes(
-                    digest: digest,
+                    digest: nil,
                     brief: brief
                 )
             )

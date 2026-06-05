@@ -90,6 +90,7 @@ final class AppContainer {
             SessionMarker.self,
             SessionUsageSnapshot.self,
             SessionAnalysisRecord.self,
+            DailyInsightCacheRecord.self,
         ])
         let configuration = ModelConfiguration()
         do {

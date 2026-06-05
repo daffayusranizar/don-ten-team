@@ -54,7 +54,7 @@ enum DailyContentDigestBuilder {
             }
         }
 
-        return output
+        return Array(output.prefix(12))
     }
 
     static func sessionTranscriptNotes(digest: String?, brief: String?) -> String? {
@@ -140,18 +140,18 @@ enum DailyContentDigestBuilder {
             let header = "Session \(session.index) (\(duration), \(session.dominantCategory)):"
             lines.append(header)
 
-            for frameLine in session.frameLines {
-                lines.append("  \(frameLine)")
+            if TranscriptSanitizer.isMeaningful(session.aiSummary) {
+                lines.append("  Session summary: \(session.aiSummary)")
             }
 
             if let transcript = session.transcriptNotes, TranscriptSanitizer.isMeaningful(transcript) {
                 lines.append("  Spoken content: \(transcript)")
             }
 
-            if session.frameLines.isEmpty,
-               session.transcriptNotes == nil,
-               TranscriptSanitizer.isMeaningful(session.aiSummary) {
-                lines.append("  Session summary: \(session.aiSummary)")
+            if !TranscriptSanitizer.isMeaningful(session.aiSummary) {
+                for frameLine in session.frameLines.prefix(12) {
+                    lines.append("  \(frameLine)")
+                }
             }
         }
         return lines

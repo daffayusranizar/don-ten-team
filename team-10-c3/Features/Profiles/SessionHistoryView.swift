@@ -153,7 +153,10 @@ private struct SessionHistoryScreen: View {
                     .background(.uiSurface)
                     .clipShape(RoundedRectangle(cornerRadius: HistoryLayout.cardCornerRadius))
             } else {
-                SessionHistoryCard(entries: viewModel.sessionEntries)
+                SessionHistoryCard(
+                    entries: viewModel.sessionEntries,
+                    sessionAnalysisStore: sessionAnalysisStore
+                )
             }
         }
     }
@@ -181,12 +184,16 @@ private struct SessionHistoryScreen: View {
 
 private struct SessionHistoryCard: View {
     let entries: [SessionHistoryEntry]
+    let sessionAnalysisStore: SessionAnalysisStore?
 
     var body: some View {
         VStack(alignment: .leading, spacing: HistoryLayout.entrySpacing) {
             ForEach(entries) { entry in
                 NavigationLink {
-                    SessionHistoryDetailView(entry: entry)
+                    SessionHistoryDetailView(
+                        entry: entry,
+                        sessionAnalysisStore: sessionAnalysisStore
+                    )
                 } label: {
                     SessionHistoryRow(entry: entry)
                 }
@@ -219,7 +226,7 @@ private struct SessionHistoryRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let errorMessage = entry.errorMessage, entry.result == nil {
+            if let errorMessage = entry.errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(.orange)

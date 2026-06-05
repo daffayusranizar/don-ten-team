@@ -9,7 +9,9 @@ import Observation
 struct SessionHistoryEntry: Identifiable {
     let sessionId: UUID
     let analyzedAt: Date
-    let result: PipelineResult?
+    let summary: String?
+    let dominantCategory: String?
+    let screenCountValue: Int
     let errorMessage: String?
 
     var id: UUID { sessionId }
@@ -23,15 +25,15 @@ struct SessionHistoryEntry: Identifiable {
     }
 
     var categoryLabel: String? {
-        result?.dominantCategoryDisplay
+        dominantCategory
     }
 
     var summaryPreview: String? {
-        result?.summary
+        summary
     }
 
     var screenCount: Int {
-        result?.screens.count ?? 0
+        screenCountValue
     }
 
     private static let dateLabelFormatter: DateFormatter = {
@@ -106,8 +108,10 @@ final class SessionHistoryViewModel {
             SessionHistoryEntry(
                 sessionId: item.sessionId,
                 analyzedAt: item.analyzedAt,
-                result: item.cacheEntry.result,
-                errorMessage: item.cacheEntry.errorMessage
+                summary: item.summaryPreview,
+                dominantCategory: item.dominantCategory,
+                screenCountValue: item.screenCount,
+                errorMessage: item.errorMessage
             )
         }
         loadError = nil

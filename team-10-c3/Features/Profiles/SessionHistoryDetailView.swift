@@ -7,15 +7,18 @@ import SwiftUI
 
 struct SessionHistoryDetailView: View {
     let entry: SessionHistoryEntry
+    let sessionAnalysisStore: SessionAnalysisStore?
 
     @State private var showScreenBreakdown = false
+    @State private var result: PipelineResult?
+    @State private var isLoadingResult = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 header
 
-                if let errorMessage = entry.errorMessage, entry.result == nil {
+                if let errorMessage = entry.errorMessage {
                     SessionResultCard(
                         icon: "exclamationmark.triangle.fill",
                         iconColor: .orange,
@@ -24,7 +27,10 @@ struct SessionHistoryDetailView: View {
                     )
                 }
 
-                if let result = entry.result {
+                if isLoadingResult {
+                    ProgressView("Loading session analysis…")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let result {
                     SessionResultCard(
                         icon: "chart.bar.fill",
                         iconColor: .decorativeSkyBlue,
@@ -49,15 +55,6 @@ struct SessionHistoryDetailView: View {
                         )
                     }
 
-                    if !result.conversationStarters.isEmpty {
-                        SessionResultCard(
-                            icon: "bubble.left.and.bubble.right.fill",
-                            iconColor: .decorativeLavender,
-                            title: "Conversation Starters",
-                            content: result.conversationStarters.joined(separator: "\n\n")
-                        )
-                    }
-
                     SessionResultCard(
                         icon: "leaf.fill",
                         iconColor: .decorativeMintGreen,
@@ -75,6 +72,13 @@ struct SessionHistoryDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
+                } else {
+                    SessionResultCard(
+                        icon: "exclamationmark.triangle.fill",
+                        iconColor: .orange,
+                        title: "Analysis unavailable",
+                        content: "This session's detailed analysis is not available."
+                    )
                 }
             }
             .padding(.horizontal, 24)
@@ -85,9 +89,15 @@ struct SessionHistoryDetailView: View {
         .navigationTitle(entry.dateLabel)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showScreenBreakdown) {
-            if let screens = entry.result?.screens {
+            if let screens = result?.screens {
                 SessionScreenBreakdownView(screens: screens)
             }
+        }
+        .task {
+            guard result == nil, entry.errorMessage == nil else { return }
+            isLoadingResult = true
+            result = sessionAnalysisStore?.loadResult(sessionId: entry.sessionId)
+            isLoadingResult = false
         }
     }
 
