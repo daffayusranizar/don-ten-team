@@ -102,9 +102,9 @@ enum DropdownSize {
 struct PrimaryDropdown: View {
     @Environment(\.profileViewModel) private var profileViewModel
     @State private var isExpanded = false
-    @State private var showAddChild: Bool = false
     @Binding var selectedChild: Child?
     var allowsSelection: Bool = true
+    var onAddChild: () -> Void = {}
     var size: DropdownSize = .medium
     var iconOption: String = "person.crop.circle.fill"
 
@@ -190,7 +190,7 @@ struct PrimaryDropdown: View {
                         withAnimation(.snappy) {
                             isExpanded = false
                         }
-                        showAddChild = true
+                        onAddChild()
                     } label: {
                         HStack(spacing: size.contentSpacing) {
                             Image(systemName: "plus")
@@ -224,12 +224,6 @@ struct PrimaryDropdown: View {
         .fontWeight(.medium)
         .frame(minHeight: size.minHeight)
         .zIndex(isExpanded ? 100 : 0)
-        .navigationDestination(isPresented: $showAddChild) {
-            ProfileFormView { child in
-                profileViewModel.handleChildSaved(child)
-                selectedChild = child
-            }
-        }
     }
 }
 

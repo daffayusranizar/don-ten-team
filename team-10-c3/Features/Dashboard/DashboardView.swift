@@ -113,7 +113,8 @@ struct DashboardView: View {
                                 profileViewModel.selectedChild = newChild
                             }
                         ),
-                        allowsSelection: !kidSessionViewModel.locksChildSelection
+                        allowsSelection: !kidSessionViewModel.locksChildSelection,
+                        onAddChild: { showAddChild = true }
                     )
 
                     Button {
@@ -137,10 +138,9 @@ struct DashboardView: View {
         .navigationDestination(isPresented: $showSettings) {
             SettingsView()
         }
-        .navigationDestination(isPresented: $showAddChild) {
-            ProfileFormView { child in
-                profileViewModel.handleChildSaved(child)
-            }
+        .childProfileFormSheet(isPresented: $showAddChild) { child in
+            profileViewModel.handleChildSaved(child)
+            profileViewModel.selectedChild = child
         }
         .navigationDestination(isPresented: $showKidSession) {
             SessionSetupView()
@@ -158,17 +158,25 @@ struct DashboardView: View {
             }
         }
         .onAppear {
-            familyControlsAuth.refreshAuthorizationStatus()
             profileViewModel.loadChildren()
-            kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
-            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
             presentScreenTimePromptIfNeeded()
+            if let child = profileViewModel.selectedChild {
+                sessionCoordinator.refreshAfterChildSwitch(for: child)
+            }
+            Task { @MainActor in
+                await Task.yield()
+                familyControlsAuth.refreshAuthorizationStatus()
+                kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            familyControlsAuth.refreshAuthorizationStatus()
-            kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
-            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+            sessionCoordinator.refreshAfterChildSwitch(for: profileViewModel.selectedChild)
+            Task { @MainActor in
+                await Task.yield()
+                familyControlsAuth.refreshAuthorizationStatus()
+                kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
+            }
         }
         .onChange(of: profileViewModel.children.count) { _, _ in
             sessionCoordinator.refresh(for: profileViewModel.selectedChild)
@@ -186,8 +194,7 @@ struct DashboardView: View {
         )
         .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
             guard !kidSessionViewModel.locksChildSelection else { return }
-            AgentDebugLog.relayAppGroupLogsToIngest()
-            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+            sessionCoordinator.refreshAfterChildSwitch(for: profileViewModel.selectedChild)
         }
         .onChange(of: showKidSession) { _, isShowing in
             if !isShowing {

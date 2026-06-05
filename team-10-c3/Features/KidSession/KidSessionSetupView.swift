@@ -107,12 +107,12 @@ struct KidSessionSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
         .onAppear {
-            familyControlsAuth.refreshAuthorizationStatus()
             alarmAuthorizationState = SessionEndAlarmScheduler.displayState
-            if alarmAuthorizationState == .notDetermined {
-                showAlarmAuthAlert = true
-            }
             kidSessionViewModel.syncSelectedChild(from: profileViewModel)
+            Task { @MainActor in
+                await Task.yield()
+                familyControlsAuth.refreshAuthorizationStatus()
+            }
         }
         .alarmAuthorizationAlert(
             isPresented: $showAlarmAuthAlert,

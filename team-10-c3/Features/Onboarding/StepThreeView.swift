@@ -148,6 +148,7 @@ struct StepThreeView: View {
         .navigationDestination(isPresented: $goToStepFour) {
             StepFourView(data: $data)
         }
+        .dismissKeyboardOnTap()
     }
 }
 

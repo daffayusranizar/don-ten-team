@@ -38,10 +38,8 @@ struct SettingsView: View {
         .onAppear {
             profileViewModel.loadChildren()
         }
-        .navigationDestination(isPresented: $showAddChild) {
-            ProfileFormView { child in
-                profileViewModel.handleChildSaved(child)
-            }
+        .childProfileFormSheet(isPresented: $showAddChild) { child in
+            profileViewModel.handleChildSaved(child)
         }
     }
 

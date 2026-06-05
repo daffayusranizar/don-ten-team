@@ -5,6 +5,9 @@
 //  Created by Huy Tran on 27/05/26.
 //
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum TextFieldSize {
     case large
@@ -79,7 +82,22 @@ struct PrimaryTextField: View {
     var placeholder: String
     var size: TextFieldSize = .medium
     var systemImage: String? = nil
+    var isFocused: FocusState<Bool>.Binding? = nil
     var action: () -> Void = {}
+
+    @ViewBuilder
+    private var textInput: some View {
+        let field = TextField(placeholder, text: $text)
+            .font(size.font)
+            .foregroundColor(.textPrimary)
+            .onSubmit { action() }
+
+        if let isFocused {
+            field.focused(isFocused)
+        } else {
+            field
+        }
+    }
     
     var body: some View {
         HStack(spacing: size.contentSpacing) {
@@ -90,10 +108,7 @@ struct PrimaryTextField: View {
                     .foregroundStyle(.textPrimary)
             }
 
-            TextField(placeholder, text: $text)
-                .font(size.font)
-                .foregroundColor(.textPrimary)
-                .onSubmit { action() }
+            textInput
             
             // Clear Text Button
             if !text.isEmpty {
@@ -236,6 +251,100 @@ struct SecondaryTextField: View {
             .fill(.uiSurface)
         )
     }
+}
+
+// MARK: Keyboard
+
+extension View {
+    /// Dismisses the keyboard when tapping outside text inputs. Ignores taps on text fields so focus stays instant.
+    func dismissKeyboardOnTap() -> some View {
+        background(KeyboardDismissGestureInstaller())
+    }
+}
+
+#if canImport(UIKit)
+private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.installIfNeeded(from: uiView)
+        }
+    }
+
+    static func dismantleUIView(_: UIView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        private weak var hostView: UIView?
+        private var recognizer: UITapGestureRecognizer?
+
+        func installIfNeeded(from anchor: UIView) {
+            guard let host = anchor.parentViewController?.view else { return }
+            guard hostView !== host else { return }
+            uninstall()
+
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+            tap.cancelsTouchesInView = false
+            tap.delegate = self
+            host.addGestureRecognizer(tap)
+            recognizer = tap
+            hostView = host
+        }
+
+        func uninstall() {
+            if let recognizer, let hostView {
+                hostView.removeGestureRecognizer(recognizer)
+            }
+            recognizer = nil
+            hostView = nil
+        }
+
+        @objc private func handleTap() {
+            dismissKeyboard()
+        }
+
+        func gestureRecognizer(_: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view: UIView? = touch.view
+            while let current = view {
+                if current is UITextField || current is UITextView {
+                    return false
+                }
+                view = current.superview
+            }
+            return true
+        }
+    }
+}
+
+private extension UIView {
+    var parentViewController: UIViewController? {
+        sequence(first: self as UIResponder, next: \.next)
+            .compactMap { $0 as? UIViewController }
+            .first
+    }
+}
+#endif
+
+private func dismissKeyboard() {
+#if canImport(UIKit)
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder),
+        to: nil,
+        from: nil,
+        for: nil
+    )
+#endif
 }
 
 // MARK: Preview

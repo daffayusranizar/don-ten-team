@@ -60,6 +60,7 @@ final class SessionCoordinator {
     var summaryScreenTimeAppTotalSeconds = 0
     private var timerTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var childSwitchDebounceTask: Task<Void, Never>?
     private var hourlySummaryTask: Task<Void, Never>?
     private var activeChildId: UUID?
     private var pausedAt: Date?
@@ -191,14 +192,67 @@ final class SessionCoordinator {
             ]
         )
         // #endregion
-        hydrateDisplayStateFromCache(for: child.id, epoch: epoch)
-        refreshTask = Task { await performRefresh(for: child, epoch: epoch) }
+        let childId = child.id
+        hydrateDisplayStateFromCache(for: childId, epoch: epoch)
+        refreshTask = Task { @MainActor in
+            await performRefresh(childId: childId, epoch: epoch)
+        }
+    }
+
+    /// Child picker: show cached data immediately, debounce Screen Time + chart reload.
+    func refreshAfterChildSwitch(for child: Child?) {
+        childSwitchDebounceTask?.cancel()
+        refreshTask?.cancel()
+        guard let child else {
+            resetDisplayState()
+            return
+        }
+        let childId = child.id
+        refreshChildId = childId
+        refreshEpoch += 1
+        let epoch = refreshEpoch
+        hydrateDisplayStateFromCache(for: childId, epoch: epoch, loadChart: false)
+
+        childSwitchDebounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            guard refreshEpoch == epoch, refreshChildId == childId else { return }
+            refreshTask = Task { @MainActor in
+                await performRefresh(childId: childId, epoch: epoch)
+            }
+        }
+    }
+
+    /// Defers heavy refresh until navigation / layout has settled.
+    func refreshDeferred(for child: Child?, delayMilliseconds: UInt64 = 250) {
+        childSwitchDebounceTask?.cancel()
+        refreshTask?.cancel()
+        guard let child else {
+            resetDisplayState()
+            return
+        }
+        let childId = child.id
+        refreshChildId = childId
+        refreshEpoch += 1
+        let epoch = refreshEpoch
+        hydrateDisplayStateFromCache(for: childId, epoch: epoch, loadChart: false)
+
+        refreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(Int(delayMilliseconds)))
+            guard !Task.isCancelled else { return }
+            guard refreshEpoch == epoch, refreshChildId == childId else { return }
+            await performRefresh(childId: childId, epoch: epoch)
+        }
     }
 
     /// Publishes persisted banner + day summary immediately (async Screen Time refresh follows).
-    private func hydrateDisplayStateFromCache(for childId: UUID, epoch: UInt64) {
+    private func hydrateDisplayStateFromCache(
+        for childId: UUID,
+        epoch: UInt64,
+        loadChart: Bool = true
+    ) {
         applyCachedBannerState(for: childId, publish: false)
-        if !isSessionActive {
+        if loadChart, !isSessionActive {
             loadSummaryActivity(for: childId, epoch: epoch)
         }
         publishChildDisplayState(for: childId)
@@ -247,7 +301,7 @@ final class SessionCoordinator {
         latestScreenTimeAppTotalSeconds = state.latestScreenTimeAppTotalSeconds
     }
 
-    private func performRefresh(for child: Child, epoch: UInt64) async {
+    private func performRefresh(childId: UUID, epoch: UInt64) async {
         guard !Task.isCancelled else {
             // #region agent log
             AgentDebugLog.log(
@@ -255,7 +309,7 @@ final class SessionCoordinator {
                 location: "SessionCoordinator.performRefresh",
                 message: "cancelled at entry",
                 data: [
-                    "childId": child.id.uuidString,
+                    "childId": childId.uuidString,
                     "epoch": String(epoch),
                     "currentEpoch": String(refreshEpoch),
                 ]
@@ -264,37 +318,37 @@ final class SessionCoordinator {
             return
         }
         do {
-            let snapshotCount = (try? sessionRepository.fetchSnapshots(for: child.id, month: currentMonthKey()))?
+            let snapshotCount = (try? sessionRepository.fetchSnapshots(for: childId, month: currentMonthKey()))?
                 .count ?? -1
-            if let active = try sessionRepository.activeSession(for: child.id) {
+            if let active = try sessionRepository.activeSession(for: childId) {
                 currentSessionId = active.startMarkerId
-                if isSessionActive, activeChildId == child.id {
+                if isSessionActive, activeChildId == childId {
                     sessionStartAt = active.startedAt
                     try? await screenTimeService.activateSessionRestrictions()
                 }
-            } else if !(isSessionActive && activeChildId == child.id), !isStoppingSession {
+            } else if !(isSessionActive && activeChildId == childId), !isStoppingSession {
                 clearActiveSessionState()
             }
 
             applyCachedBannerState(
-                for: child.id,
-                publish: isActiveRefresh(childId: child.id, epoch: epoch)
+                for: childId,
+                publish: isActiveRefresh(childId: childId, epoch: epoch)
             )
-            guard isActiveRefresh(childId: child.id, epoch: epoch) else { return }
-            await refreshScreenTimeFromAPI(for: child.id, epoch: epoch)
-            guard isActiveRefresh(childId: child.id, epoch: epoch) else { return }
+            guard isActiveRefresh(childId: childId, epoch: epoch) else { return }
+            await refreshScreenTimeFromAPI(for: childId, epoch: epoch)
+            guard isActiveRefresh(childId: childId, epoch: epoch) else { return }
             if !isSessionActive {
-                loadSummaryActivity(for: child.id, epoch: epoch)
+                loadSummaryActivity(for: childId, epoch: epoch)
             }
             loadError = nil
             // #region agent log
-            let daySummary = try? sessionRepository.dayActivitySummary(for: child.id, referenceDate: nil)
+            let daySummary = try? sessionRepository.dayActivitySummary(for: childId, referenceDate: nil)
             AgentDebugLog.log(
                 hypothesisId: "H2",
                 location: "SessionCoordinator.performRefresh",
                 message: "performRefresh finished",
                 data: [
-                    "childId": child.id.uuidString,
+                    "childId": childId.uuidString,
                     "epoch": String(epoch),
                     "currentEpoch": String(refreshEpoch),
                     "epochStale": String(epoch != refreshEpoch),
@@ -316,7 +370,7 @@ final class SessionCoordinator {
                 location: "SessionCoordinator.performRefresh",
                 message: "performRefresh error",
                 data: [
-                    "childId": child.id.uuidString,
+                    "childId": childId.uuidString,
                     "epoch": String(epoch),
                     "error": error.localizedDescription,
                 ]
@@ -931,7 +985,7 @@ final class SessionCoordinator {
         publish: Bool
     ) {
         hourlySummaryTask?.cancel()
-        hourlySummaryTask = Task { [weak self] in
+        hourlySummaryTask = Task { @MainActor [weak self] in
             guard let self else { return }
             await loadHourlySummaryUsage(for: childId, day: day, publish: publish)
         }

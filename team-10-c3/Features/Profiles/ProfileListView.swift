@@ -78,10 +78,8 @@ struct ProfileListView: View {
         .padding(.horizontal, 30)
         .padding(.vertical)
         .foregroundStyle(.textPrimary)
-        .navigationDestination(isPresented: $showAddChild) {
-            ProfileFormView { child in
-                profileViewModel.handleChildSaved(child)
-            }
+        .childProfileFormSheet(isPresented: $showAddChild) { child in
+            profileViewModel.handleChildSaved(child)
         }
         .navigationDestination(isPresented: $showDetail) {
             if let selectedChild {

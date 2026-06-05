@@ -97,6 +97,7 @@ struct StepOneView: View {
         .navigationDestination(isPresented: $goToPinSetup) {
             ParentPinSetupView(data: $data)
         }
+        .dismissKeyboardOnTap()
     }
 }
 

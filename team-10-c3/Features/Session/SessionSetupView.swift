@@ -14,6 +14,7 @@ struct SessionSetupView: View {
     @State private var minutes = 25
     @State private var seconds = 0
     @State private var recordScreen = false
+    @State private var deferredSetupTask: Task<Void, Never>?
     @State private var showScreenTimeAuthAlert = false
     @State private var showAlarmAuthAlert = false
     @State private var showSessionStartErrorAlert = false
@@ -26,12 +27,13 @@ struct SessionSetupView: View {
     @State private var extensionBroadcastWasActive = false
     /// Set when the user taps Start Session — blocks false starts from display connect / toggle alone.
     @State private var broadcastStartArmed = false
+    @State private var showAddChild = false
 
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
     @Environment(\.familyControlsAuth) private var familyControlsAuth
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var recordingManager = RecordingManager.shared
+    private var recordingManager: RecordingManager { RecordingManager.shared }
 
     private var totalSeconds: Int {
         hours * 3600 + minutes * 60 + seconds
@@ -95,28 +97,27 @@ struct SessionSetupView: View {
             }
             .onAppear {
                 RecordingReadyBridge.startListening()
-                familyControlsAuth.refreshAuthorizationStatus()
                 refreshAlarmAuthorizationState()
-                if alarmAuthorizationState == .notDetermined {
-                    showAlarmAuthAlert = true
-                }
                 loadDurationPickersFromViewModel()
-                kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
                 prepareForRecordingMode()
-                if recordScreen {
-                    startBroadcastObserver()
-                }
-                switch kidSessionViewModel.phase {
-                case .active:
-                    showActiveSession = true
-                case .finished:
-                    showResult = true
-                case .idle:
-                    break
+
+                deferredSetupTask?.cancel()
+                deferredSetupTask = Task { @MainActor in
+                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard !Task.isCancelled else { return }
+                    familyControlsAuth.refreshAuthorizationStatus()
+                    kidSessionViewModel.reconcilePersistedSession(profileViewModel: profileViewModel)
+                    syncNavigationForCurrentPhase()
+                    if recordScreen {
+                        startBroadcastObserver()
+                    }
                 }
             }
             .onDisappear {
+                deferredSetupTask?.cancel()
+                deferredSetupTask = nil
                 stopBroadcastObserver()
             }
             .alarmAuthorizationAlert(
@@ -148,6 +149,11 @@ struct SessionSetupView: View {
                 }
             } message: {
                 Text(kidSessionViewModel.sessionStartError ?? "")
+            }
+            .childProfileFormSheet(isPresented: $showAddChild) { child in
+                profileViewModel.handleChildSaved(child)
+                profileViewModel.selectedChild = child
+                kidSessionViewModel.syncSelectedChild(from: profileViewModel)
             }
     }
 
@@ -202,7 +208,8 @@ struct SessionSetupView: View {
                             profileViewModel.selectedChild = newChild
                         }
                     ),
-                    allowsSelection: !kidSessionViewModel.locksChildSelection
+                    allowsSelection: !kidSessionViewModel.locksChildSelection,
+                    onAddChild: { showAddChild = true }
                 )
             }
             .padding(.top, 110)
@@ -326,6 +333,20 @@ struct SessionSetupView: View {
         seconds = clamped % 60
         kidSessionViewModel.setPlannedDuration(seconds: clamped)
         recordingManager.setSessionDuration(seconds: clamped)
+    }
+
+    private func syncNavigationForCurrentPhase() {
+        switch kidSessionViewModel.phase {
+        case .active:
+            showResult = false
+            showActiveSession = true
+        case .finished:
+            showActiveSession = false
+            showResult = true
+        case .idle:
+            showActiveSession = false
+            showResult = false
+        }
     }
 
     private func syncPlannedDurationWhenValid(totalSeconds: Int) {
