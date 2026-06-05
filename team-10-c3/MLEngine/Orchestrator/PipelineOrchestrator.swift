@@ -298,7 +298,7 @@ public actor PipelineOrchestrator {
         let topCreators = handleCounts.sorted { $0.value > $1.value }.prefix(3).map { $0.key }
         
         // 8. Generate Guidance
-        report(.finalizing, 0.94, "Preparing conversation starters…")
+        report(.finalizing, 0.94, "Preparing session insights…")
         print("[\(Date().formatted(date: .omitted, time: .standard))] 💡 Step 8: Generating insights and guidance...")
         let guidanceEngine = GuidanceEngine()
         let insights = await guidanceEngine.generateInsights(
@@ -359,6 +359,13 @@ public actor PipelineOrchestrator {
             print("⚠️ Failed to delete processed video: \(error)")
         }
         
+        let fullTrackText = TranscriptSanitizer.sanitize(fullTranscripts.map(\.text).joined(separator: " "))
+        let sessionTranscriptDigest = TranscriptDigestBuilder.buildDigest(
+            timeline: timeline,
+            fullTrackText: fullTrackText
+        )
+        let sessionToneSummary = SessionToneSummarizer.summarize(timeline: timeline)
+
         return SessionAnalysisResult(
             dominantCategory: ClassificationCategory(name: dominantCategory, prompts: []),
             aiProseSummary: aiProseSummary,
@@ -367,7 +374,9 @@ public actor PipelineOrchestrator {
             guidance: insights.guidance,
             timeline: timeline,
             categoryBreakdown: categoryBreakdown,
-            sessionTranscriptExcerpt: sessionTranscriptExcerpt
+            sessionTranscriptExcerpt: sessionTranscriptExcerpt,
+            sessionTranscriptDigest: sessionTranscriptDigest,
+            sessionToneSummary: sessionToneSummary
         )
     }
 

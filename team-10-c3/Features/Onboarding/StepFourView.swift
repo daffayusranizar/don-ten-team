@@ -120,7 +120,7 @@ enum ParentGoal: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .talkMore:
-            return "Get conversation starters based on what they watch"
+            return "See what they watched and how it sounded, with daily insights"
         case .understandHabits:
             return "Know what type of content they consume"
         case .educationalContent:

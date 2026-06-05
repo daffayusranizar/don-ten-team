@@ -96,13 +96,13 @@ public actor ScreenRecordingAudioToneAnalyzer {
         durationSeconds: TimeInterval
     ) -> AudioToneAnalysis {
         let pace = paceLabel(transcript: transcript, durationSeconds: durationSeconds)
-        var parts = ["calm spoken audio", "with spoken words"]
+        var parts = ["spoken audio (audio unclear)", "with spoken words"]
         if let pace {
             parts.append(pace)
         }
         return AudioToneAnalysis(
             description: parts.joined(separator: ", "),
-            energy: "calm",
+            energy: "unknown",
             character: "spoken",
             pace: pace
         )

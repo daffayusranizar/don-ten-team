@@ -97,7 +97,9 @@ public actor LLMSummarizer {
         let prompt = """
         Write one daily overview for a parent based on today's data below.
         Use 2-4 clear sentences. Mention total screen time and the main content themes (educational, entertainment, commercial).
-        If concern signals are listed, note them briefly. Use only the facts provided — do not invent apps, creators, or durations.
+        When spoken content is provided, ground the overview in those excerpts alongside each session AI summary.
+        If how-it-sounded notes are provided, mention audio patterns only when supported by the data.
+        If concern signals are listed, note them briefly. Use only the facts provided — do not invent apps, creators, dialogue, or durations.
 
         \(input.promptBody())
         """
@@ -191,15 +193,15 @@ public actor LLMSummarizer {
         if let name = input.childName, let age = input.childAge {
             return """
                 You are a parental monitoring assistant writing a daily screen-time overview for a parent of \(name), age \(age).
-                Synthesize today's session summaries, category mix, and screen time into one cohesive paragraph.
-                Use \(name) when it reads naturally. Be objective and reassuring. Do not invent details.
+                Synthesize today's session summaries, spoken content excerpts, category mix, and screen time into one cohesive paragraph.
+                Use \(name) when it reads naturally. Be objective and reassuring. Do not invent details or dialogue.
                 Write 2-4 sentences only.
                 """
         }
         return """
             You are a parental monitoring assistant writing a daily screen-time overview for a parent.
-            Synthesize today's session summaries, category mix, and screen time into one cohesive paragraph.
-            Be objective and reassuring. Do not invent details. Write 2-4 sentences only.
+            Synthesize today's session summaries, spoken content excerpts, category mix, and screen time into one cohesive paragraph.
+            Be objective and reassuring. Do not invent details or dialogue. Write 2-4 sentences only.
             """
     }
 

@@ -14,16 +14,21 @@ struct SessionScreenBreakdownView: View {
     var body: some View {
         List {
             Section {
-                ForEach(screens) { screen in
+                ForEach(Array(screens.enumerated()), id: \.element.id) { index, screen in
                     Button {
                         selectedScreen = screen
                     } label: {
-                        TimelineRowView(item: screen)
+                        TimelineRowView(
+                            item: screen,
+                            previousTranscript: index > 0
+                                ? screens[index - 1].meaningfulAudioTranscript
+                                : nil
+                        )
                     }
                     .buttonStyle(.plain)
                 }
             } footer: {
-                Text("Each entry is about 3 seconds of the recording. Analysis is available until you start a new session.")
+                Text("Each entry is about 3 seconds of the recording. Analysis is saved on this device and survives app restarts.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -130,24 +130,22 @@ struct SessionResultView: View {
                         )
                     }
 
-                    SessionResultCard(
-                        icon: "bubble.left.and.bubble.right.fill",
-                        iconColor: .decorativeSunnyYellow,
-                        title: result.conversationStarters.count > 1
-                            ? "Conversation Starters"
-                            : "Conversation Starter",
-                        content: result.conversationStarters
-                            .map { "• \($0)" }
-                            .joined(separator: "\n\n")
-                    )
+                    if let tone = result.sessionToneSummary {
+                        SessionResultCard(
+                            icon: "speaker.wave.2.fill",
+                            iconColor: .decorativeSunnyYellow,
+                            title: "How it sounded",
+                            content: tone.parentFacingSummary
+                        )
+                    }
 
-                    if let excerpt = result.sessionTranscriptExcerpt,
-                       TranscriptSanitizer.isMeaningful(excerpt) {
+                    if let transcript = result.sessionTranscriptForDisplay,
+                       TranscriptSanitizer.isMeaningful(transcript) {
                         SessionResultCard(
                             icon: "waveform",
                             iconColor: .primaryMediumBlue,
                             title: "What we heard (session)",
-                            content: excerpt
+                            content: transcript
                         )
                     }
 

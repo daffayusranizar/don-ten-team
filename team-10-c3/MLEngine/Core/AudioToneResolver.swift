@@ -13,9 +13,9 @@ public enum AudioToneResolver {
         categoryLabel: String?,
         contentSummary: String?
     ) -> String {
-        if let stored = TranscriptSanitizer.meaningfulForStorage(transcript ?? "") {
+        if TranscriptSanitizer.meaningfulForStorage(transcript ?? "") != nil {
             if AudioToneLabels.isSilentDescription(pcmDescription) {
-                return "calm spoken audio, with spoken words"
+                return "spoken audio (audio unclear), with spoken words"
             }
             return pcmDescription
         }

@@ -38,11 +38,11 @@ struct SessionScreenDetailView: View {
                     screenshotsSection
                 }
 
-                if screen.hasAudioDetails {
+                if screen.hasAudioDetails || screen.meaningfulAudioTranscript != nil || screen.isSilentOrUnreadableTone {
                     SessionResultCard(
                         icon: "waveform",
                         iconColor: .decorativeSunnyYellow,
-                        title: "Audio",
+                        title: "What we heard",
                         content: audioContent
                     )
                 }
@@ -71,18 +71,20 @@ struct SessionScreenDetailView: View {
         }
 
         let transcript = screen.meaningfulAudioTranscript
-        let tone = screen.audioTone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if screen.isSilentOrUnreadableTone, transcript == nil {
-            lines.append(
-                "App audio wasn’t clear in this clip (Screen Time captures app sound only, not the microphone)."
-            )
-        } else if !tone.isEmpty {
-            lines.append("Tone: \(tone)")
-        }
 
         if let transcript {
             lines.append("Transcript: \(transcript)")
+        } else if screen.isSilentOrUnreadableTone {
+            lines.append(
+                "App audio wasn’t clear in this clip (Screen Time captures app sound only, not the microphone)."
+            )
+        }
+
+        if let friendlyTone = SessionToneSummarizer.frameDisplayTone(
+            audioTone: screen.audioTone,
+            transcript: screen.audioTranscript
+        ) {
+            lines.append("Tone: \(friendlyTone)")
         }
 
         return lines.joined(separator: "\n\n")

@@ -212,7 +212,7 @@ struct ReportView: View {
                 HStack(spacing: 8) {
                     Image("suggestion-icon")
 
-                    Text("This Week Suggestion")
+                    Text("This Week Reflection")
                         .font(.heading6)
                         .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
                         .lineLimit(1)

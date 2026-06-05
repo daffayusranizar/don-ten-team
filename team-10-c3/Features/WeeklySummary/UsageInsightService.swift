@@ -53,6 +53,7 @@ struct UsageInsightService {
         var sessionResults: [(session: CompletedSessionReference, result: PipelineResult)] = []
         var allSignals: [String] = []
         var conversationStarters: [String] = []
+        var toneSummaries: [SessionToneSummary] = []
         var latestOfflineActivity = "Let's take a 15-minute screen break together."
         var todaySnapshots: [SessionUsageSnapshot] = []
         var todaySessions: [CompletedSessionReference] = []
@@ -74,6 +75,9 @@ struct UsageInsightService {
                 mergedBreakdown = mergedBreakdown.merged(with: result.categoryBreakdown)
                 allSignals.append(contentsOf: result.signals)
                 conversationStarters.append(contentsOf: result.conversationStarters)
+                if let tone = result.sessionToneSummary {
+                    toneSummaries.append(tone)
+                }
             }
         }
 
@@ -118,7 +122,10 @@ struct UsageInsightService {
                 totalSeconds: totalSeconds,
                 breakdown: mergedBreakdown
             )
-            weeklySuggestion = InsightProseBuilder.weeklySuggestion(from: conversationStarters)
+            weeklySuggestion = InsightProseBuilder.weeklySuggestion(
+                fromToneVerdict: SessionToneSummarizer.weeklyVerdict(from: toneSummaries),
+                conversationStarters: conversationStarters
+            )
         }
 
         return UsageInsightReport(

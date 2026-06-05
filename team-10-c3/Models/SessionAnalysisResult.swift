@@ -26,6 +26,12 @@ public struct SessionAnalysisResult: Sendable {
     /// Full-session speech excerpt when per-window transcripts are mostly empty but Whisper succeeded on the full track.
     public let sessionTranscriptExcerpt: String?
 
+    /// Bounded digest of per-window and full-track speech for daily insight and session review.
+    public let sessionTranscriptDigest: String?
+
+    /// Parent-facing session audio tone verdict with confidence gating.
+    public let sessionToneSummary: SessionToneSummary?
+
     public init(
         dominantCategory: ClassificationCategory,
         aiProseSummary: String,
@@ -34,7 +40,9 @@ public struct SessionAnalysisResult: Sendable {
         guidance: GuidanceSuggestion,
         timeline: [FrameClassificationSummary],
         categoryBreakdown: UsageCategoryBreakdown,
-        sessionTranscriptExcerpt: String? = nil
+        sessionTranscriptExcerpt: String? = nil,
+        sessionTranscriptDigest: String? = nil,
+        sessionToneSummary: SessionToneSummary? = nil
     ) {
         self.dominantCategory = dominantCategory
         self.aiProseSummary = aiProseSummary
@@ -44,6 +52,8 @@ public struct SessionAnalysisResult: Sendable {
         self.timeline = timeline
         self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
+        self.sessionTranscriptDigest = sessionTranscriptDigest
+        self.sessionToneSummary = sessionToneSummary
     }
 }
 

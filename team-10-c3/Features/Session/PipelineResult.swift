@@ -6,7 +6,7 @@
 import Foundation
 import UIKit
 
-/// UI model for session-level AI analysis plus per-screen timeline (in memory until reset).
+/// UI model for session-level AI analysis plus per-screen timeline (persisted via SessionAnalysisStore).
 struct PipelineResult {
     let category: String
     let summary: String
@@ -16,7 +16,21 @@ struct PipelineResult {
     let offlineActivity: String
     let categoryBreakdown: UsageCategoryBreakdown
     let sessionTranscriptExcerpt: String?
+    let sessionTranscriptDigest: String?
+    let sessionToneSummary: SessionToneSummary?
     let screens: [ScreenBreakdownItem]
+
+    /// Transcript text for session-complete card (excerpt or digest prefix).
+    var sessionTranscriptForDisplay: String? {
+        if let excerpt = sessionTranscriptExcerpt,
+           TranscriptSanitizer.isMeaningful(excerpt) {
+            return excerpt
+        }
+        return TranscriptDigestBuilder.cardExcerpt(from: sessionTranscriptDigest)
+            ?? TranscriptDigestBuilder.cardExcerpt(
+                from: TranscriptDigestBuilder.buildDigest(from: screens)
+            )
+    }
 
     /// First starter for older call sites.
     var conversationStarter: String {
@@ -36,6 +50,8 @@ struct PipelineResult {
         self.offlineActivity = result.guidance.offlineActivity
         self.categoryBreakdown = result.categoryBreakdown
         self.sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
+        self.sessionTranscriptDigest = result.sessionTranscriptDigest
+        self.sessionToneSummary = result.sessionToneSummary
         self.screens = result.timeline.map { ScreenBreakdownItem(frame: $0) }
     }
 
@@ -48,6 +64,10 @@ struct PipelineResult {
         offlineActivity = stored.offlineActivity
         categoryBreakdown = stored.resolvedCategoryBreakdown
         sessionTranscriptExcerpt = stored.sessionTranscriptExcerpt
+        sessionTranscriptDigest = stored.sessionTranscriptDigest
+            ?? TranscriptDigestBuilder.buildDigest(from: stored.screens)
+        sessionToneSummary = stored.sessionToneSummary
+            ?? SessionToneSummarizer.summarize(screens: stored.screens)
         screens = stored.screens.map(ScreenBreakdownItem.init(stored:))
     }
 }
@@ -178,7 +198,9 @@ extension PipelineResult {
         offlineActivity: String,
         categoryBreakdown: UsageCategoryBreakdown = .empty,
         screens: [ScreenBreakdownItem],
-        sessionTranscriptExcerpt: String? = nil
+        sessionTranscriptExcerpt: String? = nil,
+        sessionTranscriptDigest: String? = nil,
+        sessionToneSummary: SessionToneSummary? = nil
     ) {
         self.category = category
         self.summary = summary
@@ -188,6 +210,8 @@ extension PipelineResult {
         self.offlineActivity = offlineActivity
         self.categoryBreakdown = categoryBreakdown
         self.sessionTranscriptExcerpt = sessionTranscriptExcerpt
+        self.sessionTranscriptDigest = sessionTranscriptDigest
+        self.sessionToneSummary = sessionToneSummary
         self.screens = screens
     }
 }

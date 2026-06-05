@@ -165,6 +165,18 @@ enum InsightProseBuilder {
         "Explore the recommended offline activity that we already provide for you to do it with your child!"
 
     static func weeklySuggestion(from conversationStarters: [String]) -> String {
+        weeklySuggestion(fromToneVerdict: nil, conversationStarters: conversationStarters)
+    }
+
+    static func weeklySuggestion(
+        fromToneVerdict toneVerdict: String?,
+        conversationStarters: [String] = []
+    ) -> String {
+        if let toneVerdict, !toneVerdict.isEmpty {
+            return """
+            \(toneVerdict) When you talk about the week, ask how that kind of content felt to watch and whether they'd like more calm or more active viewing next time.
+            """
+        }
         if let starter = conversationStarters.first, !starter.isEmpty {
             return """
             Spend 15–20 minutes talking with your child about what they watched this week. For example: "\(starter)" These small conversations help you understand their interests while encouraging healthier screen habits.

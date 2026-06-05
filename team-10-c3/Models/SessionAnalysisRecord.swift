@@ -54,6 +54,8 @@ struct StoredPipelineResult: Codable {
     let offlineActivity: String
     let categoryBreakdown: UsageCategoryBreakdown?
     let sessionTranscriptExcerpt: String?
+    let sessionTranscriptDigest: String?
+    let sessionToneSummary: SessionToneSummary?
     let screens: [StoredScreenBreakdown]
 
     var resolvedCategoryBreakdown: UsageCategoryBreakdown {
@@ -75,7 +77,24 @@ struct StoredPipelineResult: Codable {
     enum CodingKeys: String, CodingKey {
         case category, summary, creators, signals
         case conversationStarter, conversationStarters
-        case offlineActivity, categoryBreakdown, sessionTranscriptExcerpt, screens
+        case offlineActivity, categoryBreakdown, sessionTranscriptExcerpt
+        case sessionTranscriptDigest, sessionToneSummary, screens
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        category = try container.decode(String.self, forKey: .category)
+        summary = try container.decode(String.self, forKey: .summary)
+        creators = try container.decode([String].self, forKey: .creators)
+        signals = try container.decode([String].self, forKey: .signals)
+        conversationStarter = try container.decodeIfPresent(String.self, forKey: .conversationStarter)
+        conversationStarters = try container.decodeIfPresent([String].self, forKey: .conversationStarters)
+        offlineActivity = try container.decode(String.self, forKey: .offlineActivity)
+        categoryBreakdown = try container.decodeIfPresent(UsageCategoryBreakdown.self, forKey: .categoryBreakdown)
+        sessionTranscriptExcerpt = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptExcerpt)
+        sessionTranscriptDigest = try container.decodeIfPresent(String.self, forKey: .sessionTranscriptDigest)
+        sessionToneSummary = try container.decodeIfPresent(SessionToneSummary.self, forKey: .sessionToneSummary)
+        screens = try container.decode([StoredScreenBreakdown].self, forKey: .screens)
     }
 }
 
@@ -103,6 +122,8 @@ extension StoredPipelineResult {
         offlineActivity = result.offlineActivity
         categoryBreakdown = result.categoryBreakdown
         sessionTranscriptExcerpt = result.sessionTranscriptExcerpt
+        sessionTranscriptDigest = result.sessionTranscriptDigest
+        sessionToneSummary = result.sessionToneSummary
         screens = result.screens.map(StoredScreenBreakdown.init)
     }
 }
