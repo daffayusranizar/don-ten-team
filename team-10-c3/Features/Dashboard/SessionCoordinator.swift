@@ -447,12 +447,22 @@ final class SessionCoordinator {
 
         do {
             try await familyControlsAuth.ensureSessionAuthorization()
-            try await screenTimeService.activateSessionRestrictions()
         } catch {
             screenTimeService.deactivateSessionRestrictions()
             loadError = familyControlsAuth.sessionPermissionBlockedMessage()
                 ?? error.localizedDescription
             return false
+        }
+
+        do {
+            try await screenTimeService.activateSessionRestrictions()
+        } catch {
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "SessionCoordinator.prepareSessionAuthorized",
+                message: "session shield failed; continuing without app blocking",
+                data: ["error": error.localizedDescription]
+            )
         }
 
         let seconds = max(SessionDurationLimits.minimumSeconds, plannedDurationSeconds)

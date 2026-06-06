@@ -24,7 +24,13 @@ enum SessionAppShield {
             throw SessionAppShieldError.notAuthorized
         }
         guard #available(iOS 26.4, *) else {
-            throw SessionAppShieldError.requiresIOS264
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "SessionAppShield.applyAllowlist",
+                message: "app shield skipped below iOS 26.4",
+                data: [:]
+            )
+            return
         }
 
         let hostBundle = Bundle.main.bundleIdentifier?.lowercased() ?? ""

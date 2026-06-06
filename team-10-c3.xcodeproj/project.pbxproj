@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8FALRM012FC95000001AF248 /* AlarmKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FALRM002FC95000001AF248 /* AlarmKit.framework */; };
+		74D576D42FD3691500DAE2E1 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */; };
+		74D576D62FD369AE00DAE2E1 /* AlarmKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FALRM002FC95000001AF248 /* AlarmKit.framework */; };
+		8FBCSET022FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FBCSET012FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8FBCSET122FCD3C47006D4D7E /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
 		8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8FDA4F172FC5E0BA001AF248 /* WhisperKit */; };
-		8FDACT012FC94010001AF248 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */; };
 		8FDACT112FC94010001AF248 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */; };
 		8FDACT122FC94010001AF248 /* DeviceActivityMonitorExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8FDB9C572FCD3C46006D4D7E /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */; };
@@ -17,6 +19,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		8FBCSET322FCD3C47006D4D7E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8FBCSET212FCD3C47006D4D7E;
+			remoteInfo = ScreenRecorderExtensionSetupUI;
+		};
 		8FDACT132FC94010001AF248 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8F5E2D1F2FC04CB700A62CBC /* Project object */;
@@ -41,6 +50,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				8FDB9C6C2FCD3C47006D4D7E /* ScreenRecorderExtension.appex in Embed Foundation Extensions */,
+				8FBCSET022FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex in Embed Foundation Extensions */,
 				8FDACT122FC94010001AF248 /* DeviceActivityMonitorExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -51,6 +61,7 @@
 /* Begin PBXFileReference section */
 		8F5E2D272FC04CB700A62CBC /* team-10-c3.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "team-10-c3.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FALRM002FC95000001AF248 /* AlarmKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AlarmKit.framework; path = System/Library/Frameworks/AlarmKit.framework; sourceTree = SDKROOT; };
+		8FBCSET012FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenRecorderExtensionSetupUI.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8FDA4FA42FC930A2001AF248 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
 		8FDA4FCA2FC930C9001AF248 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
 		8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeviceActivityMonitorExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -60,6 +71,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8FBCSET422FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8FBCSET212FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */;
+		};
 		8FDACT142FC94010001AF248 /* Exceptions for "DeviceActivityMonitorExtension" folder in "DeviceActivityMonitorExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -97,6 +115,14 @@
 			path = BroadcastShared;
 			sourceTree = "<group>";
 		};
+		8FBCSET512FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8FBCSET422FCD3C47006D4D7E /* Exceptions for "ScreenRecorderExtensionSetupUI" folder in "ScreenRecorderExtensionSetupUI" target */,
+			);
+			path = ScreenRecorderExtensionSetupUI;
+			sourceTree = "<group>";
+		};
 		8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -121,8 +147,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				8FDA4F182FC5E0BA001AF248 /* WhisperKit in Frameworks */,
-				8FDACT012FC94010001AF248 /* DeviceActivity.framework in Frameworks */,
-				8FALRM012FC95000001AF248 /* AlarmKit.framework in Frameworks */,
+				74D576D42FD3691500DAE2E1 /* DeviceActivity.framework in Frameworks */,
+				74D576D62FD369AE00DAE2E1 /* AlarmKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FBCSET922FCD3C47006D4D7E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FBCSET122FCD3C47006D4D7E /* ReplayKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -151,6 +185,7 @@
 				8FTEAM032FC94000001AF248 /* Config */,
 				8F5E2D292FC04CB700A62CBC /* team-10-c3 */,
 				8FDB9C582FCD3C46006D4D7E /* ScreenRecorderExtension */,
+				8FBCSET512FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 				8FDACT152FC94010001AF248 /* DeviceActivityMonitorExtension */,
 				8FBCA0012FCA0000001AF248 /* BroadcastShared */,
 				8FDA4F162FC5E0B0001AF248 /* Frameworks */,
@@ -163,6 +198,7 @@
 			children = (
 				8F5E2D272FC04CB700A62CBC /* team-10-c3.app */,
 				8FDB9C562FCD3C46006D4D7E /* ScreenRecorderExtension.appex */,
+				8FBCSET012FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */,
 				8FDACT102FC94010001AF248 /* DeviceActivityMonitorExtension.appex */,
 			);
 			name = Products;
@@ -203,6 +239,7 @@
 			);
 			dependencies = (
 				8FDB9C6B2FCD3C47006D4D7E /* PBXTargetDependency */,
+				8FBCSET622FCD3C47006D4D7E /* PBXTargetDependency */,
 				8FDACT172FC94010001AF248 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -216,6 +253,28 @@
 			productName = "team-10-c3";
 			productReference = 8F5E2D272FC04CB700A62CBC /* team-10-c3.app */;
 			productType = "com.apple.product-type.application";
+		};
+		8FBCSET212FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FBCSET722FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */;
+			buildPhases = (
+				8FBCSET822FCD3C47006D4D7E /* Sources */,
+				8FBCSET922FCD3C47006D4D7E /* Frameworks */,
+				8FBCSETA22FCD3C47006D4D7E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8FBCSET512FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
+			);
+			name = ScreenRecorderExtensionSetupUI;
+			packageProductDependencies = (
+			);
+			productName = ScreenRecorderExtensionSetupUI;
+			productReference = 8FBCSET012FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		8FDACT0F2FC94010001AF248 /* DeviceActivityMonitorExtension */ = {
 			isa = PBXNativeTarget;
@@ -275,6 +334,9 @@
 					8F5E2D262FC04CB700A62CBC = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					8FBCSET212FCD3C47006D4D7E = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					8FDACT0F2FC94010001AF248 = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -302,6 +364,7 @@
 			targets = (
 				8F5E2D262FC04CB700A62CBC /* team-10-c3 */,
 				8FDB9C552FCD3C46006D4D7E /* ScreenRecorderExtension */,
+				8FBCSET212FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */,
 				8FDACT0F2FC94010001AF248 /* DeviceActivityMonitorExtension */,
 			);
 		};
@@ -309,6 +372,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		8F5E2D252FC04CB700A62CBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8FBCSETA22FCD3C47006D4D7E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -339,6 +409,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8FBCSET822FCD3C47006D4D7E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8FDACT182FC94010001AF248 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -356,6 +433,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		8FBCSET622FCD3C47006D4D7E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8FBCSET212FCD3C47006D4D7E /* ScreenRecorderExtensionSetupUI */;
+			targetProxy = 8FBCSET322FCD3C47006D4D7E /* PBXContainerItemProxy */;
+		};
 		8FDACT172FC94010001AF248 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 8FDACT0F2FC94010001AF248 /* DeviceActivityMonitorExtension */;
@@ -499,6 +581,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "team-10-c3/Info.plist";
@@ -516,7 +599,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(MAIN_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -535,10 +618,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "$(MAIN_APP_ENTITLEMENTS)";
+				CODE_SIGN_ENTITLEMENTS = "team-10-c3/team-10-c3Release.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "team-10-c3/Info.plist";
@@ -556,7 +640,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(MAIN_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -570,9 +654,74 @@
 			};
 			name = Release;
 		};
+		8FBCSETB22FCD3C47006D4D7E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "$(SETUP_UI_ENTITLEMENTS)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SCREEN_RECORDER_SETUP_UI_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8FBCSETC22FCD3C47006D4D7E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "$(SETUP_UI_ENTITLEMENTS)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenRecorderExtensionSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SCREEN_RECORDER_SETUP_UI_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		8FDACT1B2FC94010001AF248 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(DEVICE_ACTIVITY_MONITOR_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -580,8 +729,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeviceActivityMonitorExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitorExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -603,6 +754,7 @@
 		8FDACT1C2FC94010001AF248 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(DEVICE_ACTIVITY_MONITOR_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -610,8 +762,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DeviceActivityMonitorExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
-				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitorExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -642,7 +796,9 @@
 				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
 				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -673,7 +829,9 @@
 				INFOPLIST_FILE = ScreenRecorderExtension/Info.plist;
 				INFOPLIST_KEY_AppGroupIdentifier = "$(APP_GROUP_IDENTIFIER)";
 				INFOPLIST_KEY_CFBundleDisplayName = Kiddly;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -709,6 +867,15 @@
 			buildConfigurations = (
 				8F5E2D332FC04CB800A62CBC /* Debug */,
 				8F5E2D342FC04CB800A62CBC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8FBCSET722FCD3C47006D4D7E /* Build configuration list for PBXNativeTarget "ScreenRecorderExtensionSetupUI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8FBCSETB22FCD3C47006D4D7E /* Debug */,
+				8FBCSETC22FCD3C47006D4D7E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

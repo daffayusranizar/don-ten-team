@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 extension View {
     /// Presents an alert that triggers the system Screen Time permission dialog.
@@ -25,7 +26,20 @@ extension View {
 struct ScreenTimePermissionBanner: View {
     let gaps: [ScreenTimePermissionGap]
     let statusDescription: String
+    let canRequestUsageAccess: Bool
     let onEnable: () -> Void
+
+    init(
+        gaps: [ScreenTimePermissionGap],
+        statusDescription: String,
+        canRequestUsageAccess: Bool = true,
+        onEnable: @escaping () -> Void
+    ) {
+        self.gaps = gaps
+        self.statusDescription = statusDescription
+        self.canRequestUsageAccess = canRequestUsageAccess
+        self.onEnable = onEnable
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -41,12 +55,16 @@ struct ScreenTimePermissionBanner: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            PrimaryButton(
-                title: "Enable Screen Time",
-                size: .medium,
-                systemImage: "checkmark.shield",
-                action: onEnable
-            )
+            if canRequestUsageAccess {
+                PrimaryButton(
+                    title: gaps.contains(.familyControlsNotApproved)
+                        ? "Enable Screen Time"
+                        : "Allow App Usage",
+                    size: .medium,
+                    systemImage: "checkmark.shield",
+                    action: onEnable
+                )
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,7 +78,7 @@ struct ScreenTimePermissionBanner: View {
         if gaps.contains(.familyControlsNotApproved) {
             return "Allow Screen Time so sessions can block every app except TikTok and YouTube."
         }
-        return "Allow app usage data to show TikTok and YouTube time on the dashboard."
+        return "Usage charts need Apple’s App & Website Usage entitlement on this TestFlight build. Sessions still work."
     }
 }
 
@@ -79,8 +97,20 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
                 Button("Not Now", role: .cancel) {
                     onDismissWithoutAuth?()
                 }
-                Button("Continue") {
-                    Task { await requestScreenTimeAccess() }
+                if familyControlsAuth.isAuthorizationDenied {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                } else if familyControlsAuth.isUsageDataEntitlementMissing {
+                    Button("OK", role: .cancel) {
+                        onDismissWithoutAuth?()
+                    }
+                } else {
+                    Button("Continue") {
+                        Task { await requestScreenTimeAccess() }
+                    }
                 }
             } message: {
                 Text(familyControlsAuth.permissionAlertMessage())
@@ -95,7 +125,11 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
     private func requestScreenTimeAccess() async {
         familyControlsAuth.refreshAuthorizationStatus()
         do {
-            try await familyControlsAuth.ensureSessionAuthorization()
+            if familyControlsAuth.missingPermissions.contains(.familyControlsNotApproved) {
+                try await familyControlsAuth.ensureSessionAuthorization()
+            } else {
+                try await familyControlsAuth.ensureUsageAuthorization()
+            }
             onAuthorized?()
         } catch {
             familyControlsAuth.refreshAuthorizationStatus()

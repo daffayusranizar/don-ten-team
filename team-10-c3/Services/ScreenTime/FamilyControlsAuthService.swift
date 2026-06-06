@@ -16,11 +16,19 @@ protocol FamilyControlsAuthProviding: AnyObject {
     var canRecordSessionUsage: Bool { get }
     var authorizationStatusDescription: String { get }
     var missingPermissions: [ScreenTimePermissionGap] { get }
+    /// True when app blocking / session start requires Screen Time approval.
     var needsPermissionPrompt: Bool { get }
+    /// True when basic Screen Time is granted but per-app usage data is not (charts only).
+    var needsUsagePermissionPrompt: Bool { get }
+    /// Usage charts unavailable because status is `approved` (not `approvedWithDataAccess`) — re-prompting won't help.
+    var isUsageDataEntitlementMissing: Bool { get }
+    /// User turned off Screen Time for Kiddly in Settings — re-prompting won't help.
+    var isAuthorizationDenied: Bool { get }
     func refreshAuthorizationStatus()
     func requestAuthorization() async throws
+    /// App blocking and session monitoring — does not require usage-data access.
     func ensureSessionAuthorization() async throws
-    /// Shows the system Screen Time permission sheet if usage data access is not granted yet.
+    /// Per-app usage charts — requires `approvedWithDataAccess` on iOS 26.4+.
     func ensureUsageAuthorization() async throws
     func permissionAlertTitle() -> String
     func permissionAlertMessage() -> String
@@ -50,6 +58,7 @@ enum FamilyControlsAuthError: LocalizedError {
 final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     private(set) var isAuthorized = false
     private(set) var hasUsageDataAccess = false
+    private(set) var isAuthorizationDenied = false
     private(set) var authorizationStatusDescription = "unknown"
 
     init() {
@@ -59,12 +68,33 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     func refreshAuthorizationStatus() {
         let status = AuthorizationCenter.shared.authorizationStatus
         authorizationStatusDescription = String(describing: status)
-        if #available(iOS 26.4, *) {
-            hasUsageDataAccess = status == .approvedWithDataAccess
-        } else {
-            hasUsageDataAccess = status == .approved
+
+        switch status {
+        case .approved:
+            isAuthorizationDenied = false
+            isAuthorized = true
+            if #available(iOS 26.4, *) {
+                hasUsageDataAccess = false
+            } else {
+                hasUsageDataAccess = true
+            }
+        case .approvedWithDataAccess:
+            isAuthorizationDenied = false
+            isAuthorized = true
+            hasUsageDataAccess = true
+        case .denied:
+            isAuthorizationDenied = true
+            isAuthorized = false
+            hasUsageDataAccess = false
+        case .notDetermined:
+            isAuthorizationDenied = false
+            isAuthorized = false
+            hasUsageDataAccess = false
+        @unknown default:
+            isAuthorizationDenied = false
+            isAuthorized = false
+            hasUsageDataAccess = false
         }
-        isAuthorized = status == .approved || hasUsageDataAccess
     }
 
     var canBlockAppsDuringSession: Bool {
@@ -86,7 +116,22 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     }
 
     var needsPermissionPrompt: Bool {
-        !missingPermissions.isEmpty
+        !isAuthorized
+    }
+
+    var needsUsagePermissionPrompt: Bool {
+        isAuthorized && !hasUsageDataAccess
+    }
+
+    /// On iOS 26.4+, `approved` without data access usually means the distribution
+    /// profile lacks `com.apple.developer.family-controls.app-and-website-usage`.
+    /// Calling `requestAuthorization()` again does not show a separate user toggle.
+    var isUsageDataEntitlementMissing: Bool {
+        guard isAuthorized, !hasUsageDataAccess else { return false }
+        if #available(iOS 26.4, *) {
+            return AuthorizationCenter.shared.authorizationStatus == .approved
+        }
+        return false
     }
 
     func permissionAlertTitle() -> String {
@@ -97,6 +142,13 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     }
 
     func permissionAlertMessage() -> String {
+        if isAuthorizationDenied {
+            return """
+            Screen Time access for Kiddly is turned off.
+
+            Open Settings → Screen Time → Apps with Screen Time Access, enable Kiddly, then return here.
+            """
+        }
         if missingPermissions.contains(.familyControlsNotApproved) {
             return """
             Kiddly needs Screen Time permission to run parent sessions:
@@ -108,16 +160,22 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
             """
         }
         return """
-            Screen Time is on, but per-app usage data is not available yet.
+            Screen Time is on, but TikTok/YouTube usage charts are not available on this build.
 
-            Tap Continue and allow App & Website Usage so Kiddly can show TikTok and YouTube time. \
-            Sessions can still block other apps once basic Screen Time access is granted.
+            This is not a setting you can turn on in the app — Apple must approve \
+            “Family Controls App And Website Usage” for your TestFlight/App Store build. \
+            Parent’s Access should show status `approvedWithDataAccess` when it works.
+
+            Sessions and app blocking still work with basic Screen Time access.
             """
     }
 
     func sessionPermissionBlockedMessage() -> String? {
         guard !canBlockAppsDuringSession else {
             if !canRecordSessionUsage {
+                if isUsageDataEntitlementMissing {
+                    return "Usage charts need Apple’s App & Website Usage entitlement on this build (status: approved). Sessions still work."
+                }
                 return "Session started, but usage charts need App & Website Usage. " +
                     "Open Parent’s Access → Allow Screen Time usage."
             }
@@ -134,10 +192,18 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     func requestAuthorization() async throws {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
         refreshAuthorizationStatus()
+        if !isAuthorized {
+            // AuthorizationCenter can lag briefly after the system sheet dismisses.
+            try await Task.sleep(for: .milliseconds(350))
+            refreshAuthorizationStatus()
+        }
     }
 
     func ensureSessionAuthorization() async throws {
         refreshAuthorizationStatus()
+        if isAuthorizationDenied {
+            throw FamilyControlsAuthError.notAuthorized(status: authorizationStatusDescription)
+        }
         if !isAuthorized {
             try await requestAuthorization()
             refreshAuthorizationStatus()
@@ -145,20 +211,24 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
         guard isAuthorized else {
             throw FamilyControlsAuthError.notAuthorized(status: authorizationStatusDescription)
         }
+    }
 
-        if !hasUsageDataAccess {
+    func ensureUsageAuthorization() async throws {
+        try await ensureSessionAuthorization()
+        refreshAuthorizationStatus()
+        guard !hasUsageDataAccess else { return }
+
+        // First authorization may grant both; re-prompting after `approved` never upgrades.
+        if !isAuthorized {
             try await requestAuthorization()
             refreshAuthorizationStatus()
         }
+
         guard hasUsageDataAccess else {
             throw FamilyControlsAuthError.usageAccessNotGranted(
                 status: authorizationStatusDescription
             )
         }
-    }
-
-    func ensureUsageAuthorization() async throws {
-        try await ensureSessionAuthorization()
     }
 }
 
@@ -172,6 +242,9 @@ final class PreviewFamilyControlsAuthService: FamilyControlsAuthProviding {
     var authorizationStatusDescription = "approvedWithDataAccess"
     var missingPermissions: [ScreenTimePermissionGap] = []
     var needsPermissionPrompt = false
+    var needsUsagePermissionPrompt = false
+    var isUsageDataEntitlementMissing = false
+    var isAuthorizationDenied = false
 
     func refreshAuthorizationStatus() {}
 
@@ -190,6 +263,7 @@ final class PreviewFamilyControlsAuthService: FamilyControlsAuthProviding {
         canRecordSessionUsage = true
         missingPermissions = []
         needsPermissionPrompt = false
+        needsUsagePermissionPrompt = false
     }
 
     func ensureSessionAuthorization() async throws {

@@ -217,7 +217,7 @@ struct UsageInsightService {
         sessions: [CompletedSessionReference],
         snapshots: [SessionUsageSnapshot]
     ) async -> [AppUsageRow] {
-        guard !familyControlsAuth.needsPermissionPrompt else { return [] }
+        guard familyControlsAuth.canRecordSessionUsage else { return [] }
 
         let windows: [SessionWindow]
         if !sessions.isEmpty {

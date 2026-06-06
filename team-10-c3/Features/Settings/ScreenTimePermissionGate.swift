@@ -13,6 +13,10 @@ enum ScreenTimePermissionGate {
             onAuthorized()
             return
         }
+        if auth.isAuthorizationDenied {
+            showAlert()
+            return
+        }
         Task {
             do {
                 try await auth.ensureSessionAuthorization()

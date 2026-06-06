@@ -22,7 +22,9 @@ struct DashboardView: View {
     @State var showSessionEnd: Bool = false
     @State var addingTime: Bool = false
     @State private var showScreenTimeAuthAlert = false
+    @State private var pendingKidSessionAfterScreenTimeAuth = false
     @AppStorage("screenTimeAuthPromptDismissed") private var screenTimeAuthPromptDismissed = false
+    @AppStorage("screenTimeUsagePromptDismissed") private var screenTimeUsagePromptDismissed = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -55,10 +57,11 @@ struct DashboardView: View {
                     }
 
                     if profileViewModel.selectedChild != nil,
-                       familyControlsAuth.needsPermissionPrompt {
+                       shouldShowScreenTimeBanner {
                         ScreenTimePermissionBanner(
                             gaps: familyControlsAuth.missingPermissions,
                             statusDescription: familyControlsAuth.authorizationStatusDescription,
+                            canRequestUsageAccess: !familyControlsAuth.isUsageDataEntitlementMissing,
                             onEnable: { showScreenTimeAuthAlert = true }
                         )
                     }
@@ -66,7 +69,8 @@ struct DashboardView: View {
                     if profileViewModel.selectedChild != nil,
                        let screenTimeError = sessionCoordinator.loadError {
                         Button {
-                            if familyControlsAuth.needsPermissionPrompt {
+                            if familyControlsAuth.needsPermissionPrompt
+                                || familyControlsAuth.needsUsagePermissionPrompt {
                                 showScreenTimeAuthAlert = true
                             }
                         } label: {
@@ -184,12 +188,24 @@ struct DashboardView: View {
         .screenTimeAuthorizationAlert(
             isPresented: $showScreenTimeAuthAlert,
             onAuthorized: {
+                if familyControlsAuth.needsPermissionPrompt == false {
+                    screenTimeAuthPromptDismissed = true
+                }
                 if profileViewModel.selectedChild != nil {
+                    sessionCoordinator.refresh(for: profileViewModel.selectedChild)
+                }
+                if pendingKidSessionAfterScreenTimeAuth {
+                    pendingKidSessionAfterScreenTimeAuth = false
                     showKidSession = true
                 }
             },
             onDismissWithoutAuth: {
-                screenTimeAuthPromptDismissed = true
+                pendingKidSessionAfterScreenTimeAuth = false
+                if familyControlsAuth.needsPermissionPrompt {
+                    screenTimeAuthPromptDismissed = true
+                } else if familyControlsAuth.needsUsagePermissionPrompt {
+                    screenTimeUsagePromptDismissed = true
+                }
             }
         )
         .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
@@ -225,6 +241,13 @@ struct DashboardView: View {
         }
     }
 
+    private var shouldShowScreenTimeBanner: Bool {
+        if familyControlsAuth.needsPermissionPrompt {
+            return true
+        }
+        return familyControlsAuth.needsUsagePermissionPrompt && !screenTimeUsagePromptDismissed
+    }
+
     private func presentScreenTimePromptIfNeeded() {
         guard profileViewModel.selectedChild != nil,
               !screenTimeAuthPromptDismissed else {
@@ -238,7 +261,10 @@ struct DashboardView: View {
     private func beginKidSessionFlow() {
         ScreenTimePermissionGate.runIfAuthorized(
             auth: familyControlsAuth,
-            showAlert: { showScreenTimeAuthAlert = true },
+            showAlert: {
+                pendingKidSessionAfterScreenTimeAuth = true
+                showScreenTimeAuthAlert = true
+            },
             onAuthorized: { showKidSession = true }
         )
     }

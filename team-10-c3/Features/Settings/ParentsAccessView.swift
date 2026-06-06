@@ -77,10 +77,12 @@ struct ParentsAccessView: View {
                         .opacity(0.2)
                 )
 
-            if familyControlsAuth.needsPermissionPrompt {
+            if familyControlsAuth.needsPermissionPrompt
+                || familyControlsAuth.needsUsagePermissionPrompt {
                 ScreenTimePermissionBanner(
                     gaps: familyControlsAuth.missingPermissions,
                     statusDescription: familyControlsAuth.authorizationStatusDescription,
+                    canRequestUsageAccess: !familyControlsAuth.isUsageDataEntitlementMissing,
                     onEnable: { showScreenTimeAuthAlert = true }
                 )
             } else {
