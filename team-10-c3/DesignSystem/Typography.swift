@@ -41,4 +41,11 @@ extension Font {
     }
     
     // MARK: Body
+    static var bodyLarge: Font {
+        .system(size: 18, weight: .regular)
+    }
+    
+    static var bodyRegular: Font {
+        .system(size: 15, weight: .regular)
+    }
 }
