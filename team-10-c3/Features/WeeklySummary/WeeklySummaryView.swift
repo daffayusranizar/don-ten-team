@@ -14,8 +14,23 @@ enum Period: String, CaseIterable {
     case weekly = "Weekly"
 }
 
+let options = [
+    "Opened up and talked",
+    "Enjoy it, not much talking",
+    "Led to a longer conversation",
+    "Didn't want to"
+]
+
+struct CategoryItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let value: Double
+    let color: Color
+}
+
 struct WeeklySummaryView: View {
     @State private var selectedPeriod: Period = .daily
+    @State private var dataExist: Bool = true
 
     var body: some View {
         NavigationStack {
@@ -26,9 +41,27 @@ struct WeeklySummaryView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal)
+                .padding(.horizontal, 18)
 
-                ReportView(period: selectedPeriod)
+                if dataExist {
+                    ReportView(period: selectedPeriod)
+                } else {
+                    Spacer()
+                    
+                    ContentUnavailableView {
+                        Label {
+                            Text("No Data Yet")
+                        } icon: {
+                            Image("empty-state")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 200, height: 200)
+                                .scaleEffect(3)
+                        }
+                    } description: {
+                        Text("Check back later once your child has started using their device.")
+                    }
+                }
 
                 Spacer()
             }
@@ -49,10 +82,13 @@ struct WeeklySummaryView: View {
 
 struct ReportView: View {
     let period: Period
+    @State private var isTrySuggestion: Bool = false
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 20) {
+                
+                
                 
                 CardView(width: 364, height: 216) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -69,7 +105,7 @@ struct ReportView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        StackedBarCard(items: [
+                        StackedBarChartView(items: [
                             .init(name: "Entertainment", value: 45, color: .orange),
                             .init(name: "Games", value: 15, color: .green),
                             .init(name: "Education", value: 25, color: .blue)
@@ -80,112 +116,58 @@ struct ReportView: View {
                     .padding(.bottom, 16)
                 }
 
-                CardView(width: 364, height: 242) {
-                    VStack(spacing: 0) {
-                        HStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.18))
-                                    .frame(width: 24, height: 24)
-
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-
-                            Text("Needs your attention")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(height: 50)
-                        .background(Color(red: 0.95, green: 0.40, blue: 0.42))
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(spacing: 8) {
-                                Image("summary-icon")
-
-                                Text(period == .daily ? "AI Summary of Today" : "AI Summary of This Week")
-                                    .font(.heading6)
-                                    .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.9)
-
-                                Spacer(minLength: 0)
-                            }
-
-                            Text(
-                                period == .daily
-                                ? "Today, your child spent 1 hour and 48 minutes on screen time, with most activity focused on educational content and a smaller portion on entertainment."
-                                : "This week, your child spent a total of 12 hours and 45 minutes on screen time, with 68% dedicated to educational content and 32% to entertainment. Their digital activity showed a healthy balance between learning and relaxation throughout the week"
-                            )
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
-                            .lineSpacing(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 14)
-                        .padding(.bottom, 20)
-                    }
-                }
+                SummaryCardView(period: period, isNeedAttention: true)
+                
                 
                 if period == .weekly {
-                    CardView(width: 364, height: 216) {
-                        VStack {
-                            HStack(spacing: 8) {
-                                Image("suggestion-icon")
+                    if isTrySuggestion {
+                        SuggestionFlowView()
+                    } else {
+                        CardView(width: 364, height: 216) {
+                            VStack {
+                                HStack(spacing: 8) {
+                                    Image("suggestion-icon")
 
-                                Text("This Week Suggestion")
-                                    .font(.heading6)
-                                    .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.9)
-                                    .padding(8)
+                                    Text("This Week Suggestion")
+                                        .font(.heading6)
+                                        .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.9)
+                                        .padding(8)
 
-                                Spacer(minLength: 0)
-                            }
-                            
-                            Text(
-                                "Spend 15–20 minutes talking with your child about what they watched this week — ask what they learned, which content made them happy, and if anything confused or surprised them. These small conversations can help parents better understand their child’s interests while encouraging healthier and more mindful screen habits."
-                            )
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
-                            .lineSpacing(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                            
-                            HStack {
-                                PrimaryButton(
-                                    title: "Not Now",
-                                    size: .medium,
-                                    systemImage: "",
-                                    action: {}
+                                    Spacer(minLength: 0)
+                                }
+                                Text(
+                                    "Spend 15–20 minutes talking with your child about what they watched this week — ask what they learned, which content made them happy, and if anything confused or surprised them. These small conversations can help parents better understand their child’s interests while encouraging healthier and more mindful screen habits."
                                 )
-                                .padding(.top, 8)
-                    
+                                .font(.bodyRegular)
+                                .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
+                                .lineSpacing(5)
+                                .fixedSize(horizontal: false, vertical: true)
+                                
+                               
                                 PrimaryButton(
                                     title: "Try",
                                     size: .medium,
                                     systemImage: "",
-                                    action: {}
+                                    action: {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            isTrySuggestion.toggle()
+                                        }
+                                    }
                                 )
                                 .padding(.top, 8)
                             }
+                            .padding(.horizontal, 18)
+                            .padding(.top, 14)
+                            .padding(.bottom, 16)
+                            .background(
+                                Color("primaryMediumBlue").opacity(0.2)
+                            )
+                            
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 14)
-                        .padding(.bottom, 16)
-                        .background(
-                            Color("primaryMediumBlue").opacity(0.2)
-                        )
-                        
                     }
+                    
                 }
                 
                 CardView(width: 364, height: 216) {
@@ -193,7 +175,7 @@ struct ReportView: View {
                         HStack(spacing: 8) {
                             Image("activity-icon")
 
-                            Text(period == .daily ? "AI Summary of Today" : "AI Summary of This Week")
+                            Text(period == .daily ? "Recommended Activity" : "Recommended Activity")
                                 .font(.heading6)
                                 .foregroundStyle(Color(red: 0.14, green: 0.15, blue: 0.22))
                                 .lineLimit(1)
@@ -205,7 +187,7 @@ struct ReportView: View {
                         Text(
                             "Explore the recommended offline activity that we already provide for you to do it with your child!"
                         )
-                        .font(.system(size: 17, weight: .regular))
+                        .font(.bodyRegular)
                         .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
@@ -229,91 +211,6 @@ struct ReportView: View {
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
-    }
-}
-
-struct CardView<Content: View>: View {
-    let width: CGFloat
-    let height: CGFloat
-    let content: Content
-
-    init(
-        width: CGFloat,
-        height: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.width = width
-        self.height = height
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .frame(minWidth: width, minHeight: height, alignment: .top)
-            
-            .background(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color(red: 0.82, green: 0.83, blue: 0.88), lineWidth: 1)
-            )
-            .fixedSize(horizontal: false, vertical: true)
-            .shadow(radius: 6)
-    }
-}
-
-struct CategoryItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let value: Double
-    let color: Color
-}
-
-struct StackedBarCard: View {
-    let items: [CategoryItem]
-
-    private var total: Double {
-        items.reduce(0) { $0 + $1.value }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GeometryReader { geo in
-                let total = items.reduce(0) { $0 + $1.value }
-
-                ZStack(alignment: .leading) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        let consumed = items.prefix(index).reduce(0) { $0 + $1.value }
-                        let remainingWidth = geo.size.width * ((total - consumed) / total)
-
-                        Capsule()
-                            .fill(item.color)
-                            .frame(width: remainingWidth, height: 24)
-                            .shadow(radius: 2)
-                    }
-                }
-            }
-            .frame(height: 24)
-
-            VStack(spacing: 10) {
-                ForEach(items) { item in
-                    HStack {
-                        Circle()
-                            .fill(item.color)
-                            .frame(width: 10, height: 10)
-
-                        Text(item.name)
-                            .font(.caption)
-
-                        Spacer()
-
-                        Text("\(Int(item.value))%")
-                            .font(.caption)
-                            .foregroundStyle(item.color)
-                    }
-                }
-            }
-        }
     }
 }
 

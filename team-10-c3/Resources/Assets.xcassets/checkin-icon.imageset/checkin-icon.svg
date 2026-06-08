@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="25px" height="25px" viewBox="0 0 25 25" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>checkin-icon</title>
+    <defs>
+        <path d="M12.5,0 C19.4035594,0 25,5.59644063 25,12.5 C25,19.4035594 19.4035594,25 12.5,25 C5.59644063,25 0,19.4035594 0,12.5 C0,5.59644063 5.59644063,0 12.5,0 Z" id="path-1"></path>
+    </defs>
+    <g id="checkin-icon" stroke="none" fill="none" xlink:href="#path-1">
+        <circle id="Oval" fill="#F4FFF5" fill-rule="evenodd" cx="12.5" cy="12.5" r="12.5"></circle>
+        <g id="Done_round" transform="translate(5, 5)" stroke="#6BCB77" stroke-linecap="round" stroke-width="2">
+            <path d="M3.33333333,9.33333333 L5.48872667,10.9498667 C5.77452,11.1642 6.17848,11.1152 6.4047,10.8387333 L12,4" id="Path"></path>
+        </g>
+    </g>
+</svg>

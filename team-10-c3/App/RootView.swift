@@ -28,8 +28,8 @@ struct RootView: View {
                     DashboardView()
                 }
 
-                Tab("Guidance", systemImage: "book.fill", value: AppTab.guidance.rawValue) {
-//                    GuidanceView()
+                Tab("Insight", systemImage: "book.fill", value: AppTab.guidance.rawValue) {
+                    WeeklySummaryView()
                 }
                 Tab("Session", systemImage: "record.circle", value: AppTab.session.rawValue, role: .search) {
                     SessionSetupView(
