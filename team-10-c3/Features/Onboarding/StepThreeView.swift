@@ -99,6 +99,7 @@ struct StepThreeView: View {
                             )
                         }
                     }
+                    .padding(.vertical)
                     .padding(.leading, 20)
                 }
                 .padding(.horizontal, -30)

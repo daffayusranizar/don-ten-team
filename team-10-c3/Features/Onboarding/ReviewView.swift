@@ -114,7 +114,7 @@ struct ReviewView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $goToExplanationPage) {
-            ExplanationView()
+            ExplanationView(data: $data)
         }
     }
 }

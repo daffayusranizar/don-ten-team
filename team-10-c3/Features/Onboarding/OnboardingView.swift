@@ -20,8 +20,8 @@ struct OnboardingData {
     // step 3 data (child)
     var childName = ""
     var childBirthdate: Date?
-    var childIsMale = true
-    var selectedAvatar: ChildAvatarImage?
+    var childIsMale: Bool = true
+    var selectedAvatar: ChildAvatarImage? = .avatar1
 
     // step 4 data (most important goals)
     var selectedGoals: [ParentGoal] = []
@@ -42,7 +42,12 @@ struct OnboardingView: View {
 }
 
 #Preview {
+    let repository = InMemoryChildRepository()
+    let profileViewModel = ProfileViewModel(childRepository: repository)
+    
     NavigationStack {
         OnboardingView()
     }
+    .environment(\.childRepository, repository)
+    .environment(\.profileViewModel, profileViewModel)
 }

@@ -14,11 +14,11 @@ struct step: Identifiable {
 }
 
 struct ExplanationView: View {
-    //@Binding var data: OnboardingData
+    @Binding var data: OnboardingData
 
     @State private var goToAgreementsPage: Bool = false
     
-    private var steps: [step] = [
+    private let steps: [step] = [
         step(
             title: "Start a Session",
             description: "Before handing your phone to your child, start a session. Set the time limit and choose whether to enable screen recording."
@@ -126,12 +126,12 @@ struct ExplanationView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $goToAgreementsPage) {
-                AgreementView()
+                AgreementView(data: $data)
             }
         }
     }
 }
 
 #Preview {
-    ExplanationView()
+    OnboardingView()
 }

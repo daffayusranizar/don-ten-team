@@ -93,6 +93,7 @@ struct StepOneView: View {
                     .font(.system(size: 22, weight: .semibold))
             }
         }
+        .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $goToPinSetup) {
             ParentPinSetupView(data: $data)

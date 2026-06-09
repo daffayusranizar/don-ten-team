@@ -49,4 +49,8 @@ final class ProfileViewModel {
     func selectChild(_ child: Child) {
         selectedChild = child
     }
+    
+    func debugRepositoryAddress() {
+        print("ProfileViewModel repo =", ObjectIdentifier(childRepository as AnyObject))
+    }
 }
