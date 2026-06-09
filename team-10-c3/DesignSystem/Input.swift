@@ -85,20 +85,6 @@ struct PrimaryTextField: View {
     var isFocused: FocusState<Bool>.Binding? = nil
     var action: () -> Void = {}
 
-    @ViewBuilder
-    private var textInput: some View {
-        let field = TextField(placeholder, text: $text)
-            .font(size.font)
-            .foregroundColor(.textPrimary)
-            .onSubmit { action() }
-
-        if let isFocused {
-            field.focused(isFocused)
-        } else {
-            field
-        }
-    }
-    
     var body: some View {
         HStack(spacing: size.contentSpacing) {
             // TextField Icon (Optional)
@@ -108,7 +94,14 @@ struct PrimaryTextField: View {
                     .foregroundStyle(.textPrimary)
             }
 
-            textInput
+            TextField(placeholder, text: $text)
+                .font(size.font)
+                .foregroundStyle(.textPrimary)
+                .tint(.textPrimary)
+                .textFieldStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onSubmit { action() }
+                .modifier(OptionalFocusBinding(binding: isFocused))
             
             // Clear Text Button
             if !text.isEmpty {
@@ -128,6 +121,18 @@ struct PrimaryTextField: View {
             Capsule()
                 .fill(.uiSurface)
         )
+    }
+}
+
+private struct OptionalFocusBinding: ViewModifier {
+    let binding: FocusState<Bool>.Binding?
+
+    func body(content: Content) -> some View {
+        if let binding {
+            content.focused(binding)
+        } else {
+            content
+        }
     }
 }
 
@@ -197,8 +202,7 @@ struct PrimaryDateField: View {
                     }
                 }
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
@@ -229,7 +233,10 @@ struct SecondaryTextField: View {
 
             TextField(placeholder, text: $text)
                 .font(size.font)
-                .foregroundColor(.textPrimary)
+                .foregroundStyle(.textPrimary)
+                .tint(.textPrimary)
+                .textFieldStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .onSubmit { action() }
             
             // Clear Text Button
@@ -290,6 +297,7 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
         private var recognizer: UITapGestureRecognizer?
 
         func installIfNeeded(from anchor: UIView) {
+            guard !PreviewRuntime.isActive else { return }
             guard let host = anchor.parentViewController?.view else { return }
             guard hostView !== host else { return }
             uninstall()
@@ -315,14 +323,24 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
         }
 
         func gestureRecognizer(_: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            var view: UIView? = touch.view
-            while let current = view {
-                if current is UITextField || current is UITextView {
-                    return false
+            !Self.isTextInputView(touch.view)
+        }
+
+        private static func isTextInputView(_ view: UIView?) -> Bool {
+            var current = view
+            while let v = current {
+                if v is UITextField || v is UITextView {
+                    return true
                 }
-                view = current.superview
+                let typeName = String(describing: type(of: v))
+                if typeName.contains("TextField")
+                    || typeName.contains("TextInput")
+                    || typeName.contains("UITextInput") {
+                    return true
+                }
+                current = v.superview
             }
-            return true
+            return false
         }
     }
 }
@@ -348,92 +366,128 @@ private func dismissKeyboard() {
 }
 
 // MARK: Preview
-#Preview("Primary Input") {
-    @Previewable @State var example1 = ""
-    @Previewable @State var example2 = ""
-    @Previewable @State var example3 = ""
-    @Previewable @State var example4: Date? = nil
-    
-    ZStack {
-        Color.black
-            .ignoresSafeArea()
-        
-        VStack(spacing: 16) {
-            PrimaryTextField(
-                text: $example1,
-                placeholder: "Type name...",
-                size: .large,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .large,
-                systemImage: "person.crop.circle.fill"
-            )
-            
-            PrimaryTextField(
-                text: $example2,
-                placeholder: "Type name...",
-                size: .medium,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .medium,
-                systemImage: "person.crop.circle.fill"
-            )
-            
-            PrimaryTextField(
-                text: $example3,
-                placeholder: "Type name...",
-                size: .small,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .small,
-                systemImage: "person.crop.circle.fill"
-            )
+
+private struct PrimaryInputPreviewScreen: View {
+    @State private var largeText = ""
+    @State private var mediumText = ""
+    @State private var smallText = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                PrimaryTextField(
+                    text: $largeText,
+                    placeholder: "Type name...",
+                    size: .large,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Large", value: largeText)
+
+                PrimaryTextField(
+                    text: $mediumText,
+                    placeholder: "Type name...",
+                    size: .medium,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Medium", value: mediumText)
+
+                PrimaryTextField(
+                    text: $smallText,
+                    placeholder: "Type name...",
+                    size: .small,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Small", value: smallText)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.light)
+    }
+
+    private func previewEcho(_ label: String, value: String) -> some View {
+        Text("\(label): \"\(value.isEmpty ? " " : value)\"")
+            .font(.caption)
+            .foregroundStyle(.textSecondary)
     }
 }
 
-#Preview("Secondary Input") {
-    @Previewable @State var example1 = ""
-    @Previewable @State var example2 = ""
-    @Previewable @State var example3 = ""
-    
-    ZStack {
-        Color.black
-            .ignoresSafeArea()
-        
+private struct PrimaryDateInputPreviewScreen: View {
+    @State private var birthdate: Date? = nil
+
+    var body: some View {
         VStack(spacing: 16) {
-            SecondaryTextField(
-                text: $example1,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .large,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
-            
-            SecondaryTextField(
-                text: $example2,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .medium,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
-            
-            SecondaryTextField(
-                text: $example3,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .small,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
         }
         .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
+        .preferredColorScheme(.light)
     }
+}
+
+private struct SecondaryInputPreviewScreen: View {
+    @State private var largeText = ""
+    @State private var mediumText = ""
+    @State private var smallText = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                SecondaryTextField(
+                    text: $largeText,
+                    placeholder: "Type name...",
+                    size: .large,
+                    systemImage: "person.crop.circle.fill"
+                )
+                SecondaryTextField(
+                    text: $mediumText,
+                    placeholder: "Type name...",
+                    size: .medium,
+                    systemImage: "person.crop.circle.fill"
+                )
+                SecondaryTextField(
+                    text: $smallText,
+                    placeholder: "Type name...",
+                    size: .small,
+                    systemImage: "person.crop.circle.fill"
+                )
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color.black)
+        .preferredColorScheme(.light)
+    }
+}
+
+#Preview("Primary Input") {
+    PrimaryInputPreviewScreen()
+}
+
+#Preview("Primary Date Input") {
+    PrimaryDateInputPreviewScreen()
+}
+
+#Preview("Secondary Input") {
+    SecondaryInputPreviewScreen()
 }
 

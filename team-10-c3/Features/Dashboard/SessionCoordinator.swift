@@ -456,6 +456,16 @@ final class SessionCoordinator {
 
         do {
             try await screenTimeService.activateSessionRestrictions()
+        } catch let error as SessionAppShieldError where error == .appsNotSelected {
+            screenTimeService.deactivateSessionRestrictions()
+            loadError = error.localizedDescription
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "SessionCoordinator.prepareSessionAuthorized",
+                message: "session blocked — allowed apps not selected",
+                data: ["error": error.localizedDescription]
+            )
+            return false
         } catch {
             AgentDebugLog.log(
                 hypothesisId: "C",

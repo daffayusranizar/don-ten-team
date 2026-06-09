@@ -105,10 +105,33 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
                     }
                 } else if familyControlsAuth.isUsageDataEntitlementMissing {
                     Button("OK", role: .cancel) {
+                        // #region agent log
+                        DebugSessionLog.log(
+                            hypothesisId: "H3",
+                            location: "ScreenTimeAuthorizationAlert.alert",
+                            message: "user tapped OK (usage entitlement missing — no system sheet)",
+                            data: [
+                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                                "status": familyControlsAuth.authorizationStatusDescription,
+                            ]
+                        )
+                        // #endregion
                         onDismissWithoutAuth?()
                     }
                 } else {
                     Button("Continue") {
+                        // #region agent log
+                        DebugSessionLog.log(
+                            hypothesisId: "H3",
+                            location: "ScreenTimeAuthorizationAlert.alert",
+                            message: "user tapped Continue — will request auth",
+                            data: [
+                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                                "status": familyControlsAuth.authorizationStatusDescription,
+                                "missingPermissions": familyControlsAuth.missingPermissions.map { String(describing: $0) }.joined(separator: ","),
+                            ]
+                        )
+                        // #endregion
                         Task { await requestScreenTimeAccess() }
                     }
                 }

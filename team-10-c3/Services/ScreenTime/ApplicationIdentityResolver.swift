@@ -20,8 +20,6 @@ struct ApplicationIdentityResolver {
             return LoadResult(resolver: resolver, monitoredApplicationTokens: monitoredTokens)
         }
 
-        FamilyActivitySelectionStore.clearPersistedSelection()
-
         do {
             let installed = try await FamilyActivityData.shared.installedApplications
             for app in installed {

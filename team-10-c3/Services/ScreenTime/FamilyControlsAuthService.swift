@@ -68,6 +68,9 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     func refreshAuthorizationStatus() {
         let status = AuthorizationCenter.shared.authorizationStatus
         authorizationStatusDescription = String(describing: status)
+        // #region agent log
+        logAuthSnapshot(hypothesisId: "H2", location: "FamilyControlsAuthService.refreshAuthorizationStatus", message: "status refreshed")
+        // #endregion
 
         switch status {
         case .approved:
@@ -190,18 +193,30 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
     }
 
     func requestAuthorization() async throws {
+        // #region agent log
+        logAuthSnapshot(hypothesisId: "H1", location: "FamilyControlsAuthService.requestAuthorization", message: "calling AuthorizationCenter.requestAuthorization")
+        // #endregion
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
         refreshAuthorizationStatus()
+        // #region agent log
+        logAuthSnapshot(hypothesisId: "H1", location: "FamilyControlsAuthService.requestAuthorization", message: "AuthorizationCenter returned")
+        // #endregion
         if !isAuthorized {
             // AuthorizationCenter can lag briefly after the system sheet dismisses.
             try await Task.sleep(for: .milliseconds(350))
             refreshAuthorizationStatus()
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H2", location: "FamilyControlsAuthService.requestAuthorization", message: "status after 350ms retry")
+            // #endregion
         }
     }
 
     func ensureSessionAuthorization() async throws {
         refreshAuthorizationStatus()
         if isAuthorizationDenied {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H2", location: "FamilyControlsAuthService.ensureSessionAuthorization", message: "blocked: denied")
+            // #endregion
             throw FamilyControlsAuthError.notAuthorized(status: authorizationStatusDescription)
         }
         if !isAuthorized {
@@ -209,27 +224,73 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
             refreshAuthorizationStatus()
         }
         guard isAuthorized else {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H2", location: "FamilyControlsAuthService.ensureSessionAuthorization", message: "blocked: still not authorized")
+            // #endregion
             throw FamilyControlsAuthError.notAuthorized(status: authorizationStatusDescription)
         }
+        // #region agent log
+        logAuthSnapshot(hypothesisId: "H4", location: "FamilyControlsAuthService.ensureSessionAuthorization", message: "session auth OK")
+        // #endregion
     }
 
     func ensureUsageAuthorization() async throws {
         try await ensureSessionAuthorization()
         refreshAuthorizationStatus()
-        guard !hasUsageDataAccess else { return }
+        guard !hasUsageDataAccess else {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H5", location: "FamilyControlsAuthService.ensureUsageAuthorization", message: "already has usage data access")
+            // #endregion
+            return
+        }
 
         // First authorization may grant both; re-prompting after `approved` never upgrades.
         if !isAuthorized {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H5", location: "FamilyControlsAuthService.ensureUsageAuthorization", message: "will requestAuthorization (not yet authorized)")
+            // #endregion
             try await requestAuthorization()
             refreshAuthorizationStatus()
+        } else {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H5", location: "FamilyControlsAuthService.ensureUsageAuthorization", message: "skipped requestAuthorization (already authorized without usage)")
+            // #endregion
         }
 
         guard hasUsageDataAccess else {
+            // #region agent log
+            logAuthSnapshot(hypothesisId: "H3", location: "FamilyControlsAuthService.ensureUsageAuthorization", message: "usage access still missing after flow")
+            // #endregion
             throw FamilyControlsAuthError.usageAccessNotGranted(
                 status: authorizationStatusDescription
             )
         }
     }
+
+    // #region agent log
+    private func logAuthSnapshot(hypothesisId: String, location: String, message: String, runId: String = "pre-fix") {
+        let profileFamilyControls = DebugSessionLog.embeddedProfileContains("family-controls")
+        let profileUsage = DebugSessionLog.embeddedProfileContains("app-and-website-usage")
+        var data: [String: String] = [
+            "buildChannel": DebugSessionLog.buildChannel.rawValue,
+            "status": authorizationStatusDescription,
+            "isAuthorized": String(isAuthorized),
+            "hasUsageDataAccess": String(hasUsageDataAccess),
+            "isUsageDataEntitlementMissing": String(isUsageDataEntitlementMissing),
+            "needsPermissionPrompt": String(needsPermissionPrompt),
+            "needsUsagePermissionPrompt": String(needsUsagePermissionPrompt),
+            "profileHasFamilyControls": profileFamilyControls.map { $0 ? "true" : "false" } ?? "unknown",
+            "profileHasUsageEntitlement": profileUsage.map { $0 ? "true" : "false" } ?? "unknown",
+        ]
+        DebugSessionLog.log(
+            hypothesisId: hypothesisId,
+            location: location,
+            message: message,
+            data: data,
+            runId: runId
+        )
+    }
+    // #endregion
 }
 
 @Observable

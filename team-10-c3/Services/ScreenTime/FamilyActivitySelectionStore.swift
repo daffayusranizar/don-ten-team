@@ -1,5 +1,6 @@
-import Foundation
 import FamilyControls
+import Foundation
+import ManagedSettings
 
 enum FamilyActivitySelectionStore {
     private static var defaults: UserDefaults? {
@@ -13,6 +14,20 @@ enum FamilyActivitySelectionStore {
             return FamilyActivitySelection()
         }
         return selection
+    }
+
+    static var hasAllowedApps: Bool {
+        let selection = load()
+        return !selection.applicationTokens.isEmpty
+    }
+
+    static var allowedAppCount: Int {
+        load().applicationTokens.count
+    }
+
+    /// Tokens used for session allowlist shields (apps only — categories are not supported for allowlist).
+    static func allowedApplicationTokensForShields() -> Set<ApplicationToken> {
+        load().applicationTokens
     }
 
     static func save(_ selection: FamilyActivitySelection) {

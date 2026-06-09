@@ -2,9 +2,10 @@ import FamilyControls
 import Foundation
 import ManagedSettings
 
-enum SessionAppShieldError: LocalizedError {
+enum SessionAppShieldError: LocalizedError, Equatable {
     case notAuthorized
     case requiresIOS264
+    case appsNotSelected
 
     var errorDescription: String? {
         switch self {
@@ -12,11 +13,15 @@ enum SessionAppShieldError: LocalizedError {
             return "Screen Time access is required to limit apps during a session."
         case .requiresIOS264:
             return "App blocking requires iOS 26.4 or later on this device."
+        case .appsNotSelected:
+            return """
+            Choose TikTok and YouTube in Parent's Access → Allowed Apps before starting a session.
+            """
         }
     }
 }
 
-/// Blocks opening any installed app except TikTok, YouTube, and this app while a session is active.
+/// Blocks every app except parent-selected allowlist tokens while a session is active.
 @MainActor
 enum SessionAppShield {
     static func applyAllowlist() async throws {
@@ -33,36 +38,27 @@ enum SessionAppShield {
             return
         }
 
-        let hostBundle = Bundle.main.bundleIdentifier?.lowercased() ?? ""
-        let installed = try await FamilyActivityData.shared.installedApplications
-
-        var allowed = Set<ApplicationToken>()
-        var blocked = Set<ApplicationToken>()
-
-        for app in installed {
-            guard let token = app.token,
-                  let bundleId = app.bundleIdentifier,
-                  !bundleId.isEmpty else { continue }
-
-            if MonitoredAppsFilter.includes(bundleId: bundleId) {
-                allowed.insert(token)
-                continue
-            }
-            if bundleId.lowercased() == hostBundle {
-                continue
-            }
-            blocked.insert(token)
+        let allowed = FamilyActivitySelectionStore.allowedApplicationTokensForShields()
+        guard !allowed.isEmpty else {
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "SessionAppShield.applyAllowlist",
+                message: "no picker tokens — shield skipped",
+                data: ["tokenSource": "picker"]
+            )
+            throw SessionAppShieldError.appsNotSelected
         }
 
-        SessionShieldStore.persistAndApply(allowed: allowed, blocked: blocked)
+        SessionShieldStore.persistAndApply(allowed: allowed, blocked: [])
 
         AgentDebugLog.log(
             hypothesisId: "C",
             location: "SessionAppShield.applyAllowlist",
             message: "session app shield applied",
             data: [
+                "tokenSource": "picker",
                 "allowedCount": String(allowed.count),
-                "blockedCount": String(blocked.count),
+                "blockedCount": "0",
             ]
         )
     }
