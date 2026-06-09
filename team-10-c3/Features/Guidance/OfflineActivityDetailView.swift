@@ -8,84 +8,85 @@
 import SwiftUI
 
 struct OfflineActivityDetailView: View {
-    let activity: OfflineActivity
-
+    let activity: ActivityItem
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                sheetToolbar
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Image(activity.imageName)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 359, height: 190)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .frame(maxWidth: .infinity)
 
-                List {
-                    Section {
-                        VStack(alignment: .leading, spacing: 20) {
-                            ActivityImagePlaceholder(height: 190, cornerRadius: 19, showLabel: true)
-                            Text(activity.overview)
-                                .font(.system(size: 15))
-                                .foregroundStyle(.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                    }
+                    VStack(alignment: .leading, spacing: 20) {
+                        detailSectionTitle("Description")
 
-                    Section {
-                        ForEach(Array(activity.steps.enumerated()), id: \.offset) { index, step in
-                            Text("\(index + 1). \(step)")
-                                .font(.system(size: 15))
-                                .foregroundStyle(.textPrimary)
-                                .lineSpacing(13)
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
+                        Text(activity.detailDescription)
+                            .font(.bodyRegular)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+
+                        detailSectionTitle(activity.howToTitle)
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(Array(activity.howTo.enumerated()), id: \.offset) { index, item in
+                                numberedRow(number: index + 1, text: item)
+                            }
+                        }
+
+                        detailSectionTitle(activity.tipsTitle)
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(Array(activity.tips.enumerated()), id: \.offset) { index, item in
+                                numberedRow(number: index + 1, text: item)
+                            }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
-            .padding(.horizontal, 21)
-            .background(.uiBackground)
-            .foregroundStyle(.textPrimary)
-            .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle(activity.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Close")
+                }
+            }
         }
+        .presentationDragIndicator(.visible)
     }
 
-    private var sheetToolbar: some View {
-        ZStack {
-            HStack {
-                Spacer()
+    private func detailSectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.heading6)
+            .foregroundStyle(.primary)
+    }
 
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 20, weight: .semibold))
-                        .padding()
-                        .background(Circle().fill(.uiSurface))
-                }
-            }
+    private func numberedRow(number: Int, text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text("\(number).")
+                .font(.bodyRegular)
+                .foregroundStyle(.primary)
 
-            Text(activity.title)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, 56)
+            Text(text)
+                .font(.bodyRegular)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
     }
 }
 
 #Preview {
-    OfflineActivityDetailView(
-        activity: OfflineActivity(
-            title: "2 Person Football Game",
-            description: "Play short football passing challenges together.",
-            overview: "Stand a few steps apart and pass the ball back and forth.",
-            steps: ["Stand 3–5 meters apart.", "Pass the ball gently.", "Count successful passes together."]
-        )
-    )
+    OfflineActivityDetailView(activity: ActivityLibrary.allActivities[0])
 }

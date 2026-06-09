@@ -284,7 +284,9 @@ struct ReportView: View {
                     title: "See Activity",
                     size: .medium,
                     systemImage: "",
-                    action: { showOfflineActivity = true }
+                    action: {
+                        showOfflineActivity = true
+                    }
                 )
                 .padding(.top, 10)
             }
@@ -461,12 +463,14 @@ private struct WeeklySummaryPreview: View {
 
     var body: some View {
         VStack {
-            Picker("Period", selection: $selectedPeriod) {
-                ForEach(Period.allCases, id: \.self) { period in
-                    Text(period.rawValue).tag(period)
+            HStack(spacing: 12) {
+                Picker("Period", selection: $selectedPeriod) {
+                    ForEach(Period.allCases, id: \.self) { period in
+                        Text(period.rawValue).tag(period)
+                    }
                 }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal, 24)
             .padding(.top, 4)
 
@@ -484,13 +488,15 @@ private struct WeeklySummaryPreview: View {
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.blue)
+                Button {
+                } label: {
+                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                }
+
             }
         }
         .navigationDestination(isPresented: $showOfflineActivity) {
-            InsightOfflineActivityDetailView(activityText: currentReport.offlineActivity)
+            OfflineActivityView()
         }
     }
 }
