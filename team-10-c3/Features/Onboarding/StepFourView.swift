@@ -193,7 +193,7 @@ struct StepFourView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 4 of 5")
+                Text("Step 4 of 6")
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

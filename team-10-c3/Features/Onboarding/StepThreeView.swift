@@ -140,7 +140,7 @@ struct StepThreeView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 3 of 5")
+                Text("Step 3 of 6")
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

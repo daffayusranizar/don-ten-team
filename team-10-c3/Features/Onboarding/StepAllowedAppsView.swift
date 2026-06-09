@@ -1,19 +1,23 @@
 //
-//  StepFiveView.swift
+//  StepAllowedAppsView.swift
 //  team-10-c3
 //
-//  Created by Huy Tran on 04/06/26.
-//
+
 import SwiftUI
 
-struct StepFiveView: View {
+struct StepAllowedAppsView: View {
     @Binding var data: OnboardingData
-    
-    @State var goToReviewPage: Bool = false
-    
+
+    @Environment(\.familyControlsAuth) private var familyControlsAuth
+    @State private var goToReviewPage = false
+    @State private var showScreenTimeAuthAlert = false
+
+    private var canContinue: Bool {
+        familyControlsAuth.isAuthorized && FamilyActivitySelectionStore.hasAllowedApps
+    }
+
     var body: some View {
         VStack(spacing: 20) {
-            // bell icon
             ZStack {
                 Circle()
                     .fill(
@@ -24,59 +28,50 @@ struct StepFiveView: View {
                         )
                     )
                     .frame(width: 80, height: 80)
-                
-                Image(systemName: "bell")
+
+                Image(systemName: "checkmark.shield")
                     .foregroundStyle(.white)
                     .font(.system(size: 30))
             }
-            
+
             VStack(spacing: 5) {
-                Text("Get Weekly \n Reminders!")
+                Text("Choose Allowed Apps")
                     .font(.system(size: 20, weight: .semibold))
-                Text("Choose which reminders you'd like. You can change these anytime in Settings.")
+                Text("During a session, only TikTok and YouTube stay open. Pick them here so Kiddly can block everything else.")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            
-            // notification settings
-            VStack(alignment: .leading) {
-                Text("Notifications")
-                
-                NotificationToggle(
-                    icon: "bell.circle.fill",
-                    title: "Weekly Suggestion Reminder",
-                    isOn: $data.weeklySuggestions
-                )
-                .font(.system(size: 15, weight: .regular))
-                
-                Divider()
-                
-                NotificationToggle(
-                    icon: "calendar.circle.fill",
-                    title: "Weekly Check-In",
-                    isOn: $data.weeklyCheckIns
+
+            if familyControlsAuth.needsPermissionPrompt {
+                PrimaryButton(
+                    title: "Enable Screen Time",
+                    size: .medium,
+                    systemImage: "hourglass.badge.plus",
+                    action: { showScreenTimeAuthAlert = true }
                 )
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(.primaryMediumBlue)
-                    .opacity(0.2)
-            )
-            
+
+            FamilyActivityPickerSection(onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true })
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(.primaryMediumBlue)
+                        .opacity(0.12)
+                )
+
             Spacer()
-            
-            // forward buttons
+
             VStack(spacing: 15) {
                 PrimaryButton(
                     title: "Continue",
+                    isDisabled: !canContinue,
                     action: { goToReviewPage = true }
                 )
-                
+
                 Button {
                     goToReviewPage = true
-                } label : {
+                } label: {
                     Text("Set Up Later")
                         .foregroundStyle(.textSecondary)
                         .font(.system(size: 14, weight: .semibold))
@@ -87,20 +82,27 @@ struct StepFiveView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 5 of 6")
+                Text("Step 6 of 6")
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $goToReviewPage) {
-            StepAllowedAppsView(data: $data)
+            ReviewView(data: $data)
+        }
+        .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
+            familyControlsAuth.refreshAuthorizationStatus()
+        }
+        .onAppear {
+            familyControlsAuth.refreshAuthorizationStatus()
         }
     }
 }
 
 #Preview {
     NavigationStack {
-        OnboardingView()
+        StepAllowedAppsView(data: .constant(OnboardingData()))
     }
+    .environment(\.familyControlsAuth, FamilyControlsAuthService())
 }
