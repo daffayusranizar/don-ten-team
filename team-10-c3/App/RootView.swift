@@ -21,16 +21,21 @@ struct RootView: View {
     var body: some View {
         @Bindable var sessionCoordinator = sessionCoordinator
 
-        NavigationStack {
-            TabView(selection: $selectedTab) {
-                Tab("Home", systemImage: "house.fill", value: AppTab.dashboard.rawValue) {
+        TabView(selection: $selectedTab) {
+            Tab("Home", systemImage: "house.fill", value: AppTab.dashboard.rawValue) {
+                NavigationStack {
                     DashboardView()
                 }
+            }
 
-                Tab("Insight", systemImage: "chart.bar.fill", value: AppTab.insight.rawValue) {
+            Tab("Insight", systemImage: "chart.bar.fill", value: AppTab.insight.rawValue) {
+                NavigationStack {
                     WeeklySummaryView()
                 }
-                Tab("Session", systemImage: "record.circle", value: AppTab.session.rawValue, role: .search) {
+            }
+
+            Tab("Session", systemImage: "record.circle", value: AppTab.session.rawValue, role: .search) {
+                NavigationStack {
                     SessionSetupView(
                         showsBackButton: false,
                         onSessionStarted: { selectedTab = AppTab.dashboard.rawValue }
