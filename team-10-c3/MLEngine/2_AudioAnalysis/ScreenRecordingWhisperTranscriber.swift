@@ -41,7 +41,8 @@ public actor ScreenRecordingWhisperTranscriber {
         withoutTimestamps: false
     )
 
-    public init() async throws {
+    public init(statusUpdate: (@Sendable (String) -> Void)? = nil) async throws {
+        statusUpdate?("Downloading speech recognition model…")
         do {
             whisperKit = try await WhisperKit(
                 WhisperKitConfig(model: sharedModelName)
@@ -49,6 +50,7 @@ public actor ScreenRecordingWhisperTranscriber {
         } catch {
             throw WhisperTranscriberError.loadFailed(error.localizedDescription)
         }
+        statusUpdate?("Loading speech recognition…")
     }
 
     public func transcribe(wavURL: URL) async throws -> String {

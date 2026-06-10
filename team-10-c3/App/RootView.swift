@@ -43,53 +43,27 @@ struct RootView: View {
             return
         }
 
-        splashStatusMessage = "Loading screen analysis model…"
         var clipLoaded = false
         var whisperLoaded = false
 
-        await withTaskGroup(of: SplashModelLoadResult.self) { group in
-            group.addTask {
-                do {
-                    try await MobileCLIPModelLoader.preload()
-                    return .clipSucceeded
-                } catch {
-                    print("MobileCLIP preload failed: \(error.localizedDescription)")
-                    return .clipFailed
+        splashStatusMessage = "Loading screen analysis model…"
+        await Task.yield()
+        do {
+            try await MobileCLIPModelLoader.preload()
+            clipLoaded = true
+        } catch {
+            print("MobileCLIP preload failed: \(error.localizedDescription)")
+        }
+
+        do {
+            try await WhisperModelLoader.preload { status in
+                Task { @MainActor in
+                    splashStatusMessage = status
                 }
             }
-            group.addTask {
-                do {
-                    try await WhisperModelLoader.preload()
-                    return .whisperSucceeded
-                } catch {
-                    print("Whisper preload failed: \(error.localizedDescription)")
-                    return .whisperFailed
-                }
-            }
-
-            var clipFinished = false
-            var whisperFinished = false
-
-            for await result in group {
-                switch result {
-                case .clipSucceeded:
-                    clipLoaded = true
-                    clipFinished = true
-                case .clipFailed:
-                    clipFinished = true
-                case .whisperSucceeded:
-                    whisperLoaded = true
-                    whisperFinished = true
-                case .whisperFailed:
-                    whisperFinished = true
-                }
-
-                if clipFinished && !whisperFinished {
-                    splashStatusMessage = "Loading speech recognition…"
-                } else if whisperFinished && !clipFinished {
-                    splashStatusMessage = "Loading screen analysis model…"
-                }
-            }
+            whisperLoaded = true
+        } catch {
+            print("Whisper preload failed: \(error.localizedDescription)")
         }
 
         switch (clipLoaded, whisperLoaded) {
@@ -101,18 +75,12 @@ struct RootView: View {
             splashStatusMessage = "Continuing with partial model preload…"
         }
 
+        await Task.yield()
         try? await Task.sleep(for: .milliseconds(350))
 
         withAnimation {
             showSplashScreen = false
         }
-    }
-
-    private enum SplashModelLoadResult {
-        case clipSucceeded
-        case clipFailed
-        case whisperSucceeded
-        case whisperFailed
     }
     
     @ViewBuilder

@@ -200,6 +200,11 @@ struct DashboardView: View {
             }
             showOnboardingPage = profileViewModel.children.isEmpty
         }
+        .onChange(of: profileViewModel.children.isEmpty) { _, isEmpty in
+            if !isEmpty {
+                showOnboardingPage = false
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             sessionCoordinator.refreshAfterChildSwitch(for: profileViewModel.selectedChild)

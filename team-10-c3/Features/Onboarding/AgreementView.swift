@@ -13,7 +13,6 @@ struct AgreementView: View {
     @Environment(\.childRepository) private var childRepository
 
     @State private var agreedToTerms: Bool = false
-    @State private var goToDashboardPage: Bool = false
     @State private var saveError: String?
 
     var body: some View {
@@ -121,9 +120,6 @@ struct AgreementView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $goToDashboardPage) {
-            DashboardView()
-        }
         .alert(
             "Could Not Save Child Profile",
             isPresented: Binding(
@@ -192,8 +188,6 @@ struct AgreementView: View {
             profileViewModel.selectedChild = child
 
             print("👤 Selected child =", profileViewModel.selectedChild?.name ?? "nil")
-
-            goToDashboardPage = true
 
         } catch {
             print("❌ Save failed:", error)

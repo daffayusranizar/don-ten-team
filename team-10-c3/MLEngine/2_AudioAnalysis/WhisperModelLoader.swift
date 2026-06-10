@@ -4,8 +4,8 @@ import Foundation
 public enum WhisperModelLoader {
     private static let cache = Cache()
 
-    public static func preload() async throws {
-        try await cache.preload()
+    public static func preload(statusUpdate: (@Sendable (String) -> Void)? = nil) async throws {
+        try await cache.preload(statusUpdate: statusUpdate)
     }
 
     public static func shared() async throws -> ScreenRecordingWhisperTranscriber {
@@ -16,9 +16,9 @@ public enum WhisperModelLoader {
 private actor Cache {
     private var transcriber: ScreenRecordingWhisperTranscriber?
 
-    func preload() async throws {
+    func preload(statusUpdate: (@Sendable (String) -> Void)? = nil) async throws {
         guard transcriber == nil else { return }
-        transcriber = try await ScreenRecordingWhisperTranscriber()
+        transcriber = try await ScreenRecordingWhisperTranscriber(statusUpdate: statusUpdate)
     }
 
     func shared() async throws -> ScreenRecordingWhisperTranscriber {

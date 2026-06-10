@@ -25,6 +25,11 @@ struct SplashScreenView: View {
             VStack(spacing: 20) {
                 Image("SplashLogo")
 
+                Text("Smarter parenting starts here")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .tracking(0.3)
+
                 VStack(spacing: 10) {
                     ProgressView()
                         .controlSize(.regular)
