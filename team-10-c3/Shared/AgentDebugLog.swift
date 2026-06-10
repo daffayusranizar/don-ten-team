@@ -239,7 +239,6 @@ enum AgentDebugLog {
 
     static func pipelineStatus(
         screenTimeAuthorized: Bool,
-        hasUsageDataAccess: Bool = false,
         authorizationDetail: String = ""
     ) -> PipelineStatus {
         let entries = parsedEntries()
@@ -253,13 +252,12 @@ enum AgentDebugLog {
         let lastIssue = inferLastIssue(
             entries: entries,
             appGroup: appGroupSnapshot(),
-            screenTimeAuthorized: screenTimeAuthorized,
-            hasUsageDataAccess: hasUsageDataAccess
+            screenTimeAuthorized: screenTimeAuthorized
         )
 
         return PipelineStatus(
             screenTimeAuthorized: screenTimeAuthorized,
-            hasUsageDataAccess: hasUsageDataAccess,
+            hasUsageDataAccess: false,
             authorizationDetail: authorizationDetail,
             appGroup: appGroupSnapshot(),
             trust: trust,
@@ -274,29 +272,16 @@ enum AgentDebugLog {
     private static func inferLastIssue(
         entries: [ParsedEntry],
         appGroup: AppGroupSnapshot,
-        screenTimeAuthorized: Bool,
-        hasUsageDataAccess: Bool
+        screenTimeAuthorized: Bool
     ) -> String? {
-        if entries.contains(where: { $0.location.contains("fetchUsage:unauthorized") }) {
-            return "Screen Time approved but missing usage data access — enable App and Website Usage, reinstall, re-authorize (approvedWithDataAccess)."
-        }
-        if entries.contains(where: { $0.location.contains("activityData failed") || $0.location.contains("fetchUsage:error") }) {
-            let err = entries.first { $0.location.contains("activityData") || $0.location.contains("fetchUsage:error") }?
-                .data["error"] ?? "unknown"
-            return "activityData failed: \(err). EU device/account may be required for production users."
-        }
         if !appGroup.containerAccessible {
             return "Main app cannot access App Group container — check entitlements and provisioning profile."
         }
-        if screenTimeAuthorized && !hasUsageDataAccess {
-            return "Screen Time is approved but without usage data access — enable “Family Controls App And Website Usage” in Xcode, reinstall, then authorize again in Parents Access."
+        if !screenTimeAuthorized {
+            return "Screen Time is not authorized — enable it in Parent's Access."
         }
         if entries.isEmpty {
             return "No logs yet. Start a session, use an app, then stop."
-        }
-        if entries.contains(where: { $0.location.contains("afterSave") }),
-           entries.contains(where: { $0.data["savedAppCount"] == "0" }) {
-            return "Session saved with 0 apps — Screen Time returned no per-app data."
         }
         return nil
     }

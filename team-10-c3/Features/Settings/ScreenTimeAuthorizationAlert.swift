@@ -26,20 +26,7 @@ extension View {
 struct ScreenTimePermissionBanner: View {
     let gaps: [ScreenTimePermissionGap]
     let statusDescription: String
-    let canRequestUsageAccess: Bool
     let onEnable: () -> Void
-
-    init(
-        gaps: [ScreenTimePermissionGap],
-        statusDescription: String,
-        canRequestUsageAccess: Bool = true,
-        onEnable: @escaping () -> Void
-    ) {
-        self.gaps = gaps
-        self.statusDescription = statusDescription
-        self.canRequestUsageAccess = canRequestUsageAccess
-        self.onEnable = onEnable
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -47,7 +34,7 @@ struct ScreenTimePermissionBanner: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.orange)
 
-            Text(summaryText)
+            Text("Allow Screen Time so you can choose which apps stay open during sessions and view usage reports.")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
@@ -55,16 +42,12 @@ struct ScreenTimePermissionBanner: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if canRequestUsageAccess {
-                PrimaryButton(
-                    title: gaps.contains(.familyControlsNotApproved)
-                        ? "Enable Screen Time"
-                        : "Allow App Usage",
-                    size: .medium,
-                    systemImage: "checkmark.shield",
-                    action: onEnable
-                )
-            }
+            PrimaryButton(
+                title: "Enable Screen Time",
+                size: .medium,
+                systemImage: "checkmark.shield",
+                action: onEnable
+            )
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,13 +55,6 @@ struct ScreenTimePermissionBanner: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(.orange.opacity(0.12))
         )
-    }
-
-    private var summaryText: String {
-        if gaps.contains(.familyControlsNotApproved) {
-            return "Allow Screen Time so you can choose which apps stay open during sessions."
-        }
-        return "Usage charts need Apple’s App & Website Usage entitlement on this TestFlight build. Sessions still work."
     }
 }
 
@@ -103,35 +79,8 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
                             UIApplication.shared.open(url)
                         }
                     }
-                } else if familyControlsAuth.isUsageDataEntitlementMissing {
-                    Button("OK", role: .cancel) {
-                        // #region agent log
-                        DebugSessionLog.log(
-                            hypothesisId: "H3",
-                            location: "ScreenTimeAuthorizationAlert.alert",
-                            message: "user tapped OK (usage entitlement missing — no system sheet)",
-                            data: [
-                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
-                                "status": familyControlsAuth.authorizationStatusDescription,
-                            ]
-                        )
-                        // #endregion
-                        onDismissWithoutAuth?()
-                    }
                 } else {
                     Button("Continue") {
-                        // #region agent log
-                        DebugSessionLog.log(
-                            hypothesisId: "H3",
-                            location: "ScreenTimeAuthorizationAlert.alert",
-                            message: "user tapped Continue — will request auth",
-                            data: [
-                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
-                                "status": familyControlsAuth.authorizationStatusDescription,
-                                "missingPermissions": familyControlsAuth.missingPermissions.map { String(describing: $0) }.joined(separator: ","),
-                            ]
-                        )
-                        // #endregion
                         Task { await requestScreenTimeAccess() }
                     }
                 }
@@ -148,11 +97,7 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
     private func requestScreenTimeAccess() async {
         familyControlsAuth.refreshAuthorizationStatus()
         do {
-            if familyControlsAuth.missingPermissions.contains(.familyControlsNotApproved) {
-                try await familyControlsAuth.ensureSessionAuthorization()
-            } else {
-                try await familyControlsAuth.ensureUsageAuthorization()
-            }
+            try await familyControlsAuth.ensureSessionAuthorization()
             onAuthorized?()
         } catch {
             familyControlsAuth.refreshAuthorizationStatus()

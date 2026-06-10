@@ -48,8 +48,6 @@ struct UsageChartItem: Identifiable, Equatable {
 struct UsageInsightService {
     let sessionRepository: SessionRepository
     let sessionAnalysisStore: SessionAnalysisStore
-    let screenTimeService: ScreenTimeUsageProviding
-    let familyControlsAuth: FamilyControlsAuthProviding
 
     func clearWeeklyInsightCache(childId: UUID, weekKey: String) {
         sessionAnalysisStore.clearWeeklyInsightCaches(for: childId, weekKey: weekKey)
@@ -282,9 +280,6 @@ struct UsageInsightService {
             lastCheckpoint = now
         }
 
-        let topApps = await fetchTopApps(childId: childId, sessions: sessions, snapshots: snapshots)
-        logTiming("fetchTopApps")
-
         let input = DailyInsightInput.make(
             child: child,
             dayLabel: dayLabel,
@@ -292,8 +287,7 @@ struct UsageInsightService {
             sessionCount: max(sessions.count, sessionResults.count),
             mergedCategoryBreakdown: mergedBreakdown,
             sessionResults: sessionResults,
-            snapshots: snapshots,
-            topApps: topApps
+            snapshots: snapshots
         )
         logTiming("buildDailyInput")
         #if DEBUG
@@ -347,32 +341,6 @@ struct UsageInsightService {
             shortSummary: fallbackText,
             detailSummary: fallbackText
         )
-    }
-
-    private func fetchTopApps(
-        childId: UUID,
-        sessions: [CompletedSessionReference],
-        snapshots: [SessionUsageSnapshot]
-    ) async -> [AppUsageRow] {
-        guard familyControlsAuth.canRecordSessionUsage else { return [] }
-
-        let windows: [SessionWindow]
-        if !sessions.isEmpty {
-            windows = sessions.map { SessionWindow(startAt: $0.startAt, stopAt: $0.stopAt) }
-        } else {
-            windows = snapshots.map { SessionWindow(startAt: $0.startAt, stopAt: $0.stopAt) }
-        }
-        guard !windows.isEmpty else { return [] }
-
-        do {
-            let result = try await screenTimeService.fetchHourlyUsageForSessions(
-                childId: childId,
-                sessions: windows
-            )
-            return Array(result.apps.prefix(8))
-        } catch {
-            return []
-        }
     }
 
     private func days(for period: Period, referenceDate: Date, calendar: Calendar) -> [Date] {

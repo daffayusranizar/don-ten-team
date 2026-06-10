@@ -10,7 +10,7 @@ public final class SessionUsageSnapshot {
     public var fetchedAt: Date
     /// Wall-clock active session time (matches parent timer).
     public var totalSeconds: Int
-    /// Legacy field; app usage is fetched live for charts, not persisted.
+    /// Legacy field kept for schema compatibility; app usage is shown via embedded report only.
     public var screenTimeAppTotalSeconds: Int
     /// Parent-chosen session limit at start (e.g. 30 min). 0 on legacy snapshots.
     public var plannedDurationSeconds: Int
@@ -40,16 +40,6 @@ public final class SessionUsageSnapshot {
     }
 
     public var resolvedScreenTimeSeconds: Int {
-        if screenTimeAppTotalSeconds > 0 { return screenTimeAppTotalSeconds }
-        return appUsageRows.map(\.durationSeconds).reduce(0, +)
-    }
-
-    public var appUsageRows: [AppUsageRow] {
-        guard let data = appUsageJSON.data(using: .utf8),
-              let rows = try? JSONDecoder().decode([AppUsageRow].self, from: data) else {
-            return []
-        }
-        if SessionUsageSanitizer.isLegacyMockAppList(rows) { return [] }
-        return rows
+        screenTimeAppTotalSeconds
     }
 }

@@ -4,7 +4,7 @@ Kiddly is a native iOS SwiftUI app that helps parents manage child screen time �
 
 **Requirements:** Xcode 26.5+, iOS 26+ simulator or device.
 
-- [Screen Time data & limitations](docs/SCREEN_TIME.md) — how Kiddly uses `activityData` and why numbers differ from session timer / Settings.
+- [Screen Time data & limitations](docs/SCREEN_TIME.md) — embedded `DeviceActivityReport` extension, session timer, and Apple API limits.
 - [Child data storage](docs/CHILD_DATA_STORAGE.md) — SwiftData schema, child profiles, session markers, and what is persisted vs in-memory.
 
 ## Building with your own Apple account
@@ -26,7 +26,7 @@ Each teammate can build with their **own** signing identity. Shared defaults liv
    Find your **Team ID** in Xcode → Settings → Accounts → your team → Team ID.
 4. Register an **App Group** at [developer.apple.com](https://developer.apple.com) → Identifiers → App Groups:
    - Identifier: `group.yourname.don-ten-team.shared` (derived from your prefix)
-5. In Xcode, for all targets (`team-10-c3`, `ScreenRecorderExtension`, `DeviceActivityMonitorExtension`):
+5. In Xcode, for all targets (`team-10-c3`, `ScreenRecorderExtension`, `DeviceActivityMonitorExtension`, `DeviceActivityReportExtension`):
    - **Signing & Capabilities** → enable **Automatically manage signing**
    - Confirm **Team** matches your local config
    - Add the App Group capability if Xcode prompts you
@@ -109,7 +109,7 @@ Kiddly/
 Extensions/
 ├── BroadcastUpload/        Captures the screen while the child uses the device  [P1]
 ├── DeviceActivityMonitor/  Fires when a screen time limit is reached             [P2]
-├── DeviceActivityReport/   Shows usage data inside iOS Screen Time settings      [P2]
+├── DeviceActivityReportExtension/  Embedded Screen Time usage reports (sandboxed)   [done]
 └── ShieldConfiguration/    Custom "time's up" screen shown to the child          [P2]
 ```
 

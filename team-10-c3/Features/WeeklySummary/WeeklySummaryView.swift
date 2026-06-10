@@ -7,7 +7,6 @@
 // [P2] Full weekly report card
 
 import SwiftUI
-import Charts
 
 enum Period: String, CaseIterable {
     case daily = "Daily"
@@ -68,9 +67,8 @@ struct WeeklySummaryView: View {
                     onRegenerateWeekly: nil
                 )
             }
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .navigationTitle("Usage Insight")
         .toolbarTitleDisplayMode(.inline)
         .onAppear {
@@ -131,7 +129,7 @@ struct ReportView: View {
     var body: some View {
         ScrollView {
             ZStack(alignment: .top) {
-                LazyVStack(spacing: 20) {
+                LazyVStack(spacing: 16) {
                     if isLoading {
                         ProgressView("Loading insights…")
                             .frame(maxWidth: .infinity, minHeight: 120)
@@ -164,7 +162,8 @@ struct ReportView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 96)
                 .opacity(isRefreshing ? 0.45 : 1)
                 .allowsHitTesting(!isRefreshing)
 
@@ -182,6 +181,7 @@ struct ReportView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
         .onAppear {
             reloadSavedTryIfNeeded()
         }
@@ -240,7 +240,7 @@ struct ReportView: View {
     }
 
     private func usageInsightCard(report: UsageInsightReport) -> some View {
-        CardView(minHeight: 216) {
+        InsightCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image("insight-icon")
@@ -248,7 +248,7 @@ struct ReportView: View {
                     Text(period == .daily ? "Today's Usage Insight" : "This Week Usage Insight")
                         .font(.heading6)
 
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
 
                 Text(report.dateLabel)
@@ -256,21 +256,20 @@ struct ReportView: View {
                     .foregroundStyle(.secondary)
 
                 if report.chartItems.isEmpty {
-                    Text("Chart data will appear after a recorded session is analyzed.")
+                    Text("Category breakdown appears after a recorded session is analyzed.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    StackedBarCard(items: report.chartItems)
+                    CategoryBreakdownList(items: report.chartItems)
                 }
             }
             .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
+            .padding(.vertical, 14)
         }
     }
 
     private func aiSummaryCard(report: UsageInsightReport) -> some View {
-        CardView(minHeight: 242) {
+        InsightCard {
             VStack(spacing: 0) {
                 if report.needsAttention {
                     NavigationLink {
@@ -363,7 +362,7 @@ struct ReportView: View {
     }
 
     private func weeklySuggestionCard(suggestion: String) -> some View {
-        CardView(minHeight: 216) {
+        InsightCard {
             VStack {
                 HStack(spacing: 8) {
                     Image("suggestion-icon")
@@ -422,7 +421,7 @@ struct ReportView: View {
     }
 
     private func weeklySuggestionSavedCard(savedTry: SavedSuggestionTry) -> some View {
-        CardView(minHeight: 180) {
+        InsightCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image("suggestion-icon")
@@ -481,7 +480,7 @@ struct ReportView: View {
     }
 
     private func recommendedActivityCard(report: UsageInsightReport) -> some View {
-        CardView(minHeight: 190) {
+        InsightCard {
             VStack {
                 HStack(spacing: 8) {
                     Image("activity-icon")
@@ -519,7 +518,7 @@ struct ReportView: View {
     }
 
     private func insightEmptyState(message: String) -> some View {
-        CardView(minHeight: 180) {
+        InsightCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text(period == .daily ? "Today's Usage Insight" : "This Week Usage Insight")
                     .font(.heading6)
@@ -528,7 +527,46 @@ struct ReportView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(18)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+        }
+    }
+}
+
+private struct InsightCard<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(red: 0.82, green: 0.83, blue: 0.88), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+    }
+}
+
+private struct CategoryBreakdownList: View {
+    let items: [UsageChartItem]
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(items) { item in
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(item.color)
+                        .frame(width: 10, height: 10)
+                    Text(item.name)
+                        .font(.subheadline)
+                    Spacer(minLength: 8)
+                    Text("\(Int(item.value))%")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
@@ -610,67 +648,6 @@ struct CardView<Content: View>: View {
             )
             .fixedSize(horizontal: false, vertical: true)
             .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-    }
-}
-
-struct StackedBarCard: View {
-    let items: [UsageChartItem]
-
-    @ChartDifferentiateWithoutColor private var differentiateWithoutColor
-
-    private var total: Double {
-        max(items.reduce(0) { $0 + $1.value }, 1)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        let consumed = items.prefix(index).reduce(0) { $0 + $1.value }
-                        let remainingWidth = geo.size.width * ((total - consumed) / total)
-
-                        Capsule()
-                            .fill(itemFill(item))
-                            .frame(width: remainingWidth, height: 24)
-                            .shadow(radius: 2)
-                    }
-                }
-            }
-            .frame(height: 24)
-
-            VStack(spacing: 10) {
-                ForEach(items) { item in
-                    HStack {
-                        ChartLegendSwatch(
-                            color: item.color,
-                            pattern: item.chartPattern,
-                            systemImage: item.systemImage,
-                            cacheKey: item.name,
-                            differentiateWithoutColor: differentiateWithoutColor
-                        )
-
-                        Text(item.name)
-                            .font(.caption)
-
-                        Spacer()
-
-                        Text("\(Int(item.value))%")
-                            .font(.caption)
-                            .foregroundStyle(differentiateWithoutColor ? .textPrimary : item.color)
-                    }
-                }
-            }
-        }
-    }
-
-    private func itemFill(_ item: UsageChartItem) -> AnyShapeStyle {
-        UsageCategoryVisualStyle.fillStyle(
-            color: item.color,
-            pattern: item.chartPattern,
-            cacheKey: item.name,
-            differentiateWithoutColor: differentiateWithoutColor
-        )
     }
 }
 

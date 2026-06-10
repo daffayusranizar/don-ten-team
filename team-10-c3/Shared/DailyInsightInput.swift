@@ -22,9 +22,6 @@ struct DailyInsightInput: Sendable {
     let sessionCount: Int
     let mergedCategoryBreakdown: UsageCategoryBreakdown
     let sessions: [DailySessionInsight]
-    let topApps: [AppUsageRow]
-    let screenTimeAppTotalSeconds: Int
-    let hasScreenTimeData: Bool
 
     static func make(
         child: Child?,
@@ -33,8 +30,7 @@ struct DailyInsightInput: Sendable {
         sessionCount: Int,
         mergedCategoryBreakdown: UsageCategoryBreakdown,
         sessionResults: [(session: CompletedSessionReference, result: PipelineResult)],
-        snapshots: [SessionUsageSnapshot],
-        topApps: [AppUsageRow]
+        snapshots: [SessionUsageSnapshot]
     ) -> DailyInsightInput {
         let sessionInsights = sessionResults.enumerated().map { offset, entry in
             let brief = entry.result.sessionTranscriptBriefSummary
@@ -60,8 +56,6 @@ struct DailyInsightInput: Sendable {
             )
         }
 
-        let screenTimeTotal = topApps.map(\.durationSeconds).reduce(0, +)
-
         return DailyInsightInput(
             childName: child?.name,
             childAge: child?.currentAge,
@@ -69,10 +63,7 @@ struct DailyInsightInput: Sendable {
             totalSessionSeconds: totalSessionSeconds,
             sessionCount: sessionCount,
             mergedCategoryBreakdown: mergedCategoryBreakdown,
-            sessions: sessionInsights,
-            topApps: topApps,
-            screenTimeAppTotalSeconds: screenTimeTotal,
-            hasScreenTimeData: !topApps.isEmpty
+            sessions: sessionInsights
         )
     }
 
@@ -104,16 +95,6 @@ extension DailyInsightInput {
         lines.append("Total session time (parent timer): \(DurationFormatting.verbose(seconds: totalSessionSeconds))")
         lines.append("Number of sessions: \(sessionCount)")
 
-        if hasScreenTimeData {
-            lines.append("App usage estimate: \(DurationFormatting.verbose(seconds: screenTimeAppTotalSeconds))")
-            let appLines = topApps.prefix(8).map {
-                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
-            }
-            if !appLines.isEmpty {
-                lines.append("Top apps: \(appLines.joined(separator: ", "))")
-            }
-        }
-
         if !mergedCategoryBreakdown.isEmpty {
             let breakdown = mergedCategoryBreakdown.items
                 .map { "\($0.name) \($0.percentage)%" }
@@ -128,7 +109,6 @@ extension DailyInsightInput {
 
 #if DEBUG
 extension DailyInsightInput {
-    /// Prints a human-readable summary to the Xcode console (DEBUG builds only).
     func logToXcodeConsole(maxFrameLinesPerSession: Int = 6, maxTextChars: Int = 400) {
         func truncate(_ text: String, max: Int) -> String {
             guard text.count > max else { return text }
@@ -147,10 +127,6 @@ extension DailyInsightInput {
         let breakdown = mergedCategoryBreakdown.items
             .map { "\($0.name): \($0.percentage)% (\($0.frameCount) frames)" }
             .joined(separator: "\n  ")
-
-        let appLines = topApps.prefix(8).map {
-            "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
-        }.joined(separator: "\n  ")
 
         let sessionBlocks = sessions.map { session in
             let frames = session.frameLines.prefix(maxFrameLinesPerSession).joined(separator: "\n      ")
@@ -178,10 +154,6 @@ extension DailyInsightInput {
 
         Merged category breakdown:
           \(breakdown.isEmpty ? "(empty)" : breakdown)
-
-        Screen Time: \(hasScreenTimeData ? DurationFormatting.verbose(seconds: screenTimeAppTotalSeconds) : "(none)")
-        Top apps:
-          \(appLines.isEmpty ? "(none)" : appLines)
 
         Sessions:
         \(sessionBlocks.isEmpty ? "  (none)" : sessionBlocks)
