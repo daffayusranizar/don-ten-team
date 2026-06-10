@@ -17,8 +17,27 @@ enum AppTab: Int {
 struct RootView: View {
     @SceneStorage("selectedTab") private var selectedTab = AppTab.dashboard.rawValue
     @Environment(\.sessionCoordinator) private var sessionCoordinator
+    
+    @State private var showSplashScreen = true
 
     var body: some View {
+        Group {
+            if showSplashScreen {
+                SplashScreenView()
+            } else {
+                mainTabView
+            }
+        } .task {
+            try? await Task.sleep(for: .seconds(4)) // replace with actual app initialisation logic or loading
+
+            withAnimation {
+                showSplashScreen = false
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainTabView: some View {
         @Bindable var sessionCoordinator = sessionCoordinator
 
         TabView(selection: $selectedTab) {
