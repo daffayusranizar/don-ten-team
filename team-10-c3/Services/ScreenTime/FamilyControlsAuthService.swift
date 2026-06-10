@@ -163,13 +163,9 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
             """
         }
         return """
-            Screen Time is on, but TikTok/YouTube usage charts are not available on this build.
-
-            This is not a setting you can turn on in the app — Apple must approve \
-            “Family Controls App And Website Usage” for your TestFlight/App Store build. \
-            Parent’s Access should show status `approvedWithDataAccess` when it works.
-
-            Sessions and app blocking still work with basic Screen Time access.
+          Kiddly needs Screen Time App & Website Usage permission to calculate usage charts.
+            Open Settings → Screen Time → Apps with Screen Time Access, enable Kiddly.
+            Or tap Continue for Apple’s permission screen, then allow access.
             """
     }
 
@@ -177,10 +173,10 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
         guard !canBlockAppsDuringSession else {
             if !canRecordSessionUsage {
                 if isUsageDataEntitlementMissing {
-                    return "Usage charts need Apple’s App & Website Usage entitlement on this build (status: approved). Sessions still work."
+                    return "Usage charts need Apple’s App & Website Usage enabled to capture usage data. Sessions still work."
                 }
-                return "Session started, but usage charts need App & Website Usage. " +
-                    "Open Parent’s Access → Allow Screen Time usage."
+                return "Session started, but usage charts need App & Website Usage enabled to capture usage data. " +
+                    "Open Settings → Screen Time → Apps with Screen Time Access, enable Kiddly."
             }
             return nil
         }

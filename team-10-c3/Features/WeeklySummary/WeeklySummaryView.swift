@@ -335,7 +335,7 @@ struct ReportView: View {
                         #endif
                     }
 
-                    Text(report.aiSummaryShort)
+                    Text(InsightSummaryFormatting.plainTextForCard(report.aiSummaryShort))
                         .font(.system(size: 17, weight: .regular))
                         .foregroundStyle(Color(red: 0.20, green: 0.20, blue: 0.24))
                         .lineSpacing(5)

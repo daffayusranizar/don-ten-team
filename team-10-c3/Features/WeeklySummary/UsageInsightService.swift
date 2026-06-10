@@ -174,7 +174,7 @@ struct UsageInsightService {
                 ? WeeklyInsightFormatting.weekKey(referenceDate: referenceDate, calendar: calendar)
                 : nil,
             chartItems: chartItems,
-            aiSummaryShort: aiSummaryShort,
+            aiSummaryShort: InsightSummaryFormatting.plainTextForCard(aiSummaryShort),
             aiSummaryDetail: aiSummaryDetail,
             offlineActivityTeaser: InsightProseBuilder.offlineActivityTeaser,
             offlineActivity: latestOfflineActivity,
@@ -308,7 +308,10 @@ struct UsageInsightService {
             sessionSignature: sessionSignature
         ) {
             logTiming("dailyCacheHit")
-            return cached
+            return InsightSummaryPair(
+                shortSummary: InsightSummaryFormatting.plainTextForCard(cached.shortSummary),
+                detailSummary: cached.detailSummary
+            )
         }
 
         let summarizer = LLMSummarizer()
@@ -316,14 +319,18 @@ struct UsageInsightService {
             let summary = try await summarizer.summarizeDailyInsight(input: input)
             logTiming("dailyLLM")
             if !summary.shortSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let cleaned = InsightSummaryPair(
+                    shortSummary: InsightSummaryFormatting.plainTextForCard(summary.shortSummary),
+                    detailSummary: summary.detailSummary
+                )
                 sessionAnalysisStore.saveDailyInsightCache(
                     childId: childId,
                     dayKey: dayKey,
                     sessionSignature: sessionSignature,
-                    summary: summary
+                    summary: cleaned
                 )
                 logTiming("saveDailyCache")
-                return summary
+                return cleaned
             }
         } catch {
             // Fall through to template summary.

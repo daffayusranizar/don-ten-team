@@ -28,6 +28,7 @@ struct SessionSetupView: View {
     /// Set when the user taps Start Session — blocks false starts from display connect / toggle alone.
     @State private var broadcastStartArmed = false
     @State private var showAddChild = false
+    @State private var didInitializeDurationPickers = false
 
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
@@ -99,7 +100,10 @@ struct SessionSetupView: View {
             .onAppear {
                 RecordingReadyBridge.startListening()
                 refreshAlarmAuthorizationState()
-                loadDurationPickersFromViewModel()
+                if !didInitializeDurationPickers {
+                    hydrateDurationPickers(from: kidSessionViewModel.plannedDurationSeconds)
+                    didInitializeDurationPickers = true
+                }
                 kidSessionViewModel.syncSelectedChild(from: profileViewModel)
                 prepareForRecordingMode()
 
@@ -278,38 +282,47 @@ struct SessionSetupView: View {
             VStack(alignment: .center) {
                 HStack {
                     Picker("Hours", selection: $hours) {
-                        ForEach(0..<24) { hour in Text("\(hour) h").tag(hour) }
+                        ForEach(0..<24, id: \.self) { hour in
+                            Text("\(hour) h").tag(hour)
+                        }
                     }
                     Picker("Minutes", selection: $minutes) {
-                        ForEach(0..<60) { minute in Text("\(minute) m").tag(minute) }
+                        ForEach(0..<60, id: \.self) { minute in
+                            Text("\(minute) m").tag(minute)
+                        }
                     }
                     Picker("Seconds", selection: $seconds) {
-                        ForEach(0..<60) { second in Text("\(second) s").tag(second) }
+                        ForEach(0..<60, id: \.self) { second in
+                            Text("\(second) s").tag(second)
+                        }
                     }
                 }
                 .pickerStyle(.wheel)
+                .frame(height: 140)
+                .clipped()
 
-                if totalSeconds < SessionDurationLimits.minimumSeconds {
-                    Text("Minimum session length is \(SessionDurationLimits.minimumSeconds) seconds.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.center)
-                }
+                Text("Minimum session length is \(SessionDurationLimits.minimumSeconds) seconds.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .frame(minHeight: 32)
+                    .opacity(totalSeconds < SessionDurationLimits.minimumSeconds ? 1 : 0)
+                    .accessibilityHidden(totalSeconds >= SessionDurationLimits.minimumSeconds)
 
                 VStack(alignment: .leading) {
                     Text("Quick Select")
                         .font(.system(size: 17, weight: .semibold))
                     HStack {
                         PrimaryButton(title: "15 min", size: .small) {
-                            withAnimation { applyDuration(totalSeconds: 15 * 60) }
+                            applyDuration(totalSeconds: 15 * 60)
                         }
                         Spacer()
                         PrimaryButton(title: "30 min", size: .small) {
-                            withAnimation { applyDuration(totalSeconds: 30 * 60) }
+                            applyDuration(totalSeconds: 30 * 60)
                         }
                         Spacer()
                         PrimaryButton(title: "1 hour", size: .small) {
-                            withAnimation { applyDuration(totalSeconds: 60 * 60) }
+                            applyDuration(totalSeconds: 60 * 60)
                         }
                     }
                 }
@@ -319,15 +332,16 @@ struct SessionSetupView: View {
         }
     }
 
-    private func loadDurationPickersFromViewModel() {
-        applyDuration(totalSeconds: kidSessionViewModel.plannedDurationSeconds)
+    private func hydrateDurationPickers(from totalSeconds: Int) {
+        let normalized = max(0, totalSeconds)
+        hours = normalized / 3600
+        minutes = (normalized % 3600) / 60
+        seconds = normalized % 60
     }
 
     private func applyDuration(totalSeconds: Int) {
+        hydrateDurationPickers(from: totalSeconds)
         let clamped = max(SessionDurationLimits.minimumSeconds, totalSeconds)
-        hours = clamped / 3600
-        minutes = (clamped % 3600) / 60
-        seconds = clamped % 60
         kidSessionViewModel.setPlannedDuration(seconds: clamped)
         recordingManager.setSessionDuration(seconds: clamped)
     }

@@ -19,26 +19,41 @@ struct RootView: View {
     @Environment(\.sessionCoordinator) private var sessionCoordinator
     
     @State private var showSplashScreen = true
+    @State private var splashStatusMessage = "Starting Kiddly…"
 
     var body: some View {
         Group {
             if showSplashScreen {
-                SplashScreenView()
+                SplashScreenView(statusMessage: splashStatusMessage)
             } else {
                 mainTabView
             }
-        } .task {
-            if !PreviewRuntime.isActive {
-                do {
-                    try await WhisperModelLoader.preload()
-                } catch {
-                    print("Whisper preload failed: \(error.localizedDescription)")
-                }
-            }
+        }
+        .task {
+            await runSplashStartup()
+        }
+    }
 
-            withAnimation {
-                showSplashScreen = false
+    @MainActor
+    private func runSplashStartup() async {
+        splashStatusMessage = "Preparing on-device audio analysis…"
+
+        if !PreviewRuntime.isActive {
+            do {
+                try await WhisperModelLoader.preload()
+                splashStatusMessage = "Finishing setup…"
+            } catch {
+                print("Whisper preload failed: \(error.localizedDescription)")
+                splashStatusMessage = "Continuing without audio preload…"
             }
+        } else {
+            splashStatusMessage = "Loading preview…"
+        }
+
+        try? await Task.sleep(for: .milliseconds(350))
+
+        withAnimation {
+            showSplashScreen = false
         }
     }
     

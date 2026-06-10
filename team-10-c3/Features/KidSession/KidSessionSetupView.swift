@@ -58,7 +58,7 @@ struct KidSessionSetupView: View {
                                     Text("\(minutes)m")
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(
-                                            kidSessionViewModel.durationMinutes == minutes
+                                            kidSessionViewModel.plannedDurationSeconds == minutes * 60
                                             ? .white
                                             : .textPrimary
                                         )
@@ -67,7 +67,7 @@ struct KidSessionSetupView: View {
                                         .background(
                                             Capsule()
                                                 .fill(
-                                                    kidSessionViewModel.durationMinutes == minutes
+                                                    kidSessionViewModel.plannedDurationSeconds == minutes * 60
                                                     ? Color.primaryMediumBlue
                                                     : Color.uiSurface
                                                 )
