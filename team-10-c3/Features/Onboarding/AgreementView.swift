@@ -85,7 +85,7 @@ struct AgreementView: View {
                 Text("I agree to the")
 
                 NavigationLink("Terms of Use") {
-                    // temp
+                    TermsOfUse()
                 }
                 .foregroundStyle(.primarySoftPurple)
                 .fontWeight(.semibold)
@@ -93,7 +93,7 @@ struct AgreementView: View {
                 Text("and")
 
                 NavigationLink("Privacy Policy") {
-                    // temp
+                    PrivacyPolicyView()
                 }
                 .foregroundStyle(.primarySoftPurple)
                 .fontWeight(.semibold)

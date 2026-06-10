@@ -36,7 +36,7 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            StepOneView(data: $data)
+            AgreementView(data: $data)
         }
     }
 }

@@ -79,7 +79,7 @@ struct ApprovedAppsView: View {
         .padding(24)
         .background(
             RoundedRectangle(cornerRadius: 15)
-                .fill(.primarySoftPurple)
+                .fill(.primaryMediumBlue)
                 .opacity(0.2)
         )
     }

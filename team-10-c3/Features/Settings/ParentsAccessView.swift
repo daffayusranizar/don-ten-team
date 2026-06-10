@@ -65,7 +65,7 @@ struct ParentsAccessView: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 15)
-                    .fill(.primarySoftPurple)
+                    .fill(.primaryMediumBlue)
                     .opacity(0.2)
             )
 
@@ -73,7 +73,7 @@ struct ParentsAccessView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 15)
-                        .fill(.primarySoftPurple)
+                        .fill(.primaryMediumBlue)
                         .opacity(0.2)
                 )
 

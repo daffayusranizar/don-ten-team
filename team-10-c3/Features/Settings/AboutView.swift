@@ -44,7 +44,7 @@ struct AboutView: View {
                     title: "Privacy policy",
                     changePage: $viewPrivacyPolicy
                 ) {
-                    ChangePasswordView()
+                    PrivacyPolicyView()
                 }
                 
                 Divider()
@@ -54,13 +54,13 @@ struct AboutView: View {
                     title: "Terms of Use",
                     changePage: $viewTerms
                 ) {
-                    ChangePasswordView()
+                    TermsOfUse()
                 }
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 15)
-                    .fill(.primarySoftPurple)
+                    .fill(.primaryMediumBlue)
                     .opacity(0.2)
             )
             
