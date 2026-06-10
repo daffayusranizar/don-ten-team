@@ -9,8 +9,6 @@ import SwiftUI
 import UIKit
 
 struct ParentsAccessView: View {
-    @State var changePassword: Bool = false
-    @State var setFaceID: Bool = false
     #if DEBUG
     @State var showScreenTimeDebug: Bool = false
     #endif
@@ -45,32 +43,6 @@ struct ParentsAccessView: View {
                     .font(.system(size: 25, weight: .bold))
             }
             
-            VStack(alignment: .leading) {
-                NavLink(
-                    icon: "person.badge.key.fill",
-                    title: "Change Password",
-                    changePage: $changePassword
-                ) {
-                    ChangePasswordView()
-                }
-                
-                Divider()
-                
-                NavLink(
-                    icon: "faceid",
-                    title: "Set Face ID",
-                    changePage: $setFaceID
-                ) {
-                    ChangePasswordView()
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(.primaryMediumBlue)
-                    .opacity(0.2)
-            )
-
             FamilyActivityPickerSection(onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true })
                 .padding()
                 .background(
