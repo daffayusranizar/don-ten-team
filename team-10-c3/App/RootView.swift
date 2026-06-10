@@ -28,7 +28,7 @@ struct RootView: View {
                 mainTabView
             }
         } .task {
-            try? await Task.sleep(for: .seconds(4)) // replace with actual app initialisation logic or loading
+            try? await Task.sleep(for: .seconds(1)) // replace with actual app initialisation logic or loading
 
             withAnimation {
                 showSplashScreen = false

@@ -11,7 +11,6 @@ struct SettingsView: View {
     @Environment(\.profileViewModel) private var profileViewModel
     @State var weeklyReminder: Bool = false
     @State var weeklyCheckIn: Bool = false
-    @State var showApprovedApps: Bool = false
     @State var showParentsAccess: Bool = false
     @State var showAddChild: Bool = false
     @State var showAboutPage: Bool = false
@@ -85,12 +84,6 @@ struct SettingsView: View {
         VStack(alignment: .leading) {
             Text("Screen Time")
                 .font(.system(size: 20, weight: .semibold))
-
-            NavLink(icon: "checkmark.circle.fill", title: "Approved Apps", changePage: $showApprovedApps) {
-                ApprovedAppsView()
-            }
-
-            Divider()
 
             NavLink(icon: "lock.circle.fill", title: "Parents Access", changePage: $showParentsAccess) {
                 ParentsAccessView()
