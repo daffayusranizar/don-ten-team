@@ -85,49 +85,98 @@ struct PrimaryTextField: View {
     var isFocused: FocusState<Bool>.Binding? = nil
     var action: () -> Void = {}
 
-    @ViewBuilder
-    private var textInput: some View {
-        let field = TextField(placeholder, text: $text)
-            .font(size.font)
-            .foregroundColor(.textPrimary)
-            .onSubmit { action() }
+    @FocusState private var isFieldFocused: Bool
 
-        if let isFocused {
-            field.focused(isFocused)
-        } else {
-            field
-        }
+    private var showsClearButton: Bool {
+        isFieldFocused && !text.isEmpty
     }
-    
+
+    private var externalFocusValue: Bool {
+        isFocused?.wrappedValue ?? false
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-            // TextField Icon (Optional)
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
+                    .allowsHitTesting(false)
             }
 
             textInput
-            
-            // Clear Text Button
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: size.iconSize))
-                        .foregroundStyle(.textPrimary)
-                }
-            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .frame(minHeight: size.minHeight)
-        .background(
+        .background(Capsule().fill(.uiSurface))
+        .overlay {
             Capsule()
-                .fill(.uiSurface)
-        )
+                .strokeBorder(
+                    isFieldFocused ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .overlay {
+            if !isFieldFocused {
+                Capsule()
+                    .fill(.clear)
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        isFieldFocused = true
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isFieldFocused)
+        .onChange(of: isFieldFocused) { _, focused in
+            syncFocusToExternal(focused)
+        }
+        .onChange(of: externalFocusValue) { _, externalFocused in
+            guard isFocused != nil, isFieldFocused != externalFocused else { return }
+            isFieldFocused = externalFocused
+        }
+    }
+
+    private var textInput: some View {
+        ZStack(alignment: .trailing) {
+            TextField(placeholder, text: $text)
+                .font(size.font)
+                .foregroundStyle(.textPrimary)
+                .tint(.textPrimary)
+                .textFieldStyle(.plain)
+                .textContentType(.name)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .focused($isFieldFocused)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, size.iconSize + 4)
+                .onSubmit { action() }
+
+            clearButton
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var clearButton: some View {
+        Button {
+            isFieldFocused = false
+            text = ""
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: size.iconSize))
+                .foregroundStyle(.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear text")
+        .opacity(showsClearButton ? 1 : 0)
+        .allowsHitTesting(showsClearButton)
+        .animation(.easeInOut(duration: 0.15), value: showsClearButton)
+    }
+
+    private func syncFocusToExternal(_ focused: Bool) {
+        guard let isFocused, isFocused.wrappedValue != focused else { return }
+        isFocused.wrappedValue = focused
     }
 }
 
@@ -150,63 +199,75 @@ struct PrimaryDateField: View {
         )
     }
 
+    private var dateBinding: Binding<Date> {
+        Binding(
+            get: { date ?? Date() },
+            set: { date = $0 }
+        )
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
             }
 
-            ZStack(alignment: .leading) {
-
-                // placeholder / formatted text
-                Text(formattedDate)
-                    .font(size.font)
-                    .foregroundStyle(
-                        date == nil
-                        ? .textDisabled
-                        : .textPrimary
-                    )
-
-                // actual picker
-                DatePicker(
-                    "",
-                    selection: Binding(
-                        get: { date ?? Date() },
-                        set: { date = $0 }
-                    ),
-                    displayedComponents: [.date]
+            Text(formattedDate)
+                .font(size.font)
+                .foregroundStyle(
+                    date == nil
+                    ? .textDisabled
+                    : .textPrimary
                 )
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .colorMultiply(.clear)
-                
-                if date != nil {
-                    HStack {
-                        Spacer()
-                        
-                        Button {
-                            date = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: size.iconSize))
-                                .foregroundStyle(.textPrimary)
-                        }
-                    }
-                }
-            }
-
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.trailing, size.iconSize + 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .frame(minHeight: size.minHeight)
-        .background(
+        .background(Capsule().fill(.uiSurface))
+        .allowsHitTesting(false)
+        .background {
+            DatePicker(
+                "",
+                selection: dateBinding,
+                in: ...Date(),
+                displayedComponents: [.date]
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .scaleEffect(x: 5, y: 1, anchor: .leading)
+        }
+        .clipShape(Capsule())
+        .overlay(alignment: .trailing) {
+            clearButton
+                .padding(.trailing, size.horizontalPadding)
+        }
+        .overlay {
             Capsule()
-                .fill(.uiSurface)
-        )
+                .strokeBorder(
+                    date != nil ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .animation(.easeInOut(duration: 0.15), value: date != nil)
+    }
+
+    private var clearButton: some View {
+        Button {
+            date = nil
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: size.iconSize))
+                .foregroundStyle(.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear date")
+        .opacity(date == nil ? 0 : 1)
+        .allowsHitTesting(date != nil)
     }
 }
 
@@ -217,39 +278,76 @@ struct SecondaryTextField: View {
     var size: TextFieldSize = .medium
     var systemImage: String? = nil
     var action: () -> Void = {}
-    
+
+    @FocusState private var isFieldFocused: Bool
+
+    private var showsClearButton: Bool {
+        isFieldFocused && !text.isEmpty
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-            // TextField Icon (Optional)
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
+                    .allowsHitTesting(false)
             }
 
-            TextField(placeholder, text: $text)
-                .font(size.font)
-                .foregroundColor(.textPrimary)
-                .onSubmit { action() }
-            
-            // Clear Text Button
-            if !text.isEmpty {
+            ZStack(alignment: .trailing) {
+                TextField(placeholder, text: $text)
+                    .font(size.font)
+                    .foregroundStyle(.textPrimary)
+                    .tint(.textPrimary)
+                    .textFieldStyle(.plain)
+                    .submitLabel(.done)
+                    .focused($isFieldFocused)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.trailing, size.iconSize + 4)
+                    .onSubmit { action() }
+
                 Button {
+                    isFieldFocused = false
                     text = ""
                 } label: {
-                    Image(systemName: "xmark")
+                    Image(systemName: "xmark.circle.fill")
                         .font(.system(size: size.iconSize))
-                        .foregroundStyle(.textPrimary)
+                        .foregroundStyle(.textSecondary)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear text")
+                .opacity(showsClearButton ? 1 : 0)
+                .allowsHitTesting(showsClearButton)
+                .animation(.easeInOut(duration: 0.15), value: showsClearButton)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .frame(minHeight: size.minHeight)
         .background(
             RoundedRectangle(cornerRadius: size.cornerRadius)
-            .fill(.uiSurface)
+                .fill(.uiSurface)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: size.cornerRadius)
+                .strokeBorder(
+                    isFieldFocused ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .overlay {
+            if !isFieldFocused {
+                RoundedRectangle(cornerRadius: size.cornerRadius)
+                    .fill(.clear)
+                    .contentShape(RoundedRectangle(cornerRadius: size.cornerRadius))
+                    .onTapGesture {
+                        isFieldFocused = true
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isFieldFocused)
     }
 }
 
@@ -290,6 +388,7 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
         private var recognizer: UITapGestureRecognizer?
 
         func installIfNeeded(from anchor: UIView) {
+            guard !PreviewRuntime.isActive else { return }
             guard let host = anchor.parentViewController?.view else { return }
             guard hostView !== host else { return }
             uninstall()
@@ -315,14 +414,28 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
         }
 
         func gestureRecognizer(_: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            var view: UIView? = touch.view
-            while let current = view {
-                if current is UITextField || current is UITextView {
-                    return false
+            !Self.isTextInputView(touch.view)
+        }
+
+        private static func isTextInputView(_ view: UIView?) -> Bool {
+            var current = view
+            while let v = current {
+                if v is UITextField || v is UITextView {
+                    return true
                 }
-                view = current.superview
+                if v is UIDatePicker {
+                    return true
+                }
+                let typeName = String(describing: type(of: v))
+                if typeName.contains("TextField")
+                    || typeName.contains("TextInput")
+                    || typeName.contains("UITextInput")
+                    || typeName.contains("DatePicker") {
+                    return true
+                }
+                current = v.superview
             }
-            return true
+            return false
         }
     }
 }
@@ -348,92 +461,128 @@ private func dismissKeyboard() {
 }
 
 // MARK: Preview
-#Preview("Primary Input") {
-    @Previewable @State var example1 = ""
-    @Previewable @State var example2 = ""
-    @Previewable @State var example3 = ""
-    @Previewable @State var example4: Date? = nil
-    
-    ZStack {
-        Color.black
-            .ignoresSafeArea()
-        
-        VStack(spacing: 16) {
-            PrimaryTextField(
-                text: $example1,
-                placeholder: "Type name...",
-                size: .large,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .large,
-                systemImage: "person.crop.circle.fill"
-            )
-            
-            PrimaryTextField(
-                text: $example2,
-                placeholder: "Type name...",
-                size: .medium,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .medium,
-                systemImage: "person.crop.circle.fill"
-            )
-            
-            PrimaryTextField(
-                text: $example3,
-                placeholder: "Type name...",
-                size: .small,
-                systemImage: "person.crop.circle.fill"
-            )
-            PrimaryDateField(
-                date: $example4,
-                placeholder: "Insert Birthdate...",
-                size: .small,
-                systemImage: "person.crop.circle.fill"
-            )
+
+private struct PrimaryInputPreviewScreen: View {
+    @State private var largeText = ""
+    @State private var mediumText = ""
+    @State private var smallText = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                PrimaryTextField(
+                    text: $largeText,
+                    placeholder: "Type name...",
+                    size: .large,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Large", value: largeText)
+
+                PrimaryTextField(
+                    text: $mediumText,
+                    placeholder: "Type name...",
+                    size: .medium,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Medium", value: mediumText)
+
+                PrimaryTextField(
+                    text: $smallText,
+                    placeholder: "Type name...",
+                    size: .small,
+                    systemImage: "person.crop.circle.fill"
+                )
+                previewEcho("Small", value: smallText)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.light)
+    }
+
+    private func previewEcho(_ label: String, value: String) -> some View {
+        Text("\(label): \"\(value.isEmpty ? " " : value)\"")
+            .font(.caption)
+            .foregroundStyle(.textSecondary)
     }
 }
 
-#Preview("Secondary Input") {
-    @Previewable @State var example1 = ""
-    @Previewable @State var example2 = ""
-    @Previewable @State var example3 = ""
-    
-    ZStack {
-        Color.black
-            .ignoresSafeArea()
-        
+private struct PrimaryDateInputPreviewScreen: View {
+    @State private var birthdate: Date? = nil
+
+    var body: some View {
         VStack(spacing: 16) {
-            SecondaryTextField(
-                text: $example1,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .large,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
-            
-            SecondaryTextField(
-                text: $example2,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .medium,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
-            
-            SecondaryTextField(
-                text: $example3,
-                placeholder: "Type name...",
+            PrimaryDateField(
+                date: $birthdate,
+                placeholder: "Insert Birthdate...",
                 size: .small,
-                systemImage: "person.crop.circle.fill"
+                systemImage: "calendar"
             )
         }
         .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
+        .preferredColorScheme(.light)
     }
+}
+
+private struct SecondaryInputPreviewScreen: View {
+    @State private var largeText = ""
+    @State private var mediumText = ""
+    @State private var smallText = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                SecondaryTextField(
+                    text: $largeText,
+                    placeholder: "Type name...",
+                    size: .large,
+                    systemImage: "person.crop.circle.fill"
+                )
+                SecondaryTextField(
+                    text: $mediumText,
+                    placeholder: "Type name...",
+                    size: .medium,
+                    systemImage: "person.crop.circle.fill"
+                )
+                SecondaryTextField(
+                    text: $smallText,
+                    placeholder: "Type name...",
+                    size: .small,
+                    systemImage: "person.crop.circle.fill"
+                )
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color.black)
+        .preferredColorScheme(.light)
+    }
+}
+
+#Preview("Primary Input") {
+    PrimaryInputPreviewScreen()
+}
+
+#Preview("Primary Date Input") {
+    PrimaryDateInputPreviewScreen()
+}
+
+#Preview("Secondary Input") {
+    SecondaryInputPreviewScreen()
 }
 

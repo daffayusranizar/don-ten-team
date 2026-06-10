@@ -120,6 +120,10 @@ enum SessionEndAlarmScheduler {
         case .authorized, .provisional, .ephemeral:
             isAuthorized = true
         case .notDetermined:
+            guard !PreviewRuntime.isActive else {
+                isAuthorized = false
+                break
+            }
             isAuthorized = (try? await center.requestAuthorization(options: [.alert, .sound])) == true
         case .denied:
             isAuthorized = false

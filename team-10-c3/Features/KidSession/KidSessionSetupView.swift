@@ -84,7 +84,7 @@ struct KidSessionSetupView: View {
                             .opacity(0.2)
                     )
 
-                    Text("Only TikTok and YouTube can be opened during the session. Other apps will be blocked.")
+                    Text("Only the apps you chose in Parent's Access stay open during the session. Everything else is blocked.")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

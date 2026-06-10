@@ -8,10 +8,11 @@ import UIKit
 
 struct KidSessionActiveView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isBroadcastLive = false
 
     private var showsRecordingWarning: Bool {
-        kidSessionViewModel.sessionIncludedScreenRecording && !isBroadcastLive
+        kidSessionViewModel.recordingBroadcastConfirmed && !isBroadcastLive
     }
 
     var body: some View {
@@ -41,7 +42,7 @@ struct KidSessionActiveView: View {
                 .monospacedDigit()
                 .foregroundStyle(.primaryMediumBlue)
 
-            Text("Screen time in progress")
+            Text(kidSessionViewModel.activeSessionStatusLabel)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
 
@@ -69,7 +70,15 @@ struct KidSessionActiveView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .foregroundStyle(.textPrimary)
-        .onAppear { refreshBroadcastLive() }
+        .onAppear {
+            refreshBroadcastLive()
+            kidSessionViewModel.refreshActiveSessionClock()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            refreshBroadcastLive()
+            kidSessionViewModel.refreshActiveSessionClock()
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
             refreshBroadcastLive()
         }

@@ -3,7 +3,11 @@ import SwiftUI
 enum AppUsageIcon {
     /// Icons follow bundle ID only — display names from Screen Time are often wrong.
     static func image(for app: AppUsageRow) -> Image {
-        let bundle = app.bundleIdentifier.lowercased()
+        image(bundleIdentifier: app.bundleIdentifier)
+    }
+
+    static func image(bundleIdentifier: String) -> Image {
+        let bundle = bundleIdentifier.lowercased()
 
         if KnownAppLabels.matches(bundleId: bundle, app: .instagram) {
             return ImageAsset.instagram.image

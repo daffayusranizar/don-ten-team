@@ -17,6 +17,8 @@ struct CategoryItem: Identifiable {
 struct StackedBarChartView: View {
     let items: [CategoryItem]
 
+    @ChartDifferentiateWithoutColor private var differentiateWithoutColor
+
     private var total: Double {
         items.reduce(0) { $0 + $1.value }
     }
@@ -32,10 +34,9 @@ struct StackedBarChartView: View {
                         let remainingWidth = geo.size.width * ((total - consumed) / total)
 
                         Capsule()
-                            .fill(item.color)
+                            .fill(itemFill(item))
                             .frame(width: remainingWidth, height: 24)
                             .shadow(color: .black.opacity(0.1), radius: 2)
-
                     }
                 }
             }
@@ -44,9 +45,13 @@ struct StackedBarChartView: View {
             VStack(spacing: 10) {
                 ForEach(items) { item in
                     HStack {
-                        Circle()
-                            .fill(item.color)
-                            .frame(width: 10, height: 10)
+                        ChartLegendSwatch(
+                            color: item.color,
+                            pattern: UsageCategoryVisualStyle.chartPattern(for: item.name),
+                            systemImage: UsageCategoryVisualStyle.systemImage(for: item.name),
+                            cacheKey: item.name,
+                            differentiateWithoutColor: differentiateWithoutColor
+                        )
 
                         Text(item.name)
                             .font(.caption)
@@ -55,11 +60,19 @@ struct StackedBarChartView: View {
 
                         Text("\(Int(item.value))%")
                             .font(.caption)
-                            .foregroundStyle(item.color)
+                            .foregroundStyle(differentiateWithoutColor ? .textPrimary : item.color)
                     }
                 }
             }
         }
+    }
+
+    private func itemFill(_ item: CategoryItem) -> AnyShapeStyle {
+        UsageCategoryVisualStyle.fillStyle(
+            color: item.color,
+            name: item.name,
+            differentiateWithoutColor: differentiateWithoutColor
+        )
     }
 }
 
@@ -69,4 +82,13 @@ struct StackedBarChartView: View {
         .init(name: "Games", value: 15, color: .green),
         .init(name: "Education", value: 25, color: .blue)
     ])
+}
+
+#Preview("Differentiate Without Color") {
+    StackedBarChartView(items: [
+        .init(name: "Entertainment", value: 45, color: .orange),
+        .init(name: "Games", value: 15, color: .green),
+        .init(name: "Education", value: 25, color: .blue)
+    ])
+    .differentiateWithoutColorPreview()
 }

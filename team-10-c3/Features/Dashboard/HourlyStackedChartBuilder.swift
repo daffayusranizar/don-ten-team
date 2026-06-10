@@ -22,6 +22,10 @@ struct HourlyStackedChartSegment: Identifiable, Equatable {
         default: return .decorativeSkyBlue
         }
     }
+
+    var chartPattern: ChartFillPattern {
+        ChartFillPattern.forHourlyColorName(colorName)
+    }
 }
 
 enum HourlyStackedChartBuilder {

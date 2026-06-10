@@ -21,6 +21,12 @@ struct ReviewView: View {
     private var age: Int? {
         data.childBirthdate?.age()
     }
+
+    private var allowedAppsSummary: String {
+        let count = FamilyActivitySelectionStore.allowedAppCount
+        if count == 0 { return "Not set up yet" }
+        return "\(count) app\(count == 1 ? "" : "s") selected"
+    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -86,6 +92,17 @@ struct ReviewView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
+                }
+
+                Divider()
+
+                HStack {
+                    Text("Allowed Apps")
+                        .font(.system(size: 15, weight: .bold))
+
+                    Spacer()
+
+                    Text(allowedAppsSummary)
                 }
             }
             .padding()

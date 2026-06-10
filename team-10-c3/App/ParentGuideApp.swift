@@ -25,6 +25,7 @@ struct ParentGuideApp: App {
     private let notificationDelegate = AppNotificationDelegate()
 
     init() {
+        guard !PreviewRuntime.isActive else { return }
         UNUserNotificationCenter.current().delegate = notificationDelegate
         Task {
             await ParentGuideApp.prepareNotificationAuthorization()
@@ -37,6 +38,18 @@ struct ParentGuideApp: App {
                 .onAppear {
                     RecordingReadyBridge.ensureListening()
                     SessionTimerFiredBridge.ensureListening()
+                    // #region agent log
+                    DebugSessionLog.log(
+                        hypothesisId: "H1",
+                        location: "ParentGuideApp.onAppear",
+                        message: "app launched — auth bootstrap",
+                        data: [
+                            "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                            "profileHasFamilyControls": DebugSessionLog.embeddedProfileContains("family-controls").map { $0 ? "true" : "false" } ?? "unknown",
+                            "profileHasUsageEntitlement": DebugSessionLog.embeddedProfileContains("app-and-website-usage").map { $0 ? "true" : "false" } ?? "unknown",
+                        ]
+                    )
+                    // #endregion
                 }
                 .preferredColorScheme(.light)
                 .environment(\.childRepository, container.childRepository)

@@ -422,6 +422,13 @@ final class SessionCoordinator {
         if let persisted = try? sessionRepository.resolveGlobalActiveSession() {
             if persisted.childId == child.id {
                 mountPersistedActiveSession(persisted, durationMinutes: durationMinutes)
+                if remainingSeconds <= 0 {
+                    await forceCompletePersistedSession(persisted)
+                    return await prepareSessionAuthorized(
+                        child: child,
+                        plannedDurationSeconds: plannedDurationSeconds
+                    )
+                }
                 return true
             }
             loadError = "Finish the current session before starting a new one."
@@ -456,6 +463,16 @@ final class SessionCoordinator {
 
         do {
             try await screenTimeService.activateSessionRestrictions()
+        } catch let error as SessionAppShieldError where error == .appsNotSelected {
+            screenTimeService.deactivateSessionRestrictions()
+            loadError = error.localizedDescription
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "SessionCoordinator.prepareSessionAuthorized",
+                message: "session blocked — allowed apps not selected",
+                data: ["error": error.localizedDescription]
+            )
+            return false
         } catch {
             AgentDebugLog.log(
                 hypothesisId: "C",

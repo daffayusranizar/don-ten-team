@@ -281,6 +281,21 @@ struct DashboardView: View {
             return
         }
         familyControlsAuth.refreshAuthorizationStatus()
+        // #region agent log
+        DebugSessionLog.log(
+            hypothesisId: "H4",
+            location: "DashboardView.presentScreenTimePromptIfNeeded",
+            message: familyControlsAuth.needsPermissionPrompt
+                ? "auto-prompting basic Screen Time alert"
+                : "skipped auto-prompt (needsPermissionPrompt=false)",
+            data: [
+                "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                "status": familyControlsAuth.authorizationStatusDescription,
+                "needsUsagePermissionPrompt": String(familyControlsAuth.needsUsagePermissionPrompt),
+                "shouldShowBanner": String(shouldShowScreenTimeBanner),
+            ]
+        )
+        // #endregion
         guard familyControlsAuth.needsPermissionPrompt else { return }
         showScreenTimeAuthAlert = true
     }

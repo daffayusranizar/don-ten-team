@@ -67,7 +67,7 @@ final class AppContainer {
             familyControlsAuth: self.familyControlsAuth
         )
         self.suggestionHistoryRepository = suggestionHistoryRepository
-            ?? InMemorySuggestionHistoryRepository()
+            ?? SwiftDataSuggestionHistoryRepository(modelContext: modelContainer.mainContext)
 
         self.screenTimeService.deactivateSessionRestrictions()
 
@@ -91,6 +91,8 @@ final class AppContainer {
             SessionUsageSnapshot.self,
             SessionAnalysisRecord.self,
             DailyInsightCacheRecord.self,
+            WeeklyInsightCacheRecord.self,
+            WeeklySuggestionTryRecord.self,
         ])
         let configuration = ModelConfiguration()
         do {

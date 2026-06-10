@@ -9,6 +9,8 @@ import SwiftUI
 struct UsageRingView: View {
     let segments: [UsageCategorySegment]
 
+    @ChartDifferentiateWithoutColor private var differentiateWithoutColor
+
     private var totalDuration: TimeInterval {
         segments.reduce(0) { $0 + $1.duration }
     }
@@ -29,11 +31,19 @@ struct UsageRingView: View {
             SectorMark(
                 angle: .value("Duration", segment.duration),
                 innerRadius: .ratio(0.55),
-                angularInset: 1.5
+                angularInset: differentiateWithoutColor ? 2.5 : 1.5
             )
-            .foregroundStyle(segment.color)
+            .foregroundStyle(segmentFill(segment))
         }
         .chartLegend(.hidden)
+    }
+
+    private func segmentFill(_ segment: UsageCategorySegment) -> AnyShapeStyle {
+        UsageCategoryVisualStyle.fillStyle(
+            color: segment.color,
+            name: segment.title,
+            differentiateWithoutColor: differentiateWithoutColor
+        )
     }
 
     private var emptyRing: some View {
@@ -47,4 +57,10 @@ struct UsageRingView: View {
 #Preview("Usage Ring") {
     UsageRingView(segments: UsageCategorySegment.previewData)
         .padding()
+}
+
+#Preview("Usage Ring — Differentiate Without Color") {
+    UsageRingView(segments: UsageCategorySegment.previewData)
+        .padding()
+        .differentiateWithoutColorPreview()
 }

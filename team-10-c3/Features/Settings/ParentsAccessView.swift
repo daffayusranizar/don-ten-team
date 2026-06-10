@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ParentsAccessView: View {
     @State var changePassword: Bool = false
@@ -14,6 +15,7 @@ struct ParentsAccessView: View {
     @State var showScreenTimeDebug: Bool = false
     #endif
     @State private var showScreenTimeAuthAlert = false
+    @State private var showDebugLogCopied = false
     @Environment(\.familyControlsAuth) private var familyControlsAuth
 
     @Environment(\.dismiss) private var dismiss
@@ -69,7 +71,7 @@ struct ParentsAccessView: View {
                     .opacity(0.2)
             )
 
-            FamilyActivityPickerSection()
+            FamilyActivityPickerSection(onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true })
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 15)
@@ -94,6 +96,11 @@ struct ParentsAccessView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Text(signedEntitlementStatusLine)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             #if DEBUG
             NavLink(
                 icon: "ladybug.fill",
@@ -103,6 +110,16 @@ struct ParentsAccessView: View {
                 ScreenTimeDebugView()
             }
             #endif
+
+            Button {
+                UIPasteboard.general.string = DebugSessionLog.readAppGroupContents()
+                showDebugLogCopied = true
+            } label: {
+                Label("Copy auth debug log", systemImage: "doc.on.doc")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
 
             Spacer()
         }
@@ -115,6 +132,22 @@ struct ParentsAccessView: View {
             familyControlsAuth.refreshAuthorizationStatus()
         }
         .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert)
+        .alert("Debug log copied", isPresented: $showDebugLogCopied) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Paste the log into Cursor chat so we can compare TestFlight vs Xcode builds.")
+        }
+    }
+
+    private var signedEntitlementStatusLine: String {
+        let channel = DebugSessionLog.buildChannel.rawValue
+        if familyControlsAuth.isUsageDataEntitlementMissing {
+            return "Build: \(channel) · App & Website Usage: missing from this signed TestFlight build"
+        }
+        if familyControlsAuth.hasUsageDataAccess {
+            return "Build: \(channel) · App & Website Usage: granted (approvedWithDataAccess)"
+        }
+        return "Build: \(channel) · App & Website Usage: not granted yet"
     }
 }
 

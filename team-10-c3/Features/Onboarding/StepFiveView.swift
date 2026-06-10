@@ -87,14 +87,14 @@ struct StepFiveView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 5 of 5")
+                Text("Step 5 of 6")
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $goToReviewPage) {
-            ReviewView(data: $data)
+            StepAllowedAppsView(data: $data)
         }
     }
 }

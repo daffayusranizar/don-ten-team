@@ -159,10 +159,14 @@ enum PromptLibrary {
             Do not use prefixes like "on-screen:" in the final answer.
             Do not invent creators, titles, apps, dialogue, or claims not present in the notes.
 
-            OUTPUT FORMAT (use exactly this format):
+            OUTPUT FORMAT (use exactly this format, plain text only — no markdown or asterisks):
+            SHORT_SUMMARY:
+            <2-3 sentences — quick overview for a busy parent>
+
+            DETAIL:
             Overall, <2-4 sentences, plain language, parent-friendly>
             Topics that are repeated most often are: <topic 1>, <topic 2>
-            
+
             What Appears To Hold Attention: <2-3 sentences using cautious language like "appears drawn to", "may be interested in", "repeatedly viewed", "frequently exposed to". Base this on repeated topics/messages/formats and total viewing time patterns.>
 
             The evidencce of this report are:
@@ -370,6 +374,48 @@ enum PromptLibrary {
             \(supportingSection)
 
             Output a single parent-facing summary paragraph only.
+            """
+        }
+
+        nonisolated
+        static func weeklyInsightPrompt(metadata: String, topicBody: String) -> String {
+            """
+            \(metadata)
+
+            You are writing ONE cohesive parent-facing weekly report in a single response.
+            Use only the evidence provided. Do not invent apps, creators, titles, dialogue, or claims.
+            Focus on repeated patterns across the week, not isolated moments.
+            Keep language calm, practical, and parent-friendly.
+
+            The SUGGESTION must directly follow from the DETAIL — same themes, same child, same week.
+            Do not suggest something unrelated to what you wrote in DETAIL.
+
+            OUTPUT FORMAT (plain text only — no markdown, no asterisks, no angle-bracket placeholders):
+            SHORT_SUMMARY:
+            <2-3 sentences — quick weekly overview for a busy parent>
+
+            DETAIL:
+            Overall, <2-4 sentences summarizing patterns across the week>
+            Topics that are repeated most often are: <topic 1>, <topic 2>
+            What Appears To Hold Attention: <2-3 cautious sentences about repeated themes>
+            The evidence of this report are:
+            <evidence point 1>, <evidence point 2>, <evidence point 3>
+            Overall, looking at the evidence, we recommend that you: <one short practical recommendation>
+
+            SUGGESTION:
+            <one specific, actionable suggestion for the parent to try this week — must connect to DETAIL>
+
+            FOLLOWUP_OPTIONS:
+            Opened up and talked more
+            Enjoyed it quietly
+            Led to a longer conversation
+            Did not want to try it
+
+            Write four real follow-up options like the examples above (short phrases, one per line, no bullets or dashes).
+            Do not copy placeholder text from this prompt.
+
+            Weekly activity evidence:
+            \(topicBody)
             """
         }
     }

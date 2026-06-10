@@ -80,6 +80,7 @@ struct SessionSetupView: View {
                 } else {
                     broadcastStartArmed = false
                     stopBroadcastObserver()
+                    RecordingManager.shared.clearSessionRecordingBinding()
                 }
             }
             .onChange(of: kidSessionViewModel.phase) { _, newPhase in
@@ -181,11 +182,7 @@ struct SessionSetupView: View {
                 .font(.system(size: 17, weight: .semibold))
 
                 if recordScreen {
-                    Text("Tap Start Session below, then choose **\(BroadcastConstants.extensionDisplayName)** in the system dialog.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 8)
+                    ScreenBroadcastSetupGuide()
                 }
 
                 Spacer()
@@ -390,6 +387,7 @@ struct SessionSetupView: View {
         guard profileViewModel.selectedChild != nil else { return }
         kidSessionViewModel.syncSelectedChild(from: profileViewModel)
         applyDuration(totalSeconds: totalSeconds)
+        RecordingManager.shared.clearSessionRecordingBinding()
         kidSessionViewModel.startSession(
             includesScreenRecording: false,
             plannedDurationSeconds: totalSeconds
@@ -472,6 +470,67 @@ struct SessionSetupView: View {
         broadcastObserverTask = nil
     }
 
+}
+
+private struct ScreenBroadcastSetupGuide: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("How to start screen broadcast", systemImage: "record.circle")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primaryMediumBlue)
+
+            Text(
+                "Everything on your screen, including notifications, will be recorded. " +
+                "Enable Do Not Disturb to prevent unexpected notifications."
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 12) {
+                guideStep(
+                    number: 1,
+                    title: "Tap Start Session",
+                    detail: "Use the button at the bottom of this screen."
+                )
+                guideStep(
+                    number: 2,
+                    title: "Select \(BroadcastConstants.extensionDisplayName)",
+                    detail: "In the Screen Broadcast sheet, choose \(BroadcastConstants.extensionDisplayName) from the list."
+                )
+                guideStep(
+                    number: 3,
+                    title: "Tap Start Broadcast",
+                    detail: "Confirm the system dialog to begin recording and your session."
+                )
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.primaryMediumBlue.opacity(0.1))
+        )
+    }
+
+    private func guideStep(number: Int, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(.primaryMediumBlue))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 }
 
 private struct StartSessionPickerView: UIViewRepresentable {

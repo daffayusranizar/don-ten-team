@@ -25,13 +25,15 @@ Session time and per-app bars answer different questions. They will not always a
 When a parent session **starts**, Kiddly applies a **ManagedSettings** shield (`SessionAppShield` + `SessionShieldStore`):
 
 - **Category policy**: shield all app categories except TikTok/YouTube tokens (`.all(except:)`).
-- **Per-app blocklist**: shield every other installed app token from `FamilyActivityData.installedApplications`.
+- **Per-app blocklist**: shield every other installed app token from parent **Allowed Apps** selection (`FamilyActivityPicker` in Parent's Access).
 - **Web**: shield web domain categories (blocks most in-app Safari browsing).
 - **Device Activity Monitor extension** (`DeviceActivityMonitorExtension`) re-applies shields when `DeviceActivityCenter.startMonitoring` fires `intervalDidStart`.
 
 Shields clear on session stop and on app launch if no session is active.
 
-- Requires **Screen Time / Family Controls** authorization on the device.
+- Requires **Screen Time / Family Controls** authorization on the device (`Approved` is enough for blocking).
+- Parent must select allowed apps (TikTok, YouTube) once in **Parent's Access → Allowed Apps** before the first session.
+- Per-app **usage charts** still require `approvedWithDataAccess` on iOS 26.4+.
 - Test on a **physical device**; the simulator does not enforce shields.
 - In **Screen Time debug**, check App Group key `deviceActivityExtensionHeartbeat` after starting a session — should read `intervalDidStart` if the monitor extension ran.
 

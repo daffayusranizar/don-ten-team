@@ -20,6 +20,26 @@ enum DeviceActivityUsageAggregator {
         Bundle.main.bundleIdentifier
     }
 
+    /// EU + EEA storefront/region codes where customer installs can reach `approvedWithDataAccess`.
+    private static let euRegionCodes: Set<String> = [
+        "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU",
+        "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
+        "IS", "LI", "NO",
+    ]
+
+    /// Apple only grants `approvedWithDataAccess` on EU devices with an EU Apple Account.
+    static var isDeviceInEURegion: Bool {
+        let code = Locale.current.region?.identifier.uppercased() ?? ""
+        return euRegionCodes.contains(code)
+    }
+
+    /// True when usage fetch proceeds with basic `approved` because data access is unavailable outside the EU.
+    static var usesApprovedOnlyFallback: Bool {
+        guard #available(iOS 26.4, *) else { return false }
+        let status = AuthorizationCenter.shared.authorizationStatus
+        return status == .approved && !isDeviceInEURegion
+    }
+
     static func refreshAuthorizationStatus() {
         _ = AuthorizationCenter.shared.authorizationStatus
     }
@@ -27,7 +47,14 @@ enum DeviceActivityUsageAggregator {
     static func hasRequiredAuthorization() -> Bool {
         let status = AuthorizationCenter.shared.authorizationStatus
         if #available(iOS 26.4, *) {
-            return status == .approvedWithDataAccess
+            if status == .approvedWithDataAccess {
+                return true
+            }
+            // Outside the EU, customer installs never reach `approvedWithDataAccess`.
+            if status == .approved, !isDeviceInEURegion {
+                return true
+            }
+            return false
         }
         return status == .approved
     }
@@ -66,7 +93,19 @@ enum DeviceActivityUsageAggregator {
 
         let identityLoad = await ApplicationIdentityResolver.load()
         let identity = identityLoad.resolver
-        let monitoredTokens = identityLoad.monitoredApplicationTokens
+        var monitoredTokens = identityLoad.monitoredApplicationTokens
+        if monitoredTokens.isEmpty, usesApprovedOnlyFallback {
+            monitoredTokens = FamilyActivitySelectionStore.allowedApplicationTokensForShields()
+            AgentDebugLog.log(
+                hypothesisId: "C",
+                location: "DeviceActivityUsageAggregator.aggregateHourlyForSessions",
+                message: "non-EU approved fallback: parent-selected tokens",
+                data: [
+                    "region": Locale.current.region?.identifier ?? "unknown",
+                    "tokenCount": String(monitoredTokens.count),
+                ]
+            )
+        }
         let calendar = Calendar.current
         let hourStarts = SessionUsageHourMerge.unionHourStarts(sessions: windows, calendar: calendar)
         let capSeconds = 3600
@@ -103,7 +142,8 @@ enum DeviceActivityUsageAggregator {
                         filter: labeled.filter,
                         filterLabel: labeled.label,
                         policy: policy,
-                        identity: identity
+                        identity: identity,
+                        monitoredTokens: monitoredTokens
                     )
                     ScreenTimePipelineLogger.logCandidate(
                         filterLabel: labeled.label,
@@ -220,7 +260,8 @@ enum DeviceActivityUsageAggregator {
         filter: DeviceActivityFilter,
         filterLabel: String,
         policy: DeviceActivityData.Policy,
-        identity: ApplicationIdentityResolver
+        identity: ApplicationIdentityResolver,
+        monitoredTokens: Set<ApplicationToken>
     ) async throws -> SessionUsagePayload {
         #if DEBUG
         SessionUsageNoiseFilter.resetDebugCounters()
@@ -259,7 +300,11 @@ enum DeviceActivityUsageAggregator {
                     for await category in segment.categories {
                         for await application in category.applications {
                             applicationCount += 1
-                            guard let resolved = identity.resolve(application.application) else {
+                            guard let resolved = resolveApplication(
+                                application.application,
+                                identity: identity,
+                                monitoredTokens: monitoredTokens
+                            ) else {
                                 continue
                             }
                             let localized = application.application.localizedDisplayName ?? ""
@@ -271,7 +316,11 @@ enum DeviceActivityUsageAggregator {
                             let appSeconds = Int(application.totalActivityDuration.rounded())
                             guard appSeconds > 0 else { continue }
 
-                            let isMonitored = MonitoredAppsFilter.includes(bundleId: resolved.bundleId)
+                            let isMonitored = isMonitoredApplication(
+                                application.application,
+                                resolved: resolved,
+                                monitoredTokens: monitoredTokens
+                            )
 
                             guard isMonitored else {
                                 #if DEBUG
@@ -370,6 +419,52 @@ enum DeviceActivityUsageAggregator {
     private static func isHostApp(bundleId: String) -> Bool {
         guard let host = hostAppBundleIdentifier?.lowercased() else { return false }
         return bundleId.lowercased() == host
+    }
+
+    @available(iOS 26.4, *)
+    private static func resolveApplication(
+        _ application: Application,
+        identity: ApplicationIdentityResolver,
+        monitoredTokens: Set<ApplicationToken>
+    ) -> (bundleId: String, displayName: String)? {
+        if let resolved = identity.resolve(application) {
+            return resolved
+        }
+        guard usesApprovedOnlyFallback,
+              let token = application.token,
+              monitoredTokens.contains(token) else {
+            return nil
+        }
+        let localized = application.localizedDisplayName ?? "App"
+        let bundleId = bundleIdForOpaqueMonitoredApp(localized: localized)
+            ?? "monitored.\(abs(token.hashValue))"
+        let displayName = KnownAppLabels.displayName(bundleId: bundleId, localized: localized)
+        return (bundleId, displayName)
+    }
+
+    @available(iOS 26.4, *)
+    private static func isMonitoredApplication(
+        _ application: Application,
+        resolved: (bundleId: String, displayName: String),
+        monitoredTokens: Set<ApplicationToken>
+    ) -> Bool {
+        if usesApprovedOnlyFallback,
+           let token = application.token,
+           monitoredTokens.contains(token) {
+            return true
+        }
+        return MonitoredAppsFilter.includes(bundleId: resolved.bundleId)
+    }
+
+    private static func bundleIdForOpaqueMonitoredApp(localized: String) -> String? {
+        let lower = localized.lowercased()
+        if lower.contains("tiktok") {
+            return "com.zhiliaoapp.musically"
+        }
+        if lower.contains("youtube") {
+            return "com.google.ios.youtube"
+        }
+        return nil
     }
 
     private static func emptyPayload(

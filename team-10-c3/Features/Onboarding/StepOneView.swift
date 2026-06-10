@@ -10,11 +10,13 @@ import SwiftUI
 struct StepOneView: View {
     @Binding var data: OnboardingData
 
+    @State private var parentName = ""
+    @State private var parentBirthdate: Date?
     @State private var goToPinSetup = false
 
     private var formCompleted: Bool {
-        !data.parentName.isEmpty &&
-        data.parentBirthdate != nil
+        !parentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        parentBirthdate != nil
     }
 
     var body: some View {
@@ -36,7 +38,7 @@ struct StepOneView: View {
                     .font(.system(size: 18, weight: .medium))
 
                 PrimaryTextField(
-                    text: $data.parentName,
+                    text: $parentName,
                     placeholder: "e.g Sarah",
                     size: .large,
                     systemImage: "person.crop.circle.fill"
@@ -49,7 +51,7 @@ struct StepOneView: View {
                     .font(.system(size: 18, weight: .medium))
 
                 PrimaryDateField(
-                    date: $data.parentBirthdate,
+                    date: $parentBirthdate,
                     placeholder: "Insert Birthdate...",
                     size: .large,
                     systemImage: "calendar"
@@ -81,14 +83,24 @@ struct StepOneView: View {
                 systemImage: nil,
                 isDisabled: !formCompleted
             ) {
+                data.parentName = parentName.trimmingCharacters(in: .whitespacesAndNewlines)
+                data.parentBirthdate = parentBirthdate
                 goToPinSetup = true
             }
         }
         .foregroundStyle(.textPrimary)
         .padding(.horizontal, 30)
+        .onAppear {
+            if parentName.isEmpty {
+                parentName = data.parentName
+            }
+            if parentBirthdate == nil {
+                parentBirthdate = data.parentBirthdate
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 1 of 5")
+                Text("Step 1 of 6")
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

@@ -76,7 +76,7 @@ struct ScreenTimePermissionBanner: View {
 
     private var summaryText: String {
         if gaps.contains(.familyControlsNotApproved) {
-            return "Allow Screen Time so sessions can block every app except TikTok and YouTube."
+            return "Allow Screen Time so you can choose which apps stay open during sessions."
         }
         return "Usage charts need Apple’s App & Website Usage entitlement on this TestFlight build. Sessions still work."
     }
@@ -105,10 +105,33 @@ private struct ScreenTimeAuthorizationAlertModifier: ViewModifier {
                     }
                 } else if familyControlsAuth.isUsageDataEntitlementMissing {
                     Button("OK", role: .cancel) {
+                        // #region agent log
+                        DebugSessionLog.log(
+                            hypothesisId: "H3",
+                            location: "ScreenTimeAuthorizationAlert.alert",
+                            message: "user tapped OK (usage entitlement missing — no system sheet)",
+                            data: [
+                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                                "status": familyControlsAuth.authorizationStatusDescription,
+                            ]
+                        )
+                        // #endregion
                         onDismissWithoutAuth?()
                     }
                 } else {
                     Button("Continue") {
+                        // #region agent log
+                        DebugSessionLog.log(
+                            hypothesisId: "H3",
+                            location: "ScreenTimeAuthorizationAlert.alert",
+                            message: "user tapped Continue — will request auth",
+                            data: [
+                                "buildChannel": DebugSessionLog.buildChannel.rawValue,
+                                "status": familyControlsAuth.authorizationStatusDescription,
+                                "missingPermissions": familyControlsAuth.missingPermissions.map { String(describing: $0) }.joined(separator: ","),
+                            ]
+                        )
+                        // #endregion
                         Task { await requestScreenTimeAccess() }
                     }
                 }
