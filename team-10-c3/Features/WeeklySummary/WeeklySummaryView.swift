@@ -17,7 +17,6 @@ struct WeeklySummaryView: View {
     @Environment(\.profileViewModel) private var profileViewModel
     @Environment(\.weeklySummaryViewModel) private var viewModel
     @State private var selectedPeriod: Period = .daily
-    @State private var showOfflineActivity = false
 
     var body: some View {
         VStack {
@@ -51,7 +50,6 @@ struct WeeklySummaryView: View {
                     emptyMessage: viewModel.emptyMessage,
                     isLoading: viewModel.isLoading,
                     isRefreshing: viewModel.isRefreshing,
-                    showOfflineActivity: $showOfflineActivity,
                     suggestionTryResetGeneration: viewModel.suggestionTryResetGeneration,
                     onRegenerateWeekly: weeklyRegenerateAction(viewModel: viewModel)
                 )
@@ -63,7 +61,6 @@ struct WeeklySummaryView: View {
                     emptyMessage: "Insights are unavailable right now.",
                     isLoading: false,
                     isRefreshing: false,
-                    showOfflineActivity: $showOfflineActivity,
                     onRegenerateWeekly: nil
                 )
             }
@@ -80,11 +77,6 @@ struct WeeklySummaryView: View {
         }
         .onChange(of: profileViewModel.selectedChild?.id) { _, _ in
             refreshInsights()
-        }
-        .navigationDestination(isPresented: $showOfflineActivity) {
-            if let activity = viewModel?.report?.offlineActivity {
-                InsightOfflineActivityDetailView(activityText: activity)
-            }
         }
     }
 
@@ -120,11 +112,11 @@ struct ReportView: View {
     let emptyMessage: String?
     let isLoading: Bool
     let isRefreshing: Bool
-    @Binding var showOfflineActivity: Bool
     var suggestionTryResetGeneration: UInt64 = 0
     var onRegenerateWeekly: (() -> Void)?
     @State private var isTrySuggestion = false
     @State private var savedTry: SavedSuggestionTry?
+    @State private var showOfflineActivityLibrary = false
 
     var body: some View {
         ScrollView {
@@ -182,6 +174,9 @@ struct ReportView: View {
         }
         .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize)
+        .navigationDestination(isPresented: $showOfflineActivityLibrary) {
+            OfflineActivityView()
+        }
         .onAppear {
             reloadSavedTryIfNeeded()
         }
@@ -506,7 +501,7 @@ struct ReportView: View {
                     size: .medium,
                     systemImage: "",
                     action: {
-                        showOfflineActivity = true
+                        showOfflineActivityLibrary = true
                     }
                 )
                 .padding(.top, 10)
@@ -585,43 +580,6 @@ struct InsightSummaryDetailView: View {
         .background(Color(red: 0.97, green: 0.97, blue: 0.98))
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-struct InsightOfflineActivityDetailView: View {
-    @Environment(\.dismiss) private var dismiss
-    let activityText: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding()
-                        .background(Circle().fill(.primaryDarkBlue))
-                }
-                Spacer()
-                Text("Offline Activity")
-                    .font(.system(size: 22, weight: .bold))
-                Spacer()
-                Color.clear.frame(width: 56, height: 56)
-            }
-
-            Text(activityText)
-                .font(.system(size: 18))
-                .foregroundStyle(.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .background(.uiBackground)
-        .navigationBarBackButtonHidden(true)
     }
 }
 
@@ -704,7 +662,6 @@ private extension UsageInsightReport {
 // Full-screen preview wrapper — mirrors WeeklySummaryView layout without real environment objects
 private struct WeeklySummaryPreview: View {
     @State private var selectedPeriod: Period = .daily
-    @State private var showOfflineActivity = false
 
     private var currentReport: UsageInsightReport {
         selectedPeriod == .daily ? .previewDaily : .previewWeekly
@@ -730,7 +687,6 @@ private struct WeeklySummaryPreview: View {
                 emptyMessage: nil,
                 isLoading: false,
                 isRefreshing: false,
-                showOfflineActivity: $showOfflineActivity,
                 onRegenerateWeekly: nil
             )
 
@@ -747,9 +703,6 @@ private struct WeeklySummaryPreview: View {
 
             }
         }
-        .navigationDestination(isPresented: $showOfflineActivity) {
-            OfflineActivityView()
-        }
     }
 }
 
@@ -760,7 +713,6 @@ private struct WeeklySummaryPreview: View {
 }
 
 #Preview("Empty State") {
-    @Previewable @State var showOfflineActivity = false
     NavigationStack {
         VStack {
             Picker("Period", selection: .constant(Period.daily)) {
@@ -777,7 +729,6 @@ private struct WeeklySummaryPreview: View {
                 emptyMessage: "No analyzed sessions today yet. Complete a session with screen recording to see today's usage insight.",
                 isLoading: false,
                 isRefreshing: false,
-                showOfflineActivity: $showOfflineActivity,
                 onRegenerateWeekly: nil
             )
             Spacer()
@@ -788,7 +739,6 @@ private struct WeeklySummaryPreview: View {
 }
 
 #Preview("Loading") {
-    @Previewable @State var showOfflineActivity = false
     NavigationStack {
         VStack {
             Picker("Period", selection: .constant(Period.daily)) {
@@ -805,7 +755,6 @@ private struct WeeklySummaryPreview: View {
                 emptyMessage: nil,
                 isLoading: true,
                 isRefreshing: false,
-                showOfflineActivity: $showOfflineActivity,
                 onRegenerateWeekly: nil
             )
             Spacer()

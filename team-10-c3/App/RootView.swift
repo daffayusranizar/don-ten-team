@@ -11,6 +11,7 @@ import SwiftUI
 enum AppTab: Int {
     case dashboard
     case insight
+    case guidance
     case session
 }
 
@@ -97,6 +98,12 @@ struct RootView: View {
             Tab("Insight", systemImage: "chart.bar.fill", value: AppTab.insight.rawValue) {
                 NavigationStack {
                     WeeklySummaryView()
+                }
+            }
+
+            Tab("Activities", systemImage: "leaf.fill", value: AppTab.guidance.rawValue) {
+                NavigationStack {
+                    GuidanceView()
                 }
             }
 

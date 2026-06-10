@@ -91,7 +91,7 @@ enum SessionUsageReportDataProcessor {
         SessionReportDisplayContext.writeRenderedMetrics(
             appRowCount: min(5, appRows.count),
             isEmpty: isEmpty,
-            showsHourlyChart: !hourlySegments.isEmpty
+            showsHourlyChart: !appRows.isEmpty
         )
 
         return SessionUsageReportConfiguration(

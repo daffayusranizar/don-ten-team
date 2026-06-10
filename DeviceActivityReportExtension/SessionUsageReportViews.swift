@@ -17,29 +17,8 @@ struct SessionUsageReportView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-            } else {
-                if !configuration.hourlySegments.isEmpty {
-                    SessionHourlyCanvasChart(segments: configuration.hourlySegments)
-                }
-
-                Text("Allowed apps")
-                    .font(.subheadline.weight(.semibold))
-
-                VStack(spacing: 10) {
-                    ForEach(configuration.apps.prefix(5)) { app in
-                        HStack(spacing: 12) {
-                            ApplicationTokenIcon(token: app.applicationToken, size: 24)
-                            Text(app.displayName)
-                                .font(.subheadline)
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text(formatDuration(app.durationSeconds))
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-                }
+            } else if !configuration.apps.isEmpty {
+                SessionPerAppComparisonChart(apps: configuration.apps)
             }
 
             if configuration.sessionElapsedSeconds > 0 {

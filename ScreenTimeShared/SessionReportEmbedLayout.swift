@@ -17,12 +17,12 @@ struct SessionReportRenderedMetrics: Sendable, Equatable {
 
 enum SessionReportEmbedLayout {
     /// Apple documents that `DeviceActivityReport` needs a fixed host-app frame.
-    static let minimumEmbedHeight: CGFloat = 440
+    static let minimumEmbedHeight: CGFloat = 260
 
     private static let periodBlock: CGFloat = 30
-    private static let chartBlock: CGFloat = 208
-    private static let sectionHeader: CGFloat = 22
-    private static let appRow: CGFloat = 38
+    private static let comparisonHeader: CGFloat = 22
+    private static let comparisonRow: CGFloat = 48
+    private static let comparisonPadding: CGFloat = 10
     private static let sessionRow: CGFloat = 30
     private static let footnote: CGFloat = 34
     private static let verticalPadding: CGFloat = 36
@@ -39,11 +39,10 @@ enum SessionReportEmbedLayout {
         }
 
         let rows = min(5, max(0, appRowCount))
-        var total = periodBlock + sectionHeader + footnote + verticalPadding
+        var total = periodBlock + footnote + verticalPadding
         if showsHourlyChart {
-            total += chartBlock
+            total += comparisonChartHeight(rows: rows)
         }
-        total += CGFloat(rows) * appRow
         if showsSessionTime {
             total += sessionRow
         }
@@ -89,5 +88,11 @@ enum SessionReportEmbedLayout {
             showsSessionTime: showsSessionTime,
             showsHourlyChart: assumesHourlyChart
         )
+    }
+
+    private static func comparisonChartHeight(rows: Int) -> CGFloat {
+        comparisonHeader
+            + CGFloat(rows) * comparisonRow
+            + comparisonPadding
     }
 }
