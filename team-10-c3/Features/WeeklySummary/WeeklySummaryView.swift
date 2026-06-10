@@ -255,7 +255,7 @@ struct ReportView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    CategoryBreakdownList(items: report.chartItems)
+                    StackedBarCard(items: report.chartItems)
                 }
             }
             .padding(.horizontal, 18)
@@ -544,25 +544,64 @@ private struct InsightCard<Content: View>: View {
     }
 }
 
-private struct CategoryBreakdownList: View {
+struct StackedBarCard: View {
     let items: [UsageChartItem]
 
+    @ChartDifferentiateWithoutColor private var differentiateWithoutColor
+
+    private var total: Double {
+        max(items.reduce(0) { $0 + $1.value }, 1)
+    }
+
     var body: some View {
-        VStack(spacing: 10) {
-            ForEach(items) { item in
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(item.color)
-                        .frame(width: 10, height: 10)
-                    Text(item.name)
-                        .font(.subheadline)
-                    Spacer(minLength: 8)
-                    Text("\(Int(item.value))%")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        let consumed = items.prefix(index).reduce(0) { $0 + $1.value }
+                        let remainingWidth = geo.size.width * ((total - consumed) / total)
+
+                        Capsule()
+                            .fill(itemFill(item))
+                            .frame(width: remainingWidth, height: 24)
+                            .shadow(color: .black.opacity(0.1), radius: 2)
+                    }
+                }
+            }
+            .frame(height: 24)
+
+            VStack(spacing: 10) {
+                ForEach(items) { item in
+                    HStack {
+                        ChartLegendSwatch(
+                            color: item.color,
+                            pattern: item.chartPattern,
+                            systemImage: item.systemImage,
+                            cacheKey: item.name,
+                            differentiateWithoutColor: differentiateWithoutColor
+                        )
+
+                        Text(item.name)
+                            .font(.caption)
+
+                        Spacer()
+
+                        Text("\(Int(item.value))%")
+                            .font(.caption)
+                            .foregroundStyle(differentiateWithoutColor ? .textPrimary : item.color)
+                    }
                 }
             }
         }
+    }
+
+    private func itemFill(_ item: UsageChartItem) -> AnyShapeStyle {
+        UsageCategoryVisualStyle.fillStyle(
+            color: item.color,
+            pattern: item.chartPattern,
+            cacheKey: item.name,
+            differentiateWithoutColor: differentiateWithoutColor
+        )
     }
 }
 
