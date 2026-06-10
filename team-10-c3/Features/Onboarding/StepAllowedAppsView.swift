@@ -88,7 +88,7 @@ struct StepAllowedAppsView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 6 of 6")
+                Text(OnboardingProgress.allowedAppsTitle)
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

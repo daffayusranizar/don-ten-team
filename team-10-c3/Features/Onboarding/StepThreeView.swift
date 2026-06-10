@@ -152,7 +152,7 @@ struct StepThreeView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 3 of 6")
+                Text(OnboardingProgress.title(step: 3))
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }
