@@ -42,5 +42,22 @@ struct RootView: View {
 }
 
 #Preview {
+    let repository = InMemoryChildRepository()
+    let profileViewModel = ProfileViewModel(childRepository: repository)
+    
     RootView()
+        .environment(\.childRepository, repository)
+        .environment(\.profileViewModel, profileViewModel)
+        .environment(\.sessionCoordinator, SessionCoordinator(
+            sessionRepository: InMemorySessionRepository(),
+            screenTimeService: ScreenTimeService(),
+            familyControlsAuth: PreviewFamilyControlsAuthService()
+        ))
+        .environment(\.kidSessionViewModel, KidSessionViewModel(
+            sessionCoordinator: SessionCoordinator(
+                sessionRepository: InMemorySessionRepository(),
+                screenTimeService: ScreenTimeService(),
+                familyControlsAuth: PreviewFamilyControlsAuthService()
+            )
+        ))
 }

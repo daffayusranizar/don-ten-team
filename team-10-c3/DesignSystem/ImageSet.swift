@@ -14,6 +14,8 @@ public enum ImageAsset: String {
     case childAvatar5 = "ChildAvatar5"
     case childAvatar6 = "ChildAvatar6"
     case childAvatar7 = "ChildAvatar7"
+    case childAvatar8 = "ChildAvatar8"
+    case childAvatar9 = "ChildAvatar9"
     case parentProfileAvatar = "ParentProfileAvatar"
     case instagram = "Instagram"
     case tiktok = "TikTok"
@@ -28,6 +30,8 @@ public enum ChildAvatarImage: CaseIterable, Identifiable, Equatable {
     case avatar5
     case avatar6
     case avatar7
+    case avatar8
+    case avatar9
 
     public var id: ImageAsset { asset }
 
@@ -40,6 +44,8 @@ public enum ChildAvatarImage: CaseIterable, Identifiable, Equatable {
         case .avatar5: .childAvatar5
         case .avatar6: .childAvatar6
         case .avatar7: .childAvatar7
+        case .avatar8: .childAvatar8
+        case .avatar9: .childAvatar9
         }
     }
 
@@ -52,6 +58,8 @@ public enum ChildAvatarImage: CaseIterable, Identifiable, Equatable {
         case .childAvatar5: self = .avatar5
         case .childAvatar6: self = .avatar6
         case .childAvatar7: self = .avatar7
+        case .childAvatar8: self = .avatar8
+        case .childAvatar9: self = .avatar9
         default: return nil
         }
     }
