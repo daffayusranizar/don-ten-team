@@ -15,7 +15,7 @@ enum SessionAppShieldError: LocalizedError, Equatable {
             return "App blocking requires iOS 26.4 or later on this device."
         case .appsNotSelected:
             return """
-            Choose TikTok and YouTube in Parent's Access → Allowed Apps before starting a session.
+            Choose allowed apps in Parent's Access before starting a session.
             """
         }
     }

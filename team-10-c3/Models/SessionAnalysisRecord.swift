@@ -53,11 +53,79 @@ enum SessionAnalysisStatus: String, Codable {
 }
 
 @Model
+final class WeeklyInsightCacheRecord {
+    var childId: UUID
+    var weekKey: String
+    var sessionSignature: String
+    var aiSummary: String
+    var aiSummaryDetail: String
+    var weeklySuggestion: String
+    var followUpOptionsJSON: String
+    var builtAt: Date
+
+    init(
+        childId: UUID,
+        weekKey: String,
+        sessionSignature: String,
+        aiSummary: String,
+        aiSummaryDetail: String = "",
+        weeklySuggestion: String,
+        followUpOptionsJSON: String,
+        builtAt: Date = Date()
+    ) {
+        self.childId = childId
+        self.weekKey = weekKey
+        self.sessionSignature = sessionSignature
+        self.aiSummary = aiSummary
+        self.aiSummaryDetail = aiSummaryDetail
+        self.weeklySuggestion = weeklySuggestion
+        self.followUpOptionsJSON = followUpOptionsJSON
+        self.builtAt = builtAt
+    }
+}
+
+@Model
+final class WeeklySuggestionTryRecord {
+    var id: UUID
+    var childId: UUID
+    var weekKey: String
+    var suggestion: String
+    var tried: Bool
+    var followUpOptionsJSON: String
+    var followUpSelection: String?
+    var note: String?
+    var savedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        childId: UUID,
+        weekKey: String,
+        suggestion: String,
+        tried: Bool,
+        followUpOptionsJSON: String,
+        followUpSelection: String? = nil,
+        note: String? = nil,
+        savedAt: Date = Date()
+    ) {
+        self.id = id
+        self.childId = childId
+        self.weekKey = weekKey
+        self.suggestion = suggestion
+        self.tried = tried
+        self.followUpOptionsJSON = followUpOptionsJSON
+        self.followUpSelection = followUpSelection
+        self.note = note
+        self.savedAt = savedAt
+    }
+}
+
+@Model
 final class DailyInsightCacheRecord {
     var childId: UUID
     var dayKey: String
     var sessionSignature: String
     var summary: String
+    var detailSummary: String
     var builtAt: Date
 
     init(
@@ -65,12 +133,14 @@ final class DailyInsightCacheRecord {
         dayKey: String,
         sessionSignature: String,
         summary: String,
+        detailSummary: String = "",
         builtAt: Date = Date()
     ) {
         self.childId = childId
         self.dayKey = dayKey
         self.sessionSignature = sessionSignature
         self.summary = summary
+        self.detailSummary = detailSummary
         self.builtAt = builtAt
     }
 }

@@ -93,58 +93,103 @@ func latestSummary(
 // MARK: 24-hour stacked app usage
 @ViewBuilder
 func hourlyStackedAppChart(segments: [HourlyStackedChartSegment]) -> some View {
-    let legendApps = Dictionary(
-        segments.map { ($0.bundleIdentifier, $0) },
-        uniquingKeysWith: { first, _ in first }
-    )
-    .values
-    .sorted { $0.appDisplayName.localizedCaseInsensitiveCompare($1.appDisplayName) == .orderedAscending }
-    let appNames = legendApps.map(\.appDisplayName)
-    let legendColors = legendApps.map(\.color)
-
-    Chart(segments) { segment in
-        BarMark(
-            x: .value("Hour", segment.hour),
-            y: .value("Seconds", segment.durationSeconds)
-        )
-        .foregroundStyle(hourlyBarForegroundStyle(segment))
-    }
-    .chartForegroundStyleScale(domain: appNames, range: legendColors)
-    .chartXScale(domain: 0...23)
-    .chartXAxis {
-        AxisMarks(values: [0, 6, 12, 18]) { value in
-            if let hour = value.as(Int.self) {
-                AxisValueLabel(hourAxisLabel(hour))
-            }
-            AxisTick()
-        }
-    }
-    .chartYAxis {
-        AxisMarks(position: .leading) { value in
-            AxisValueLabel {
-                if let number = value.as(Double.self) {
-                    Text(DurationFormatting.compact(seconds: Int(number.rounded())))
-                }
-            }
-            AxisTick()
-        }
-    }
-    .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
-    .chartPlotStyle { plotArea in
-        plotArea.border(.clear)
-    }
-    .padding()
-    .background(.uiBackground)
-    .clipShape(RoundedRectangle(cornerRadius: 15))
+    HourlyStackedAppChart(segments: segments)
 }
 
-private func hourlyBarForegroundStyle(_ segment: HourlyStackedChartSegment) -> AnyShapeStyle {
-    if segment.isPartialHour {
-        AnyShapeStyle(
-            HourlyChartDotPattern.fill(base: segment.color, cacheKey: segment.colorName)
+private struct HourlyStackedAppChart: View {
+    let segments: [HourlyStackedChartSegment]
+
+    @ChartDifferentiateWithoutColor private var differentiateWithoutColor
+
+    var body: some View {
+        let legendApps = Array(
+            Dictionary(
+                segments.map { ($0.bundleIdentifier, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            .values
         )
-    } else {
-        AnyShapeStyle(segment.color)
+        .sorted { $0.appDisplayName.localizedCaseInsensitiveCompare($1.appDisplayName) == .orderedAscending }
+        let appNames = legendApps.map(\.appDisplayName)
+        let legendColors = legendApps.map(\.color)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Chart(segments) { segment in
+                BarMark(
+                    x: .value("Hour", segment.hour),
+                    y: .value("Seconds", segment.durationSeconds)
+                )
+                .foregroundStyle(hourlyBarForegroundStyle(segment))
+            }
+            .chartForegroundStyleScale(domain: appNames, range: legendColors)
+            .chartXScale(domain: 0...23)
+            .chartXAxis {
+                AxisMarks(values: [0, 6, 12, 18]) { value in
+                    if let hour = value.as(Int.self) {
+                        AxisValueLabel(hourAxisLabel(hour))
+                    }
+                    AxisTick()
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisValueLabel {
+                        if let number = value.as(Double.self) {
+                            Text(DurationFormatting.compact(seconds: Int(number.rounded())))
+                        }
+                    }
+                    AxisTick()
+                }
+            }
+            .chartLegend(differentiateWithoutColor ? .hidden : .visible)
+            .chartPlotStyle { plotArea in
+                plotArea.border(.clear)
+            }
+
+            if differentiateWithoutColor {
+                hourlyPatternLegend(apps: legendApps)
+            }
+        }
+        .padding()
+        .background(.uiBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 15))
+    }
+
+    @ViewBuilder
+    private func hourlyPatternLegend(apps: [HourlyStackedChartSegment]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(apps, id: \.bundleIdentifier) { app in
+                ChartPatternLegendRow(
+                    title: app.appDisplayName,
+                    color: app.color,
+                    pattern: app.chartPattern,
+                    cacheKey: app.colorName,
+                    differentiateWithoutColor: true,
+                    appIcon: AppUsageIcon.image(bundleIdentifier: app.bundleIdentifier)
+                )
+            }
+        }
+    }
+
+    private func hourlyBarForegroundStyle(_ segment: HourlyStackedChartSegment) -> AnyShapeStyle {
+        if differentiateWithoutColor {
+            let pattern = segment.chartPattern
+            if segment.isPartialHour {
+                return pattern.shapeStyle(
+                    base: segment.color,
+                    cacheKey: segment.colorName,
+                    overlay: .dots
+                )
+            }
+            return pattern.shapeStyle(base: segment.color, cacheKey: segment.colorName)
+        }
+
+        if segment.isPartialHour {
+            return AnyShapeStyle(
+                HourlyChartDotPattern.fill(base: segment.color, cacheKey: segment.colorName)
+            )
+        }
+        return AnyShapeStyle(segment.color)
     }
 }
 

@@ -11,9 +11,10 @@ struct StepAllowedAppsView: View {
     @Environment(\.familyControlsAuth) private var familyControlsAuth
     @State private var goToReviewPage = false
     @State private var showScreenTimeAuthAlert = false
+    @State private var allowedAppCount = 0
 
     private var canContinue: Bool {
-        familyControlsAuth.isAuthorized && FamilyActivitySelectionStore.hasAllowedApps
+        familyControlsAuth.isAuthorized && allowedAppCount > 0
     }
 
     var body: some View {
@@ -37,7 +38,7 @@ struct StepAllowedAppsView: View {
             VStack(spacing: 5) {
                 Text("Choose Allowed Apps")
                     .font(.system(size: 20, weight: .semibold))
-                Text("During a session, only TikTok and YouTube stay open. Pick them here so Kiddly can block everything else.")
+                Text("Pick which apps your child can use during a session. Everything else stays blocked until the session ends.")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.textSecondary)
                     .multilineTextAlignment(.center)
@@ -52,7 +53,12 @@ struct StepAllowedAppsView: View {
                 )
             }
 
-            FamilyActivityPickerSection(onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true })
+            FamilyActivityPickerSection(
+                onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true },
+                onSelectionChanged: { _ in
+                    allowedAppCount = FamilyActivitySelectionStore.allowedAppCount
+                }
+            )
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 15)
@@ -93,9 +99,11 @@ struct StepAllowedAppsView: View {
         }
         .screenTimeAuthorizationAlert(isPresented: $showScreenTimeAuthAlert) {
             familyControlsAuth.refreshAuthorizationStatus()
+            allowedAppCount = FamilyActivitySelectionStore.allowedAppCount
         }
         .onAppear {
             familyControlsAuth.refreshAuthorizationStatus()
+            allowedAppCount = FamilyActivitySelectionStore.allowedAppCount
         }
     }
 }

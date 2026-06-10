@@ -156,7 +156,7 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
             return """
             Kiddly needs Screen Time permission to run parent sessions:
 
-            • Block all apps except TikTok and YouTube
+            • Block apps during sessions based on your allowed-app choices
             • Show estimated app usage on the dashboard
 
             Tap Continue for Apple’s permission screen, then allow access.

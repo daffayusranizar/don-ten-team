@@ -85,54 +85,98 @@ struct PrimaryTextField: View {
     var isFocused: FocusState<Bool>.Binding? = nil
     var action: () -> Void = {}
 
+    @FocusState private var isFieldFocused: Bool
+
+    private var showsClearButton: Bool {
+        isFieldFocused && !text.isEmpty
+    }
+
+    private var externalFocusValue: Bool {
+        isFocused?.wrappedValue ?? false
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-            // TextField Icon (Optional)
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
+                    .allowsHitTesting(false)
             }
 
+            textInput
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, size.horizontalPadding)
+        .padding(.vertical, size.verticalPadding)
+        .frame(minHeight: size.minHeight)
+        .background(Capsule().fill(.uiSurface))
+        .overlay {
+            Capsule()
+                .strokeBorder(
+                    isFieldFocused ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .overlay {
+            if !isFieldFocused {
+                Capsule()
+                    .fill(.clear)
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        isFieldFocused = true
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isFieldFocused)
+        .onChange(of: isFieldFocused) { _, focused in
+            syncFocusToExternal(focused)
+        }
+        .onChange(of: externalFocusValue) { _, externalFocused in
+            guard isFocused != nil, isFieldFocused != externalFocused else { return }
+            isFieldFocused = externalFocused
+        }
+    }
+
+    private var textInput: some View {
+        ZStack(alignment: .trailing) {
             TextField(placeholder, text: $text)
                 .font(size.font)
                 .foregroundStyle(.textPrimary)
                 .tint(.textPrimary)
                 .textFieldStyle(.plain)
+                .textContentType(.name)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .focused($isFieldFocused)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, size.iconSize + 4)
                 .onSubmit { action() }
-                .modifier(OptionalFocusBinding(binding: isFocused))
-            
-            // Clear Text Button
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: size.iconSize))
-                        .foregroundStyle(.textPrimary)
-                }
-            }
+
+            clearButton
         }
-        .padding(.horizontal, size.horizontalPadding)
-        .padding(.vertical, size.verticalPadding)
-        .frame(minHeight: size.minHeight)
-        .background(
-            Capsule()
-                .fill(.uiSurface)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
-}
 
-private struct OptionalFocusBinding: ViewModifier {
-    let binding: FocusState<Bool>.Binding?
-
-    func body(content: Content) -> some View {
-        if let binding {
-            content.focused(binding)
-        } else {
-            content
+    private var clearButton: some View {
+        Button {
+            isFieldFocused = false
+            text = ""
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: size.iconSize))
+                .foregroundStyle(.textSecondary)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear text")
+        .opacity(showsClearButton ? 1 : 0)
+        .allowsHitTesting(showsClearButton)
+        .animation(.easeInOut(duration: 0.15), value: showsClearButton)
+    }
+
+    private func syncFocusToExternal(_ focused: Bool) {
+        guard let isFocused, isFocused.wrappedValue != focused else { return }
+        isFocused.wrappedValue = focused
     }
 }
 
@@ -155,62 +199,75 @@ struct PrimaryDateField: View {
         )
     }
 
+    private var dateBinding: Binding<Date> {
+        Binding(
+            get: { date ?? Date() },
+            set: { date = $0 }
+        )
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
             }
 
-            ZStack(alignment: .leading) {
-
-                // placeholder / formatted text
-                Text(formattedDate)
-                    .font(size.font)
-                    .foregroundStyle(
-                        date == nil
-                        ? .textDisabled
-                        : .textPrimary
-                    )
-
-                // actual picker
-                DatePicker(
-                    "",
-                    selection: Binding(
-                        get: { date ?? Date() },
-                        set: { date = $0 }
-                    ),
-                    displayedComponents: [.date]
+            Text(formattedDate)
+                .font(size.font)
+                .foregroundStyle(
+                    date == nil
+                    ? .textDisabled
+                    : .textPrimary
                 )
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .colorMultiply(.clear)
-                
-                if date != nil {
-                    HStack {
-                        Spacer()
-                        
-                        Button {
-                            date = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: size.iconSize))
-                                .foregroundStyle(.textPrimary)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.trailing, size.iconSize + 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .frame(minHeight: size.minHeight)
-        .background(
+        .background(Capsule().fill(.uiSurface))
+        .allowsHitTesting(false)
+        .background {
+            DatePicker(
+                "",
+                selection: dateBinding,
+                in: ...Date(),
+                displayedComponents: [.date]
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .scaleEffect(x: 5, y: 1, anchor: .leading)
+        }
+        .clipShape(Capsule())
+        .overlay(alignment: .trailing) {
+            clearButton
+                .padding(.trailing, size.horizontalPadding)
+        }
+        .overlay {
             Capsule()
-                .fill(.uiSurface)
-        )
+                .strokeBorder(
+                    date != nil ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .animation(.easeInOut(duration: 0.15), value: date != nil)
+    }
+
+    private var clearButton: some View {
+        Button {
+            date = nil
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: size.iconSize))
+                .foregroundStyle(.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear date")
+        .opacity(date == nil ? 0 : 1)
+        .allowsHitTesting(date != nil)
     }
 }
 
@@ -221,42 +278,76 @@ struct SecondaryTextField: View {
     var size: TextFieldSize = .medium
     var systemImage: String? = nil
     var action: () -> Void = {}
-    
+
+    @FocusState private var isFieldFocused: Bool
+
+    private var showsClearButton: Bool {
+        isFieldFocused && !text.isEmpty
+    }
+
     var body: some View {
         HStack(spacing: size.contentSpacing) {
-            // TextField Icon (Optional)
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: size.iconSize))
                     .foregroundStyle(.textPrimary)
+                    .allowsHitTesting(false)
             }
 
-            TextField(placeholder, text: $text)
-                .font(size.font)
-                .foregroundStyle(.textPrimary)
-                .tint(.textPrimary)
-                .textFieldStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onSubmit { action() }
-            
-            // Clear Text Button
-            if !text.isEmpty {
+            ZStack(alignment: .trailing) {
+                TextField(placeholder, text: $text)
+                    .font(size.font)
+                    .foregroundStyle(.textPrimary)
+                    .tint(.textPrimary)
+                    .textFieldStyle(.plain)
+                    .submitLabel(.done)
+                    .focused($isFieldFocused)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.trailing, size.iconSize + 4)
+                    .onSubmit { action() }
+
                 Button {
+                    isFieldFocused = false
                     text = ""
                 } label: {
-                    Image(systemName: "xmark")
+                    Image(systemName: "xmark.circle.fill")
                         .font(.system(size: size.iconSize))
-                        .foregroundStyle(.textPrimary)
+                        .foregroundStyle(.textSecondary)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear text")
+                .opacity(showsClearButton ? 1 : 0)
+                .allowsHitTesting(showsClearButton)
+                .animation(.easeInOut(duration: 0.15), value: showsClearButton)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
         .frame(minHeight: size.minHeight)
         .background(
             RoundedRectangle(cornerRadius: size.cornerRadius)
-            .fill(.uiSurface)
+                .fill(.uiSurface)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: size.cornerRadius)
+                .strokeBorder(
+                    isFieldFocused ? Color.primaryMediumBlue : Color.clear,
+                    lineWidth: 2
+                )
+        }
+        .overlay {
+            if !isFieldFocused {
+                RoundedRectangle(cornerRadius: size.cornerRadius)
+                    .fill(.clear)
+                    .contentShape(RoundedRectangle(cornerRadius: size.cornerRadius))
+                    .onTapGesture {
+                        isFieldFocused = true
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isFieldFocused)
     }
 }
 
@@ -332,10 +423,14 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
                 if v is UITextField || v is UITextView {
                     return true
                 }
+                if v is UIDatePicker {
+                    return true
+                }
                 let typeName = String(describing: type(of: v))
                 if typeName.contains("TextField")
                     || typeName.contains("TextInput")
-                    || typeName.contains("UITextInput") {
+                    || typeName.contains("UITextInput")
+                    || typeName.contains("DatePicker") {
                     return true
                 }
                 current = v.superview

@@ -12,6 +12,7 @@ import SwiftUI
 
 struct SessionResultView: View {
     @Environment(\.kidSessionViewModel) private var kidSessionViewModel
+    @Environment(\.scenePhase) private var scenePhase
     let onStartNew: () -> Void
 
     @State private var showScreenBreakdown = false
@@ -29,13 +30,20 @@ struct SessionResultView: View {
         return displayId == finishedId
     }
 
+    private var isAwaitingRecordingAnalysis: Bool {
+        isDisplayingFinishedSession
+            && kidSessionViewModel.sessionIncludedScreenRecording
+            && kidSessionViewModel.sessionAnalysisResult == nil
+            && kidSessionViewModel.sessionAnalysisError == nil
+    }
+
     var body: some View {
         @Bindable var viewModel = kidSessionViewModel
 
         Group {
             if !isDisplayingFinishedSession {
                 ProgressView("Starting new session…")
-            } else if viewModel.isAnalyzingSession {
+            } else if viewModel.isAnalyzingSession || isAwaitingRecordingAnalysis {
                 analyzingContent(viewModel: viewModel)
             } else {
                 resultsScrollContent(
@@ -45,6 +53,13 @@ struct SessionResultView: View {
             }
         }
         .task(id: viewModel.displaySessionId) {
+            viewModel.runPostSessionAnalysisIfNeeded()
+        }
+        .onAppear {
+            viewModel.runPostSessionAnalysisIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
             viewModel.runPostSessionAnalysisIfNeeded()
         }
         .navigationBarBackButtonHidden(true)
@@ -58,10 +73,14 @@ struct SessionResultView: View {
 
     @ViewBuilder
     private func analyzingContent(viewModel: KidSessionViewModel) -> some View {
+        #if DEBUG
         SessionAnalysisLoadingView(
             progress: viewModel.analysisProgress,
             onSkip: { viewModel.cancelSessionAnalysis() }
         )
+        #else
+        SessionAnalysisLoadingView(progress: viewModel.analysisProgress)
+        #endif
     }
 
     private func resultsScrollContent(

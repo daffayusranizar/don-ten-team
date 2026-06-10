@@ -422,6 +422,13 @@ final class SessionCoordinator {
         if let persisted = try? sessionRepository.resolveGlobalActiveSession() {
             if persisted.childId == child.id {
                 mountPersistedActiveSession(persisted, durationMinutes: durationMinutes)
+                if remainingSeconds <= 0 {
+                    await forceCompletePersistedSession(persisted)
+                    return await prepareSessionAuthorized(
+                        child: child,
+                        plannedDurationSeconds: plannedDurationSeconds
+                    )
+                }
                 return true
             }
             loadError = "Finish the current session before starting a new one."

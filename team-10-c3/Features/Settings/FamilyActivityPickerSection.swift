@@ -7,6 +7,7 @@ struct FamilyActivityPickerSection: View {
     @State private var isPickerPresented = false
 
     var onRequireScreenTimeAuth: () -> Void = {}
+    var onSelectionChanged: ((FamilyActivitySelection) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -31,9 +32,11 @@ struct FamilyActivityPickerSection: View {
         }
         .onAppear {
             selection = FamilyActivitySelectionStore.load()
+            onSelectionChanged?(selection)
         }
         .onChange(of: selection) { _, newValue in
             FamilyActivitySelectionStore.save(newValue)
+            onSelectionChanged?(newValue)
         }
     }
 
@@ -68,9 +71,9 @@ struct FamilyActivityPickerSection: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.green)
         } else if appCount == 1 {
-            Label("1 app selected — add TikTok and YouTube if both are installed", systemImage: "exclamationmark.circle.fill")
+            Label("1 app selected — ready for sessions", systemImage: "checkmark.circle.fill")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.green)
         } else if categoryCount > 0 {
             Label("Select individual apps, not categories only", systemImage: "exclamationmark.circle.fill")
                 .font(.system(size: 14, weight: .medium))

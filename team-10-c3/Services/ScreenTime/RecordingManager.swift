@@ -86,6 +86,31 @@ public class RecordingManager: ObservableObject {
         defaults?.synchronize()
     }
 
+    /// App Group session id written when recording mode starts (survives process restarts).
+    public func boundRecordingSessionId() -> UUID? {
+        guard let raw = UserDefaults(suiteName: appGroupIdentifier)?
+            .string(forKey: BroadcastStorageKeys.activeRecordingSessionId) else {
+            return nil
+        }
+        return UUID(uuidString: raw)
+    }
+
+    public func isSessionBoundForRecording(sessionId: UUID) -> Bool {
+        boundRecordingSessionId()?.uuidString.lowercased() == sessionId.uuidString.lowercased()
+    }
+
+    /// Rebuilds poll context after relaunch without overwriting the bound session id.
+    public func rehydrateRecordingContext(
+        sessionId: UUID,
+        sessionStartedAt: Date
+    ) -> SessionRecordingMatchContext {
+        SessionRecordingMatchContext(
+            sessionId: sessionId,
+            sessionStartedAt: sessionStartedAt,
+            snapshotsAtStart: snapshotRecordingsInAppGroup()
+        )
+    }
+
     // MARK: - Auto-Stop Session Logic
 
     public func setSessionDuration(seconds: Int) {

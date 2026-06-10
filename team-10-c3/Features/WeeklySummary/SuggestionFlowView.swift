@@ -2,11 +2,8 @@
 //  SuggestionFlowView.swift
 //  team-10-c3
 //
-//  Created by Daffa Yuranizar Arrifi on 05/06/26.
-//
 
 import SwiftUI
-
 
 enum SuggestionStep {
     case initial
@@ -15,8 +12,20 @@ enum SuggestionStep {
 }
 
 struct SuggestionFlowView: View {
+    @Environment(\.sessionAnalysisStore) private var sessionAnalysisStore
+
+    let childId: UUID
+    let weekKey: String
     let suggestionText: String
+    let followUpOptions: [String]
+    var onComplete: () -> Void = {}
+
     @State private var currentStep: SuggestionStep = .initial
+    @State private var tried = false
+    @State private var followUpSelection: String?
+    @State private var note = ""
+    @State private var isSaving = false
+    @State private var saveError: String?
 
     var body: some View {
         VStack {
@@ -25,26 +34,79 @@ struct SuggestionFlowView: View {
                 TrySuggestionView(
                     suggestionText: suggestionText,
                     onYesTapped: {
+                        tried = true
                         withAnimation { currentStep = .response }
                     },
                     onNoTapped: {
-                        print("Skipped")
+                        tried = false
+                        saveResponse(followUpSelection: nil, note: nil)
                     }
                 )
                 .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
 
             case .response:
                 DoTheSuggestionView(
-                    onOptionSelected: { _ in
+                    responseOptions: followUpOptions,
+                    onOptionSelected: { selection in
+                        followUpSelection = selection
                         withAnimation { currentStep = .notes }
                     }
                 )
                 .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
 
             case .notes:
-                AdditionalNotesView()
-                    .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
+                AdditionalNotesView(
+                    note: $note,
+                    isSaving: isSaving,
+                    onSave: {
+                        saveResponse(followUpSelection: followUpSelection, note: note)
+                    }
+                )
+                .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
             }
+        }
+        .alert("Could Not Save", isPresented: saveErrorPresented) {
+            Button("OK", role: .cancel) {
+                saveError = nil
+            }
+        } message: {
+            Text(saveError ?? "")
+        }
+    }
+
+    private var saveErrorPresented: Binding<Bool> {
+        Binding(
+            get: { saveError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    saveError = nil
+                }
+            }
+        )
+    }
+
+    private func saveResponse(followUpSelection: String?, note: String?) {
+        guard let sessionAnalysisStore else {
+            saveError = "Saving is unavailable right now."
+            return
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            try sessionAnalysisStore.saveSuggestionTry(
+                childId: childId,
+                weekKey: weekKey,
+                suggestion: suggestionText,
+                tried: tried,
+                followUpOptions: followUpOptions,
+                followUpSelection: followUpSelection,
+                note: note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            )
+            onComplete()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 }
@@ -66,7 +128,7 @@ struct TrySuggestionView: View {
                         Image("checkin-icon")
                     }
 
-                    Text("Last week's suggestion")
+                    Text("This week's suggestion")
                         .font(.heading6)
 
                     Spacer()
@@ -130,14 +192,8 @@ struct TrySuggestionView: View {
 }
 
 struct DoTheSuggestionView: View {
+    let responseOptions: [String]
     var onOptionSelected: (String) -> Void
-
-    let responseOptions = [
-        "Opened up and talked",
-        "Enjoy it, not much talking",
-        "Led to a longer conversation",
-        "Didn't want to"
-    ]
 
     var body: some View {
         CardView(minHeight: 300) {
@@ -188,6 +244,10 @@ struct DoTheSuggestionView: View {
 }
 
 struct AdditionalNotesView: View {
+    @Binding var note: String
+    var isSaving: Bool
+    var onSave: () -> Void
+
     var body: some View {
         CardView(minHeight: 300) {
             VStack {
@@ -211,17 +271,23 @@ struct AdditionalNotesView: View {
 
                 Spacer()
 
-                CustomTextAreaView()
+                CustomTextAreaView(
+                    note: $note,
+                    isSaving: isSaving,
+                    onSave: onSave
+                )
             }
         }
     }
 }
 
 struct CustomTextAreaView: View {
-    @State private var notes: String = ""
+    @Binding var note: String
+    var isSaving: Bool
+    var onSave: () -> Void
 
     var body: some View {
-        TextField("Type your notes here...", text: $notes, axis: .vertical)
+        TextField("Type your notes here...", text: $note, axis: .vertical)
             .padding()
             .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
             .background(Color(UIColor.systemGray6))
@@ -229,10 +295,11 @@ struct CustomTextAreaView: View {
             .padding(.horizontal, 18)
 
         PrimaryButton(
-            title: "Save",
+            title: isSaving ? "Saving..." : "Save",
             size: .medium,
             systemImage: "",
-            action: {}
+            isDisabled: isSaving,
+            action: onSave
         )
         .padding(.top, 8)
         .padding(.horizontal, 18)
@@ -240,6 +307,12 @@ struct CustomTextAreaView: View {
     }
 }
 
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
 #Preview {
-    AdditionalNotesView()
+    AdditionalNotesView(note: .constant(""), isSaving: false, onSave: {})
 }

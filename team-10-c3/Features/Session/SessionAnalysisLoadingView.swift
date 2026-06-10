@@ -7,7 +7,7 @@ import SwiftUI
 
 struct SessionAnalysisLoadingView: View {
     let progress: SessionAnalysisProgress
-    let onSkip: () -> Void
+    var onSkip: (() -> Void)? = nil
 
     private let visibleSteps: [SessionAnalysisProgress.Phase] = [
         .waitingForRecording,
@@ -64,8 +64,12 @@ struct SessionAnalysisLoadingView: View {
             .background(.uiSurface, in: RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal, 24)
 
-            SecondaryButton(title: "Skip analysis", size: .medium, action: onSkip)
-                .padding(.top, 4)
+            #if DEBUG
+            if let onSkip {
+                SecondaryButton(title: "Skip analysis", size: .medium, action: onSkip)
+                    .padding(.top, 4)
+            }
+            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 24)

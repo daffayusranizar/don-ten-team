@@ -10,11 +10,13 @@ import SwiftUI
 struct StepThreeView: View {
     @Binding var data: OnboardingData
 
+    @State private var childName = ""
+    @State private var childBirthdate: Date?
     @State private var goToStepFour = false
 
     private var formCompleted: Bool {
-        !data.childName.isEmpty &&
-        data.childBirthdate != nil &&
+        !childName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        childBirthdate != nil &&
         data.selectedAvatar != nil
     }
 
@@ -39,7 +41,7 @@ struct StepThreeView: View {
                     .font(.system(size: 18, weight: .medium))
 
                 PrimaryTextField(
-                    text: $data.childName,
+                    text: $childName,
                     placeholder: "Type name...",
                     size: .large,
                     systemImage: "person.crop.circle.fill"
@@ -54,7 +56,7 @@ struct StepThreeView: View {
                     .font(.system(size: 18, weight: .medium))
 
                 PrimaryDateField(
-                    date: $data.childBirthdate,
+                    date: $childBirthdate,
                     placeholder: "Insert Birthdate...",
                     size: .large,
                     systemImage: "calendar"
@@ -133,11 +135,21 @@ struct StepThreeView: View {
                 systemImage: nil,
                 isDisabled: !formCompleted
             ) {
+                data.childName = childName.trimmingCharacters(in: .whitespacesAndNewlines)
+                data.childBirthdate = childBirthdate
                 goToStepFour = true
             }
         }
         .foregroundStyle(.textPrimary)
         .padding(.horizontal, 30)
+        .onAppear {
+            if childName.isEmpty {
+                childName = data.childName
+            }
+            if childBirthdate == nil {
+                childBirthdate = data.childBirthdate ?? OnboardingDefaults.defaultChildBirthdate
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Step 3 of 6")

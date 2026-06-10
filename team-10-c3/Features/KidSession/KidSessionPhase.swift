@@ -23,6 +23,8 @@ struct ActiveKidSession: Equatable {
 struct FinishedKidSession: Equatable {
     let sessionId: UUID
     let includesScreenRecording: Bool
+    /// Captured before `SessionCoordinator.stopSession` clears coordinator state (recording file matching).
+    let sessionStartedAt: Date?
 }
 
 extension KidSessionPhase {

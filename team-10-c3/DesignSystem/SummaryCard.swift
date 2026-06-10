@@ -45,3 +45,10 @@ struct WeeklyUsageInsightCard: View {
         .padding()
         .background(.uiBackground)
 }
+
+#Preview("Weekly Usage Insight Card — Differentiate Without Color") {
+    WeeklyUsageInsightCard(segments: UsageCategorySegment.previewData)
+        .padding()
+        .background(.uiBackground)
+        .differentiateWithoutColorPreview()
+}

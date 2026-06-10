@@ -8,12 +8,15 @@ import SwiftUI
 
 struct UsageInsightReport: Equatable {
     let dateLabel: String
+    let weekKey: String?
     let chartItems: [UsageChartItem]
-    let aiSummary: String
+    let aiSummaryShort: String
+    let aiSummaryDetail: String
     let offlineActivityTeaser: String
     let offlineActivity: String
     let needsAttention: Bool
     let weeklySuggestion: String?
+    let followUpOptions: [String]
 }
 
 struct UsageChartItem: Identifiable, Equatable {
@@ -21,12 +24,23 @@ struct UsageChartItem: Identifiable, Equatable {
     let name: String
     let value: Double
     let color: Color
+    let systemImage: String
+    let chartPattern: ChartFillPattern
 
-    init(name: String, value: Double, color: Color) {
+    init(
+        name: String,
+        value: Double,
+        color: Color,
+        systemImage: String? = nil,
+        chartPattern: ChartFillPattern? = nil
+    ) {
+        let category = UsageInsightChartCategory.fromChartItemName(name)
         self.id = name
         self.name = name
         self.value = value
         self.color = color
+        self.systemImage = systemImage ?? category.systemImage
+        self.chartPattern = chartPattern ?? category.chartPattern
     }
 }
 
@@ -37,11 +51,22 @@ struct UsageInsightService {
     let screenTimeService: ScreenTimeUsageProviding
     let familyControlsAuth: FamilyControlsAuthProviding
 
+    func clearWeeklyInsightCache(childId: UUID, weekKey: String) {
+        sessionAnalysisStore.clearWeeklyInsightCaches(for: childId, weekKey: weekKey)
+    }
+
+    /// Clears cached LLM output and saved try response so a fresh paired summary+suggestion can be generated.
+    func resetWeeklyGeneration(childId: UUID, weekKey: String) {
+        sessionAnalysisStore.clearWeeklyInsightCaches(for: childId, weekKey: weekKey)
+        sessionAnalysisStore.clearSuggestionTry(childId: childId, weekKey: weekKey)
+    }
+
     func buildReport(
         childId: UUID,
         child: Child?,
         period: Period,
-        referenceDate: Date = Date()
+        referenceDate: Date = Date(),
+        forceRegenerateWeekly: Bool = false
     ) async throws -> UsageInsightReport? {
         let calendar = Calendar.current
         let days = days(for: period, referenceDate: referenceDate, calendar: calendar)
@@ -101,11 +126,13 @@ struct UsageInsightService {
             calendar: calendar
         )
 
-        let aiSummary: String
+        let aiSummaryShort: String
+        let aiSummaryDetail: String
         let weeklySuggestion: String?
+        let followUpOptions: [String]
         switch period {
         case .daily:
-            aiSummary = await buildDailySummary(
+            let dailySummary = await buildDailySummary(
                 child: child,
                 dayLabel: dateLabel,
                 totalSeconds: totalSeconds,
@@ -115,24 +142,124 @@ struct UsageInsightService {
                 sessions: todaySessions,
                 childId: childId
             )
+            aiSummaryShort = dailySummary.shortSummary
+            aiSummaryDetail = dailySummary.detailSummary
             weeklySuggestion = nil
+            followUpOptions = []
         case .weekly:
-            aiSummary = InsightProseBuilder.weeklySummary(
+            let weekKey = WeeklyInsightFormatting.weekKey(referenceDate: referenceDate, calendar: calendar)
+            let allSnapshots = sessionsByDay.flatMap(\.snapshots)
+            // Single Foundation Models call returns summary + suggestion + follow-ups together.
+            let weeklyContent = await buildWeeklyContent(
+                child: child,
+                childId: childId,
+                weekLabel: dateLabel,
+                weekKey: weekKey,
                 totalSeconds: totalSeconds,
-                breakdown: mergedBreakdown
+                mergedBreakdown: mergedBreakdown,
+                sessionResults: sessionResults,
+                snapshots: allSnapshots,
+                sessionSignature: Self.sessionSignature(from: sessionResults),
+                skipCache: forceRegenerateWeekly
             )
-            weeklySuggestion = InsightProseBuilder.weeklySuggestion()
+            aiSummaryShort = weeklyContent.shortSummary
+            aiSummaryDetail = weeklyContent.detailSummary
+            weeklySuggestion = weeklyContent.weeklySuggestion
+            followUpOptions = weeklyContent.followUpOptions
         }
 
         return UsageInsightReport(
             dateLabel: dateLabel,
+            weekKey: period == .weekly
+                ? WeeklyInsightFormatting.weekKey(referenceDate: referenceDate, calendar: calendar)
+                : nil,
             chartItems: chartItems,
-            aiSummary: aiSummary,
+            aiSummaryShort: aiSummaryShort,
+            aiSummaryDetail: aiSummaryDetail,
             offlineActivityTeaser: InsightProseBuilder.offlineActivityTeaser,
             offlineActivity: latestOfflineActivity,
             needsAttention: false,
-            weeklySuggestion: weeklySuggestion
+            weeklySuggestion: weeklySuggestion,
+            followUpOptions: followUpOptions
         )
+    }
+
+    private struct WeeklyGeneratedContent {
+        let shortSummary: String
+        let detailSummary: String
+        let weeklySuggestion: String
+        let followUpOptions: [String]
+    }
+
+    private func buildWeeklyContent(
+        child: Child?,
+        childId: UUID,
+        weekLabel: String,
+        weekKey: String,
+        totalSeconds: Int,
+        mergedBreakdown: UsageCategoryBreakdown,
+        sessionResults: [(session: CompletedSessionReference, result: PipelineResult)],
+        snapshots: [SessionUsageSnapshot],
+        sessionSignature: String,
+        skipCache: Bool = false
+    ) async -> WeeklyGeneratedContent {
+        if !skipCache,
+           let cached = sessionAnalysisStore.weeklyInsightCache(
+            childId: childId,
+            weekKey: weekKey,
+            sessionSignature: sessionSignature
+        ) {
+            let repaired = WeeklyInsightOutput(
+                shortSummary: cached.shortSummary,
+                detailSummary: cached.detailSummary,
+                weeklySuggestion: cached.weeklySuggestion,
+                followUpOptions: cached.followUpOptions
+            ).repaired()
+            return WeeklyGeneratedContent(
+                shortSummary: repaired.shortSummary,
+                detailSummary: repaired.detailSummary,
+                weeklySuggestion: repaired.weeklySuggestion,
+                followUpOptions: repaired.followUpOptions
+            )
+        }
+
+        let input = WeeklyInsightInput.make(
+            child: child,
+            weekLabel: weekLabel,
+            totalSessionSeconds: totalSeconds,
+            sessionResults: sessionResults,
+            snapshots: snapshots,
+            mergedCategoryBreakdown: mergedBreakdown
+        )
+
+        let summarizer = LLMSummarizer()
+        do {
+            let output = try await summarizer.summarizeWeeklyInsight(input: input).repaired()
+            sessionAnalysisStore.saveWeeklyInsightCache(
+                childId: childId,
+                weekKey: weekKey,
+                sessionSignature: sessionSignature,
+                output: output
+            )
+            return WeeklyGeneratedContent(
+                shortSummary: output.shortSummary,
+                detailSummary: output.detailSummary,
+                weeklySuggestion: output.weeklySuggestion,
+                followUpOptions: output.followUpOptions
+            )
+        } catch {
+            let fallbackShort = InsightProseBuilder.weeklySummary(
+                totalSeconds: totalSeconds,
+                breakdown: mergedBreakdown
+            )
+            let fallback = WeeklyGeneratedContent(
+                shortSummary: fallbackShort,
+                detailSummary: fallbackShort,
+                weeklySuggestion: InsightProseBuilder.weeklySuggestion(),
+                followUpOptions: WeeklyInsightOutput.defaultFollowUpOptions
+            )
+            return fallback
+        }
     }
 
     private func buildDailySummary(
@@ -144,7 +271,7 @@ struct UsageInsightService {
         snapshots: [SessionUsageSnapshot],
         sessions: [CompletedSessionReference],
         childId: UUID
-    ) async -> String {
+    ) async -> InsightSummaryPair {
         let startedAt = ContinuousClock.now
         var lastCheckpoint = startedAt
         func logTiming(_ label: String) {
@@ -188,7 +315,7 @@ struct UsageInsightService {
         do {
             let summary = try await summarizer.summarizeDailyInsight(input: input)
             logTiming("dailyLLM")
-            if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !summary.shortSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 sessionAnalysisStore.saveDailyInsightCache(
                     childId: childId,
                     dayKey: dayKey,
@@ -202,14 +329,17 @@ struct UsageInsightService {
             // Fall through to template summary.
         }
 
-        let fallback = InsightProseBuilder.dailySummary(
+        let fallbackText = InsightProseBuilder.dailySummary(
             childName: child?.name,
             totalSeconds: totalSeconds,
             breakdown: mergedBreakdown,
             sessions: input.sessions
         )
         logTiming("fallbackSummary")
-        return fallback
+        return InsightSummaryPair(
+            shortSummary: fallbackText,
+            detailSummary: fallbackText
+        )
     }
 
     private func fetchTopApps(

@@ -69,7 +69,7 @@ public actor LLMSummarizer {
         }
     }
 
-    func summarizeDailyInsight(input: DailyInsightInput) async throws -> String {
+    func summarizeDailyInsight(input: DailyInsightInput) async throws -> InsightSummaryPair {
         guard #available(iOS 26, *) else {
             throw SummarizerError.requiresIOS26
         }
@@ -84,10 +84,68 @@ public actor LLMSummarizer {
         return try await summarizeDailyTopics(input: input)
     }
 
+    func summarizeWeeklyInsight(input: WeeklyInsightInput) async throws -> WeeklyInsightOutput {
+        guard #available(iOS 26, *) else {
+            throw SummarizerError.requiresIOS26
+        }
+        guard availability() == .available else {
+            throw SummarizerError.modelUnavailable(availability().statusMessage ?? "Model unavailable.")
+        }
+
+        guard input.totalSessionSeconds > 0 || !input.sessions.isEmpty else {
+            throw SummarizerError.emptyInput
+        }
+
+        return try await summarizeWeeklyInsightOnDevice(input: input)
+    }
+
     @available(iOS 26, *)
-    private func summarizeDailyTopics(input: DailyInsightInput) async throws -> String {
+    private func summarizeWeeklyInsightOnDevice(input: WeeklyInsightInput) async throws -> WeeklyInsightOutput {
+        // One model response → summary, suggestion, and follow-up options stay in sync.
+        let childContext: String? = {
+            switch (input.childName, input.childAge) {
+            case let (name?, age?):
+                return "The child is \(name), age \(age)."
+            case let (name?, nil):
+                return "The child is \(name)."
+            default:
+                return nil
+            }
+        }()
+        let instructions = PromptLibrary.Summarization.analystFrameworkInstructions(
+            childContext: childContext
+        )
+        let prompt = PromptLibrary.Summarization.weeklyInsightPrompt(
+            metadata: input.metadataPrompt(),
+            topicBody: input.topicPromptBody()
+        )
+        let response = try await respond(
+            prompt: prompt,
+            instructions: instructions
+        )
+        if let parsed = WeeklyInsightParser.parse(response) {
+            return parsed.repaired()
+        }
+
+        let fallbackShort = InsightProseBuilder.weeklySummary(
+            totalSeconds: input.totalSessionSeconds,
+            breakdown: input.mergedCategoryBreakdown
+        )
+
+        return WeeklyInsightOutput(
+            shortSummary: fallbackShort,
+            detailSummary: fallbackShort,
+            weeklySuggestion: InsightProseBuilder.weeklySuggestion(),
+            followUpOptions: WeeklyInsightOutput.defaultFollowUpOptions
+        )
+    }
+
+    @available(iOS 26, *)
+    private func summarizeDailyTopics(input: DailyInsightInput) async throws -> InsightSummaryPair {
         let topicLines = DailyContentDigestBuilder.allTopicLines(from: input.sessions)
-        guard !topicLines.isEmpty else { return "" }
+        guard !topicLines.isEmpty else {
+            return InsightSummaryPair(shortSummary: "", detailSummary: "")
+        }
 
         let chunks = chunkLines(topicLines, maxCharacters: 2_800)
         var evidenceNotes: [String] = []
@@ -99,7 +157,9 @@ public actor LLMSummarizer {
             }
         }
 
-        guard !evidenceNotes.isEmpty else { return "" }
+        guard !evidenceNotes.isEmpty else {
+            return InsightSummaryPair(shortSummary: "", detailSummary: "")
+        }
 
         let mergePrompt = PromptLibrary.Summarization.dailyTopicMergePrompt(
             metadata: dailyMetadataPrompt(for: input),
@@ -109,7 +169,9 @@ public actor LLMSummarizer {
             prompt: mergePrompt,
             instructions: dailyTopicInstructions(for: input)
         )
-        return sanitizeDailyReport(merged)
+        let sanitized = sanitizeDailyReport(merged)
+        return InsightSummaryParser.parse(sanitized)
+            ?? InsightSummaryPair.fromLegacySingleSummary(sanitized)
     }
 
     @available(iOS 26, *)
