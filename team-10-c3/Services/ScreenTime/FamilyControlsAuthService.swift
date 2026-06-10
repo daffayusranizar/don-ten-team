@@ -163,7 +163,7 @@ final class FamilyControlsAuthService: FamilyControlsAuthProviding {
             """
         }
         return """
-          Kiddly needs Screen Time App & Website Usage permission to calculate usage charts.
+            Kiddly needs Screen Time App & Website Usage permission to calculate usage charts.
             Open Settings → Screen Time → Apps with Screen Time Access, enable Kiddly.
             Or tap Continue for Apple’s permission screen, then allow access.
             """

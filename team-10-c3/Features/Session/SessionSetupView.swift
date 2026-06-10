@@ -164,38 +164,8 @@ struct SessionSetupView: View {
 
     @ViewBuilder
     private func setupContent(profileViewModel: ProfileViewModel) -> some View {
-        ZStack(alignment: .top) {
-            VStack(spacing: 18) {
-                Color.clear
-                    .frame(height: 210)
-
-                if alarmAuthorizationState != .authorized {
-                    SessionEndAlarmPermissionBanner(
-                        authorizationState: alarmAuthorizationState,
-                        onEnable: { showAlarmAuthAlert = true }
-                    )
-                }
-
-                sessionDurationSection
-
-                NotificationToggle(
-                    title: "Record your screen",
-                    isOn: $recordScreen
-                )
-                .padding(.top, 10)
-                .font(.system(size: 17, weight: .semibold))
-
-                if recordScreen {
-                    ScreenBroadcastSetupGuide()
-                }
-
-                Spacer()
-
-                startSessionControl
-            }
-
+        VStack(spacing: 18) {
             sessionToolbar
-                .zIndex(1001)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Choose Your Child's Profile")
@@ -213,8 +183,32 @@ struct SessionSetupView: View {
                     onAddChild: { showAddChild = true }
                 )
             }
-            .padding(.top, 110)
-            .zIndex(1000)
+
+            if alarmAuthorizationState != .authorized {
+                SessionEndAlarmPermissionBanner(
+                    authorizationState: alarmAuthorizationState,
+                    onEnable: { showAlarmAuthAlert = true }
+                )
+            }
+
+            if !recordScreen {
+                sessionDurationSection
+            }
+
+            NotificationToggle(
+                title: "Record your screen",
+                isOn: $recordScreen
+            )
+            .padding(.top, recordScreen ? 0 : 10)
+            .font(.system(size: 17, weight: .semibold))
+
+            if recordScreen {
+                ScreenBroadcastSetupGuide()
+            }
+
+            Spacer(minLength: 0)
+
+            startSessionControl
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)

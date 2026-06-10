@@ -51,7 +51,7 @@ public actor PipelineOrchestrator {
         let audioTranscriptAnalyzer = AudioTranscriptAnalyzer(window: .defaultPhase2)
         let visualTranscriptAnalyzer = VisualTranscriptAnalyzer(window: .defaultPhase2)
         
-        let clipClassifier = try await MobileCLIPClassifier()
+        let clipClassifier = try await MobileCLIPModelLoader.shared()
         let whisper = try await WhisperModelLoader.shared()
         logTiming("model load")
 
