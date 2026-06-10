@@ -73,17 +73,6 @@ struct WeeklySummaryView: View {
         }
         .navigationTitle("Usage Insight")
         .toolbarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    SessionHistoryView()
-                } label: {
-                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.primaryMediumBlue)
-                }
-            }
-        }
         .onAppear {
             refreshInsights()
         }

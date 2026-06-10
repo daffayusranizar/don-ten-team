@@ -3,6 +3,7 @@ import Foundation
 /// Maps bundle ID fragments to stable consumer-facing names (bundle is authoritative; Screen Time names are not).
 enum KnownAppLabels {
     private static let rules: [(fragment: String, name: String)] = [
+        ("barcelona", "Threads"),
         ("instagram", "Instagram"),
         ("burbn.instagram", "Instagram"),
         ("tiktok", "TikTok"),
@@ -52,7 +53,10 @@ enum KnownAppLabels {
         let bundle = bundleId.lowercased()
         switch app {
         case .instagram:
-            return bundle.contains("instagram") || bundle.contains("burbn")
+            return (bundle.contains("instagram") || bundle.contains("burbn"))
+                && !bundle.contains("barcelona")
+        case .threads:
+            return bundle.contains("barcelona")
         case .tiktok:
             return bundle.contains("tiktok") || bundle.contains("musically") || bundle.contains("zhiliao")
                 || bundle.contains("trill") || bundle.contains("aweme") || bundle.contains("tiktokv")
@@ -84,6 +88,7 @@ enum KnownAppLabels {
 
     enum KnownApp {
         case instagram
+        case threads
         case tiktok
         case youtube
     }

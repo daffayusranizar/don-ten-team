@@ -1,9 +1,18 @@
 import Foundation
 
 enum MonitoredAppsFilter {
+    private static var allowedBundleIds: Set<String> = []
+
+    static func setAllowedBundleIds(_ bundleIds: Set<String>) {
+        allowedBundleIds = bundleIds
+    }
+
+    static func noteResolvedBundleId(_ bundleId: String) {
+        allowedBundleIds.insert(bundleId)
+    }
+
     static func includes(bundleId: String) -> Bool {
-        KnownAppLabels.matches(bundleId: bundleId, app: .tiktok)
-            || KnownAppLabels.matches(bundleId: bundleId, app: .youtube)
+        allowedBundleIds.contains(bundleId)
     }
 
     static func userFacingApps(_ apps: [AppUsageRow]) -> [AppUsageRow] {

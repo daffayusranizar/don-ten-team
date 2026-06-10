@@ -94,17 +94,8 @@ enum DeviceActivityUsageAggregator {
         let identityLoad = await ApplicationIdentityResolver.load()
         let identity = identityLoad.resolver
         var monitoredTokens = identityLoad.monitoredApplicationTokens
-        if monitoredTokens.isEmpty, usesApprovedOnlyFallback {
+        if monitoredTokens.isEmpty {
             monitoredTokens = FamilyActivitySelectionStore.allowedApplicationTokensForShields()
-            AgentDebugLog.log(
-                hypothesisId: "C",
-                location: "DeviceActivityUsageAggregator.aggregateHourlyForSessions",
-                message: "non-EU approved fallback: parent-selected tokens",
-                data: [
-                    "region": Locale.current.region?.identifier ?? "unknown",
-                    "tokenCount": String(monitoredTokens.count),
-                ]
-            )
         }
         let calendar = Calendar.current
         let hourStarts = SessionUsageHourMerge.unionHourStarts(sessions: windows, calendar: calendar)
@@ -438,6 +429,7 @@ enum DeviceActivityUsageAggregator {
         let localized = application.localizedDisplayName ?? "App"
         let bundleId = bundleIdForOpaqueMonitoredApp(localized: localized)
             ?? "monitored.\(abs(token.hashValue))"
+        MonitoredAppsFilter.noteResolvedBundleId(bundleId)
         let displayName = KnownAppLabels.displayName(bundleId: bundleId, localized: localized)
         return (bundleId, displayName)
     }
@@ -448,9 +440,7 @@ enum DeviceActivityUsageAggregator {
         resolved: (bundleId: String, displayName: String),
         monitoredTokens: Set<ApplicationToken>
     ) -> Bool {
-        if usesApprovedOnlyFallback,
-           let token = application.token,
-           monitoredTokens.contains(token) {
+        if let token = application.token, monitoredTokens.contains(token) {
             return true
         }
         return MonitoredAppsFilter.includes(bundleId: resolved.bundleId)
@@ -458,6 +448,9 @@ enum DeviceActivityUsageAggregator {
 
     private static func bundleIdForOpaqueMonitoredApp(localized: String) -> String? {
         let lower = localized.lowercased()
+        if lower.contains("thread") {
+            return "com.instagram.barcelona"
+        }
         if lower.contains("tiktok") {
             return "com.zhiliaoapp.musically"
         }

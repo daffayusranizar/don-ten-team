@@ -28,7 +28,13 @@ struct RootView: View {
                 mainTabView
             }
         } .task {
-            try? await Task.sleep(for: .seconds(1)) // replace with actual app initialisation logic or loading
+            if !PreviewRuntime.isActive {
+                do {
+                    try await WhisperModelLoader.preload()
+                } catch {
+                    print("Whisper preload failed: \(error.localizedDescription)")
+                }
+            }
 
             withAnimation {
                 showSplashScreen = false

@@ -165,7 +165,7 @@ private struct HourlyStackedAppChart: View {
                     pattern: app.chartPattern,
                     cacheKey: app.colorName,
                     differentiateWithoutColor: true,
-                    appIcon: AppUsageIcon.image(bundleIdentifier: app.bundleIdentifier)
+                    bundleIdentifier: app.bundleIdentifier
                 )
             }
         }

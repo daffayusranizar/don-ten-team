@@ -15,8 +15,12 @@ struct ApplicationIdentityResolver {
     @MainActor
     static func load() async -> LoadResult {
         var resolver = ApplicationIdentityResolver()
-        var monitoredTokens: Set<ApplicationToken> = []
+        let allowedTokens = FamilyActivitySelectionStore.allowedApplicationTokensForShields()
+        var monitoredTokens = allowedTokens
+        var allowedBundleIds: Set<String> = []
+
         guard DeviceActivityUsageAggregator.hasRequiredAuthorization() else {
+            MonitoredAppsFilter.setAllowedBundleIds(allowedBundleIds)
             return LoadResult(resolver: resolver, monitoredApplicationTokens: monitoredTokens)
         }
 
@@ -31,13 +35,11 @@ struct ApplicationIdentityResolver {
                     localized: app.localizedDisplayName
                 )
                 resolver.byToken[token] = (bundleId, name)
-                if MonitoredAppsFilter.includes(bundleId: bundleId) {
-                    monitoredTokens.insert(token)
+                if allowedTokens.contains(token) {
+                    allowedBundleIds.insert(bundleId)
                 }
             }
-            let tiktokBundles = installed.compactMap(\.bundleIdentifier).filter {
-                KnownAppLabels.matches(bundleId: $0, app: .tiktok)
-            }
+            MonitoredAppsFilter.setAllowedBundleIds(allowedBundleIds)
             AgentDebugLog.log(
                 hypothesisId: "C",
                 location: "ApplicationIdentityResolver.load",
@@ -45,11 +47,11 @@ struct ApplicationIdentityResolver {
                 data: [
                     "mappedCount": String(resolver.byToken.count),
                     "monitoredTokenCount": String(monitoredTokens.count),
-                    "tiktokInInstalled": String(!tiktokBundles.isEmpty),
-                    "tiktokBundles": tiktokBundles.joined(separator: ","),
+                    "allowedBundleCount": String(allowedBundleIds.count),
                 ]
             )
         } catch {
+            MonitoredAppsFilter.setAllowedBundleIds(allowedBundleIds)
             AgentDebugLog.log(
                 hypothesisId: "C",
                 location: "ApplicationIdentityResolver.load",

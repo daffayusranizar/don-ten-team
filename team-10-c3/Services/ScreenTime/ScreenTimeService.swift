@@ -200,20 +200,23 @@ final class ScreenTimeService: ScreenTimeUsageProviding {
         let apps = MonitoredAppsFilter.userFacingApps(
             SessionUsageSanitizer.sanitizedApps(result.apps)
         )
+        let hourlyApps = result.hourlyApps.filter {
+            MonitoredAppsFilter.includes(bundleId: $0.bundleIdentifier)
+        }
 
         AgentDebugLog.log(
             hypothesisId: "D",
             location: "ScreenTimeService.fetchHourlyUsageForSessions:success",
             message: "hourly chart payload",
             data: [
-                "hourlyRowCount": String(result.hourlyApps.count),
+                "hourlyRowCount": String(hourlyApps.count),
                 "appCount": String(apps.count),
                 "appsList": ScreenTimePipelineLogger.formatApps(apps),
             ]
         )
 
         return HourlyChartUsageResult(
-            hourlyApps: result.hourlyApps,
+            hourlyApps: hourlyApps,
             apps: apps
         )
     }

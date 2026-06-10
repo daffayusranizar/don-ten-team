@@ -155,7 +155,7 @@ enum SessionUsageNoiseFilter {
 
     private static func looksLikeKnownConsumerApp(bundle: String, name: String) -> Bool {
         let knownFragments = [
-            "instagram", "tiktok", "youtube", "snapchat", "facebook",
+            "barcelona", "thread", "instagram", "tiktok", "youtube", "snapchat", "facebook",
             "whatsapp", "telegram", "discord", "reddit", "twitter",
             "netflix", "spotify", "amazon", "gmail", "google",
             "minecraft", "roblox", "fortnite",

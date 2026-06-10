@@ -144,16 +144,12 @@ struct ChartPatternLegendRow: View {
     var systemImage: String?
     var cacheKey: String
     var differentiateWithoutColor: Bool
-    var appIcon: Image?
+    var bundleIdentifier: String?
 
     var body: some View {
         HStack(spacing: 6) {
-            if let appIcon {
-                appIcon
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 14, height: 14)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            if let bundleIdentifier {
+                AppUsageIconView(bundleIdentifier: bundleIdentifier, size: 14, cornerRadius: 3)
             }
 
             ChartLegendSwatch(

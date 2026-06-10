@@ -1,12 +1,8 @@
 import SwiftUI
 
 enum AppUsageIcon {
-    /// Icons follow bundle ID only — display names from Screen Time are often wrong.
-    static func image(for app: AppUsageRow) -> Image {
-        image(bundleIdentifier: app.bundleIdentifier)
-    }
-
-    static func image(bundleIdentifier: String) -> Image {
+    /// Branded asset icons only — SF Symbols must use `AppUsageIconView` (they render blank with `.resizable().scaledToFill()`).
+    static func assetImage(bundleIdentifier: String) -> Image? {
         let bundle = bundleIdentifier.lowercased()
 
         if KnownAppLabels.matches(bundleId: bundle, app: .instagram) {
@@ -18,19 +14,50 @@ enum AppUsageIcon {
         if KnownAppLabels.matches(bundleId: bundle, app: .youtube) {
             return ImageAsset.youtube.image
         }
+        return nil
+    }
+
+    static func systemSymbol(bundleIdentifier: String) -> String {
+        let bundle = bundleIdentifier.lowercased()
+
+        if KnownAppLabels.matches(bundleId: bundle, app: .threads) {
+            return "at"
+        }
         if bundle.contains("safari") || bundle.contains("mobilesafari") {
-            return Image(systemName: "safari")
+            return "safari"
         }
         if bundle.contains("mobilesms") || bundle.contains("messages") {
-            return Image(systemName: "message.fill")
+            return "message.fill"
         }
         if bundle.contains("preferences") || bundle.contains("settings") {
-            return Image(systemName: "gearshape.fill")
+            return "gearshape.fill"
         }
         if bundle.hasPrefix("com.apple.") {
-            return Image(systemName: "apple.logo")
+            return "apple.logo"
         }
-        return Image(systemName: "app.fill")
+        return "app.fill"
+    }
+}
+
+struct AppUsageIconView: View {
+    let bundleIdentifier: String
+    var size: CGFloat = 30
+    var cornerRadius: CGFloat = 10
+
+    var body: some View {
+        if let asset = AppUsageIcon.assetImage(bundleIdentifier: bundleIdentifier) {
+            asset
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            Image(systemName: AppUsageIcon.systemSymbol(bundleIdentifier: bundleIdentifier))
+                .font(.system(size: size * 0.45, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: size, height: size)
+                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: cornerRadius))
+        }
     }
 }
 
@@ -39,11 +66,7 @@ struct AppUsageListRow: View {
 
     var body: some View {
         HStack {
-            AppUsageIcon.image(for: app)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 30, height: 30)
-                .cornerRadius(10)
+            AppUsageIconView(bundleIdentifier: app.bundleIdentifier)
 
             Text(app.displayName)
                 .font(.system(size: 14, weight: .regular))

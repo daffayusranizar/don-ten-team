@@ -52,7 +52,7 @@ public actor PipelineOrchestrator {
         let visualTranscriptAnalyzer = VisualTranscriptAnalyzer(window: .defaultPhase2)
         
         let clipClassifier = try await MobileCLIPClassifier()
-        let whisper = try await ScreenRecordingWhisperTranscriber()
+        let whisper = try await WhisperModelLoader.shared()
         logTiming("model load")
 
         let metadata = try await frameExtractor.loadMetadata(from: videoURL)
