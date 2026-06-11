@@ -48,7 +48,7 @@ struct ReviewView: View {
             }
             
             VStack(spacing: 5) {
-                Text("You're Ready,\n \(data.parentName))")
+                Text("You're Ready,\n \(data.parentName)")
                     .font(.system(size: 20, weight: .semibold))
                 Text("Here's what we've set up for you and \(data.childName)")
                     .font(.system(size: 15, weight: .regular))
