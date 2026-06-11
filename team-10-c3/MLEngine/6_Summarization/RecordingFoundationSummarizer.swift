@@ -365,26 +365,14 @@ public actor LLMSummarizer {
                 .joined(separator: ", ")
         }
 
-        let appUsageEstimate: String?
-        let topApps: String?
-        if input.hasScreenTimeData {
-            appUsageEstimate = DurationFormatting.verbose(seconds: input.screenTimeAppTotalSeconds)
-            topApps = input.topApps.prefix(3).map {
-                "\($0.displayName): \(DurationFormatting.compact(seconds: $0.durationSeconds))"
-            }.joined(separator: ", ")
-        } else {
-            appUsageEstimate = nil
-            topApps = nil
-        }
-
         return PromptLibrary.Summarization.dailyMetadataPrompt(
             dayLabel: input.dayLabel,
             childAgeText: input.childAge.map { String($0) } ?? "unknown",
             totalSessionTime: DurationFormatting.verbose(seconds: input.totalSessionSeconds),
             sessionCount: input.sessionCount,
             categoryBreakdown: categoryBreakdown,
-            appUsageEstimate: appUsageEstimate,
-            topApps: topApps
+            appUsageEstimate: nil,
+            topApps: nil
         )
     }
 

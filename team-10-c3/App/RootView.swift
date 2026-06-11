@@ -19,20 +19,67 @@ struct RootView: View {
     @Environment(\.sessionCoordinator) private var sessionCoordinator
     
     @State private var showSplashScreen = true
+    @State private var splashStatusMessage = "Starting Kiddly…"
 
     var body: some View {
         Group {
             if showSplashScreen {
-                SplashScreenView()
+                SplashScreenView(statusMessage: splashStatusMessage)
             } else {
                 mainTabView
             }
-        } .task {
-            try? await Task.sleep(for: .seconds(4)) // replace with actual app initialisation logic or loading
+        }
+        .task {
+            await runSplashStartup()
+        }
+    }
 
-            withAnimation {
-                showSplashScreen = false
+    @MainActor
+    private func runSplashStartup() async {
+        if PreviewRuntime.isActive {
+            splashStatusMessage = "Loading preview…"
+            try? await Task.sleep(for: .milliseconds(350))
+            withAnimation { showSplashScreen = false }
+            return
+        }
+
+        var clipLoaded = false
+        var whisperLoaded = false
+
+        splashStatusMessage = "Loading screen analysis model…"
+        await Task.yield()
+        do {
+            try await MobileCLIPModelLoader.preload()
+            clipLoaded = true
+        } catch {
+            print("MobileCLIP preload failed: \(error.localizedDescription)")
+        }
+
+        do {
+            try await WhisperModelLoader.preload { status in
+                Task { @MainActor in
+                    splashStatusMessage = status
+                }
             }
+            whisperLoaded = true
+        } catch {
+            print("Whisper preload failed: \(error.localizedDescription)")
+        }
+
+        switch (clipLoaded, whisperLoaded) {
+        case (true, true):
+            splashStatusMessage = "Finishing setup…"
+        case (false, false):
+            splashStatusMessage = "Continuing without model preload…"
+        default:
+            splashStatusMessage = "Continuing with partial model preload…"
+        }
+
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(350))
+
+        withAnimation {
+            showSplashScreen = false
         }
     }
     

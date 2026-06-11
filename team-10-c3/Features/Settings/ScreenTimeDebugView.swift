@@ -68,28 +68,19 @@ struct ScreenTimeDebugView: View {
                 detail: status.authorizationDetail
             )
             statusRow(
-                title: "Usage data access",
-                ok: status.hasUsageDataAccess,
-                detail: status.hasUsageDataAccess
-                    ? "approvedWithDataAccess (required for per-app usage)"
-                    : "Only basic approval — re-authorize after adding App & Website Usage capability"
-            )
-            statusRow(
                 title: "App Group container",
                 ok: status.appGroup.containerAccessible,
                 detail: status.appGroup.mainAppGroupID
             )
             statusRow(
-                title: "activityData fetch",
-                ok: status.fetchSucceeded,
-                detail: status.fetchSucceeded
-                    ? "DeviceActivityData.activityData succeeded"
-                    : "No success log — check usage data access or EU region"
+                title: "Monitor extension heartbeat",
+                ok: monitorHeartbeatPresent,
+                detail: monitorHeartbeatDetail
             )
             statusRow(
-                title: "Apps saved",
-                ok: status.appsSaved,
-                detail: status.appsSaved ? "Non-empty app list in snapshot" : "Saved with 0 apps or not saved"
+                title: "Embedded usage report",
+                ok: familyControlsAuth.isAuthorized,
+                detail: "Usage renders in DeviceActivityReport extension (no main-app activityData)"
             )
         }
         .padding()
@@ -176,31 +167,9 @@ struct ScreenTimeDebugView: View {
             )
             keyValue("Saved app count", status.trust.savedAppCount.map(String.init) ?? "—")
 
-            #if DEBUG
-            keyValue(
-                "Noise rows filtered (last fetch)",
-                String(SessionUsageNoiseFilter.lastDroppedNoiseCount)
-            )
-            keyValue(
-                "Uniform-duration rejected",
-                ScreenTimePayloadSelector.lastUniformDurationRejected ? "yes" : "no"
-            )
-            #endif
-
-            if let selection = DeviceActivityUsageAggregator.lastPayloadSelection {
-                keyValue("Selected filter", selection.filterLabel)
-                keyValue("Selected policy", selection.policy)
-                keyValue("Selector score", String(selection.score))
-                keyValue("Selected app sum", "\(selection.appSumSeconds)s (\(selection.appCount) apps)")
-            } else if let label = status.trust.selectedFilterLabel {
-                keyValue("Selected filter", label)
-                keyValue("Selected policy", status.trust.selectedPolicy ?? "—")
-                keyValue("Selector score", status.trust.selectedScore.map(String.init) ?? "—")
-            } else {
-                Text("No payload selected yet — stop a session on device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Per-app usage is rendered only inside the embedded DeviceActivityReport extension.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding()
         .background(cardBackground)
@@ -361,11 +330,25 @@ struct ScreenTimeDebugView: View {
 
     // MARK: - Actions
 
+    private var monitorHeartbeatPresent: Bool {
+        guard let defaults = UserDefaults(suiteName: ScreenTimeConstants.appGroupID) else {
+            return false
+        }
+        return defaults.string(forKey: ScreenTimeConstants.extensionHeartbeatKey) != nil
+    }
+
+    private var monitorHeartbeatDetail: String {
+        guard let defaults = UserDefaults(suiteName: ScreenTimeConstants.appGroupID),
+              let event = defaults.string(forKey: ScreenTimeConstants.extensionHeartbeatKey) else {
+            return "No heartbeat — start a session to verify DeviceActivityMonitorExtension"
+        }
+        return "Last event: \(event)"
+    }
+
     private func refresh() {
         familyControlsAuth.refreshAuthorizationStatus()
         status = AgentDebugLog.pipelineStatus(
             screenTimeAuthorized: familyControlsAuth.isAuthorized,
-            hasUsageDataAccess: familyControlsAuth.hasUsageDataAccess,
             authorizationDetail: familyControlsAuth.authorizationStatusDescription
         )
     }
@@ -373,12 +356,9 @@ struct ScreenTimeDebugView: View {
     private func copyReport() {
         var lines: [String] = ["Screen Time Debug Report", ""]
         lines.append("Authorized: \(status.screenTimeAuthorized)")
-        lines.append("Usage data access: \(status.hasUsageDataAccess) (\(status.authorizationDetail))")
+        lines.append("Authorization: \(status.authorizationDetail)")
+        lines.append("Monitor heartbeat: \(monitorHeartbeatDetail)")
         lines.append("Session elapsed: \(formatSeconds(status.trust.savedSessionElapsedSeconds))")
-        lines.append("App sum: \(formatSeconds(status.trust.savedScreenTimeAppTotalSeconds))")
-        if let selection = DeviceActivityUsageAggregator.lastPayloadSelection {
-            lines.append("Selected: \(selection.filterLabel) / \(selection.policy) score=\(selection.score)")
-        }
         lines.append("")
         lines.append("=== FILTER ===")
         lines.append(status.io.filterDetail ?? "—")

@@ -49,6 +49,7 @@ final class KidSessionViewModel {
         self.sessionCoordinator = sessionCoordinator
         self.sessionAnalysisStore = sessionAnalysisStore
         self.durationOptions = durationOptions
+        sessionCoordinator.durationMinutes = max(1, (plannedDurationSeconds + 59) / 60)
         SessionTimerFiredBridge.ensureListening()
         sessionTimerFiredObserver = NotificationCenter.default.addObserver(
             forName: SessionTimerFiredBridge.notification,
@@ -392,6 +393,9 @@ final class KidSessionViewModel {
             guard generation == workflowGeneration, displaySessionId == sessionId else { return }
 
             isAnalyzingSession = true
+            await SessionEndAlarmScheduler.cancel(removeDelivered: true)
+            BroadcastExtensionLog.append("🔕 Session-end alarm cancelled — analysis starting")
+
             setAnalysisProgress(
                 phase: .waitingForRecording,
                 fraction: 0.02,

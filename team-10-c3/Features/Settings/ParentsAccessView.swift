@@ -9,8 +9,6 @@ import SwiftUI
 import UIKit
 
 struct ParentsAccessView: View {
-    @State var changePassword: Bool = false
-    @State var setFaceID: Bool = false
     #if DEBUG
     @State var showScreenTimeDebug: Bool = false
     #endif
@@ -45,32 +43,6 @@ struct ParentsAccessView: View {
                     .font(.system(size: 25, weight: .bold))
             }
             
-            VStack(alignment: .leading) {
-                NavLink(
-                    icon: "person.badge.key.fill",
-                    title: "Change Password",
-                    changePage: $changePassword
-                ) {
-                    ChangePasswordView()
-                }
-                
-                Divider()
-                
-                NavLink(
-                    icon: "faceid",
-                    title: "Set Face ID",
-                    changePage: $setFaceID
-                ) {
-                    ChangePasswordView()
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(.primaryMediumBlue)
-                    .opacity(0.2)
-            )
-
             FamilyActivityPickerSection(onRequireScreenTimeAuth: { showScreenTimeAuthAlert = true })
                 .padding()
                 .background(
@@ -79,12 +51,10 @@ struct ParentsAccessView: View {
                         .opacity(0.2)
                 )
 
-            if familyControlsAuth.needsPermissionPrompt
-                || familyControlsAuth.needsUsagePermissionPrompt {
+            if familyControlsAuth.needsPermissionPrompt {
                 ScreenTimePermissionBanner(
                     gaps: familyControlsAuth.missingPermissions,
                     statusDescription: familyControlsAuth.authorizationStatusDescription,
-                    canRequestUsageAccess: !familyControlsAuth.isUsageDataEntitlementMissing,
                     onEnable: { showScreenTimeAuthAlert = true }
                 )
             } else {
@@ -141,13 +111,10 @@ struct ParentsAccessView: View {
 
     private var signedEntitlementStatusLine: String {
         let channel = DebugSessionLog.buildChannel.rawValue
-        if familyControlsAuth.isUsageDataEntitlementMissing {
-            return "Build: \(channel) · App & Website Usage: missing from this signed TestFlight build"
+        if familyControlsAuth.isAuthorized {
+            return "Build: \(channel) · Screen Time: authorized"
         }
-        if familyControlsAuth.hasUsageDataAccess {
-            return "Build: \(channel) · App & Website Usage: granted (approvedWithDataAccess)"
-        }
-        return "Build: \(channel) · App & Website Usage: not granted yet"
+        return "Build: \(channel) · Screen Time: not authorized yet"
     }
 }
 

@@ -4,6 +4,7 @@
 //
 //  Created by Huy Tran on 05/06/26.
 //
+//  Not wired into onboarding yet — reattach from StepOneView when parent PIN ships.
 
 import SwiftUI
 
@@ -67,7 +68,7 @@ struct ParentPinSetupView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 1 of 6")
+                Text(OnboardingProgress.title(step: 2))
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

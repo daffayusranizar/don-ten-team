@@ -25,7 +25,10 @@ struct InsightSummaryPair: Equatable, Sendable {
 
     static func fromCached(short: String, detail: String?) -> InsightSummaryPair {
         if let detail, !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return InsightSummaryPair(shortSummary: short, detailSummary: detail)
+            return InsightSummaryPair(
+                shortSummary: InsightSummaryFormatting.plainTextForCard(short),
+                detailSummary: detail
+            )
         }
         return fromLegacySingleSummary(short)
     }
@@ -33,7 +36,7 @@ struct InsightSummaryPair: Equatable, Sendable {
 
 enum InsightSummaryFormatting {
     static func shortExcerpt(from text: String, maxLength: Int = 280) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = plainTextForCard(text)
         guard !trimmed.isEmpty else { return "" }
 
         let firstParagraph = trimmed
@@ -50,6 +53,11 @@ enum InsightSummaryFormatting {
             return String(prefix[..<lastSpace]) + "…"
         }
         return prefix + "…"
+    }
+
+    /// Plain text for summary cards — strips markdown markers the model sometimes emits.
+    static func plainTextForCard(_ text: String) -> String {
+        InsightSummaryParser.cleanProse(text)
     }
 
     /// Normalizes model output for readable markdown rendering in the detail screen.
@@ -235,8 +243,28 @@ enum InsightSummaryParser {
     }
 
     static func cleanProse(_ text: String) -> String {
-        text
+        var result = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
             .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "__", with: "")
+
+        result = result.replacingOccurrences(
+            of: #"(?<!\*)\*(?!\*)"#,
+            with: "",
+            options: .regularExpression
+        )
+
+        for header in summarySectionNames {
+            result = result.replacingOccurrences(
+                of: #"(?i)\#(header)\s*:"#,
+                with: "",
+                options: .regularExpression
+            )
+        }
+
+        return result
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

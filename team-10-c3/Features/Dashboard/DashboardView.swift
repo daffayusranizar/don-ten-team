@@ -7,7 +7,6 @@
 // [P1] Child list + active session banner
 
 import SwiftUI
-import Charts
 import UIKit
 
 struct DashboardView: View {
@@ -25,7 +24,6 @@ struct DashboardView: View {
     @State private var pendingKidSessionAfterScreenTimeAuth = false
     @State private var showOnboardingPage: Bool = false
     @AppStorage("screenTimeAuthPromptDismissed") private var screenTimeAuthPromptDismissed = false
-    @AppStorage("screenTimeUsagePromptDismissed") private var screenTimeUsagePromptDismissed = false
     @Environment(\.scenePhase) private var scenePhase
     
     private var selectedChildExists: Bool {
@@ -60,7 +58,6 @@ struct DashboardView: View {
             ScreenTimePermissionBanner(
                 gaps: familyControlsAuth.missingPermissions,
                 statusDescription: familyControlsAuth.authorizationStatusDescription,
-                canRequestUsageAccess: !familyControlsAuth.isUsageDataEntitlementMissing,
                 onEnable: { showScreenTimeAuthAlert = true }
             )
         }
@@ -72,8 +69,7 @@ struct DashboardView: View {
            let screenTimeError = sessionCoordinator.loadError {
 
             Button {
-                if familyControlsAuth.needsPermissionPrompt
-                    || familyControlsAuth.needsUsagePermissionPrompt {
+                if familyControlsAuth.needsPermissionPrompt {
                     showScreenTimeAuthAlert = true
                 }
             } label: {
@@ -98,15 +94,11 @@ struct DashboardView: View {
         if selectedChildExists {
             latestSummary(
                 periodTitle: sessionCoordinator.summaryPeriodTitle,
-                hourlySegments: sessionCoordinator.summaryHourlyChartSegments,
-                topApps: sessionCoordinator.hasSummaryData
-                    ? sessionCoordinator.summaryTopApps
-                    : [],
-                isUpdating: sessionCoordinator.isLoadingSummaryUsage
-                    || sessionCoordinator.isRefreshingPartialUsage,
+                reportFilter: sessionCoordinator.sessionReportFilter,
+                reportRefreshToken: sessionCoordinator.reportRefreshToken,
                 sessionElapsedSeconds: sessionCoordinator.summarySessionElapsedSeconds,
-                screenTimeAppTotalSeconds: sessionCoordinator.summaryScreenTimeAppTotalSeconds,
-                showsTotalsMismatch: sessionCoordinator.showsScreenTimeTotalsMismatch
+                childName: profileViewModel.selectedChild?.name,
+                sectionIdentity: profileViewModel.selectedChild?.id.uuidString ?? ""
             )
         }
     }
@@ -127,7 +119,8 @@ struct DashboardView: View {
                     summarySection
                 }
                 .padding(.horizontal, 30)
-                .padding(.vertical)
+                .padding(.top)
+                .padding(.bottom, 96)
                 .foregroundStyle(.textPrimary)
 
                 HStack {
@@ -160,6 +153,11 @@ struct DashboardView: View {
                 .padding(.vertical)
                 .zIndex(1000)
             }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .refreshable {
+            sessionCoordinator.bumpReportRefresh()
+            sessionCoordinator.refresh(for: profileViewModel.selectedChild)
         }
         .navigationBarBackButtonHidden(true)
         .fullScreenCover(isPresented: $showOnboardingPage) {
@@ -200,6 +198,11 @@ struct DashboardView: View {
             }
             showOnboardingPage = profileViewModel.children.isEmpty
         }
+        .onChange(of: profileViewModel.children.isEmpty) { _, isEmpty in
+            if !isEmpty {
+                showOnboardingPage = false
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             sessionCoordinator.refreshAfterChildSwitch(for: profileViewModel.selectedChild)
@@ -230,8 +233,6 @@ struct DashboardView: View {
                 pendingKidSessionAfterScreenTimeAuth = false
                 if familyControlsAuth.needsPermissionPrompt {
                     screenTimeAuthPromptDismissed = true
-                } else if familyControlsAuth.needsUsagePermissionPrompt {
-                    screenTimeUsagePromptDismissed = true
                 }
             }
         )
@@ -269,10 +270,7 @@ struct DashboardView: View {
     }
 
     private var shouldShowScreenTimeBanner: Bool {
-        if familyControlsAuth.needsPermissionPrompt {
-            return true
-        }
-        return familyControlsAuth.needsUsagePermissionPrompt && !screenTimeUsagePromptDismissed
+        familyControlsAuth.needsPermissionPrompt
     }
 
     private func presentScreenTimePromptIfNeeded() {
@@ -291,7 +289,6 @@ struct DashboardView: View {
             data: [
                 "buildChannel": DebugSessionLog.buildChannel.rawValue,
                 "status": familyControlsAuth.authorizationStatusDescription,
-                "needsUsagePermissionPrompt": String(familyControlsAuth.needsUsagePermissionPrompt),
                 "shouldShowBanner": String(shouldShowScreenTimeBanner),
             ]
         )

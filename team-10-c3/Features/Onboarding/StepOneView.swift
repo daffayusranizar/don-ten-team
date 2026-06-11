@@ -12,7 +12,7 @@ struct StepOneView: View {
 
     @State private var parentName = ""
     @State private var parentBirthdate: Date?
-    @State private var goToPinSetup = false
+    @State private var goToStepTwo = false
 
     private var formCompleted: Bool {
         !parentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -85,7 +85,7 @@ struct StepOneView: View {
             ) {
                 data.parentName = parentName.trimmingCharacters(in: .whitespacesAndNewlines)
                 data.parentBirthdate = parentBirthdate
-                goToPinSetup = true
+                goToStepTwo = true
             }
         }
         .foregroundStyle(.textPrimary)
@@ -100,15 +100,15 @@ struct StepOneView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 1 of 6")
+                Text(OnboardingProgress.title(step: 1))
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }
         }
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $goToPinSetup) {
-            ParentPinSetupView(data: $data)
+        .navigationDestination(isPresented: $goToStepTwo) {
+            StepTwoView(data: $data)
         }
         .dismissKeyboardOnTap()
     }

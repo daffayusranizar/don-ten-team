@@ -62,9 +62,7 @@ final class AppContainer {
         )
         self.weeklySummaryViewModel = weeklySummaryViewModel ?? WeeklySummaryViewModel(
             sessionRepository: self.sessionRepository,
-            sessionAnalysisStore: self.sessionAnalysisStore,
-            screenTimeService: self.screenTimeService,
-            familyControlsAuth: self.familyControlsAuth
+            sessionAnalysisStore: self.sessionAnalysisStore
         )
         self.suggestionHistoryRepository = suggestionHistoryRepository
             ?? SwiftDataSuggestionHistoryRepository(modelContext: modelContainer.mainContext)

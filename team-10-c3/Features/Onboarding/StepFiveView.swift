@@ -87,7 +87,7 @@ struct StepFiveView: View {
         .padding(.horizontal, 30)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Step 5 of 6")
+                Text(OnboardingProgress.title(step: 5))
                     .foregroundStyle(.textSecondary)
                     .font(.system(size: 22, weight: .semibold))
             }

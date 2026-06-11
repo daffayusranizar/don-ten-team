@@ -8,6 +8,16 @@
 
 import SwiftUI
 
+enum OnboardingProgress {
+    static let totalSteps = 5
+
+    static func title(step: Int) -> String {
+        "Step \(step) of \(totalSteps)"
+    }
+
+    static let allowedAppsTitle = "Allowed Apps"
+}
+
 struct OnboardingData {
     // step 1 data (parents)
     var parentName = ""

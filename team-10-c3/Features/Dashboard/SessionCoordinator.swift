@@ -3,6 +3,7 @@
 //  team-10-c3
 //
 
+import DeviceActivity
 import Foundation
 import Observation
 import SwiftUI
@@ -10,17 +11,14 @@ import SwiftUI
 /// Per-child dashboard snapshot (Latest Summary + last-session banner fields).
 private struct ChildDashboardDisplayState {
     var summaryPeriodTitle = "Today"
-    var summaryHourlyChartSegments: [HourlyStackedChartSegment] = []
-    var summaryTopApps: [AppUsageRow] = []
-    var hasSummaryData = false
     var summarySessionElapsedSeconds = 0
-    var summaryScreenTimeAppTotalSeconds = 0
     var hasTodayActivity = false
     var currentDayTotalSeconds = 0
     var latestBannerTotalSeconds = 0
     var latestSessionLimitSeconds = 30 * 60
     var latestTotalSeconds = 0
-    var latestScreenTimeAppTotalSeconds = 0
+    var sessionReportFilter: DeviceActivityFilter?
+    var reportRefreshToken = ""
 }
 
 @Observable
@@ -44,24 +42,17 @@ final class SessionCoordinator {
     var durationMinutes = 30
     var loadError: String?
     var summaryPeriodTitle = "Today's Session"
-    var summaryHourlyChartSegments: [HourlyStackedChartSegment] = []
-    var summaryTopApps: [AppUsageRow] = []
-    var hasSummaryData = false
     var hasTodayActivity = false
     var currentDayTotalSeconds = 0
     var latestBannerTotalSeconds = 0
     var latestSessionLimitSeconds = 30 * 60
-    var isRefreshingScreenTime = false
-    var isLoadingSummaryUsage = false
-    var isRefreshingPartialUsage = false
     var latestTotalSeconds = 0
-    var latestScreenTimeAppTotalSeconds = 0
     var summarySessionElapsedSeconds = 0
-    var summaryScreenTimeAppTotalSeconds = 0
+    var sessionReportFilter: DeviceActivityFilter?
+    var reportRefreshToken = ""
     private var timerTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var childSwitchDebounceTask: Task<Void, Never>?
-    private var hourlySummaryTask: Task<Void, Never>?
     private var activeChildId: UUID?
     private var pausedAt: Date?
     private var totalPausedDuration: TimeInterval = 0
@@ -130,18 +121,6 @@ final class SessionCoordinator {
 
     var formattedVerboseTimeLimit: String {
         DurationFormatting.verbose(seconds: durationMinutes * 60)
-    }
-
-    var formattedSummaryScreenTimeAppTotal: String {
-        formatDuration(seconds: summaryScreenTimeAppTotalSeconds)
-    }
-
-    var showsScreenTimeTotalsMismatch: Bool {
-        guard summarySessionElapsedSeconds > 0, summaryScreenTimeAppTotalSeconds > 0 else {
-            return false
-        }
-        let delta = abs(summaryScreenTimeAppTotalSeconds - summarySessionElapsedSeconds)
-        return Double(delta) / Double(summarySessionElapsedSeconds) > 0.10
     }
 
     private var elapsedSeconds: Int {
@@ -288,17 +267,14 @@ final class SessionCoordinator {
 
     private func applyDisplayStateToPublished(_ state: ChildDashboardDisplayState) {
         summaryPeriodTitle = state.summaryPeriodTitle
-        summaryHourlyChartSegments = state.summaryHourlyChartSegments
-        summaryTopApps = state.summaryTopApps
-        hasSummaryData = state.hasSummaryData
         summarySessionElapsedSeconds = state.summarySessionElapsedSeconds
-        summaryScreenTimeAppTotalSeconds = state.summaryScreenTimeAppTotalSeconds
+        sessionReportFilter = state.sessionReportFilter
+        reportRefreshToken = state.reportRefreshToken
         hasTodayActivity = state.hasTodayActivity
         currentDayTotalSeconds = state.currentDayTotalSeconds
         latestBannerTotalSeconds = state.latestBannerTotalSeconds
         latestSessionLimitSeconds = state.latestSessionLimitSeconds
         latestTotalSeconds = state.latestTotalSeconds
-        latestScreenTimeAppTotalSeconds = state.latestScreenTimeAppTotalSeconds
     }
 
     private func performRefresh(childId: UUID, epoch: UInt64) async {
@@ -337,9 +313,7 @@ final class SessionCoordinator {
             guard isActiveRefresh(childId: childId, epoch: epoch) else { return }
             await refreshScreenTimeFromAPI(for: childId, epoch: epoch)
             guard isActiveRefresh(childId: childId, epoch: epoch) else { return }
-            if !isSessionActive {
-                loadSummaryActivity(for: childId, epoch: epoch)
-            }
+            loadSummaryActivity(for: childId, epoch: epoch)
             loadError = nil
             // #region agent log
             let daySummary = try? sessionRepository.dayActivitySummary(for: childId, referenceDate: nil)
@@ -354,9 +328,8 @@ final class SessionCoordinator {
                     "epochStale": String(epoch != refreshEpoch),
                     "cancelled": String(Task.isCancelled),
                     "snapshotCount": String(snapshotCount),
-                    "hasSummaryData": String(hasSummaryData),
-                    "summaryApps": String(summaryTopApps.count),
                     "summarySessionSeconds": String(summarySessionElapsedSeconds),
+                    "hasReportFilter": String(sessionReportFilter != nil),
                     "dayTotalSeconds": String(daySummary?.totalSeconds ?? -1),
                     "daySessionCount": String(daySummary?.sessionCount ?? -1),
                 ]
@@ -570,34 +543,11 @@ final class SessionCoordinator {
                 plannedDurationSeconds: plannedSeconds
             )
 
-            let screenTimeSeconds = await fetchScreenTimeTotalForSession(
-                childId: childId,
-                startAt: startAt,
-                stopAt: stopAt
-            )
-            if let screenTimeSeconds {
-                try sessionRepository.updateSnapshotScreenTimeTotals(
-                    snapshot,
-                    screenTimeAppTotalSeconds: screenTimeSeconds
-                )
-            }
-
-            ScreenTimePipelineLogger.logOutput(
-                stage: "afterSave",
-                apps: [],
-                sessionElapsedSeconds: elapsedSeconds,
-                extra: [
-                    "timerOnly": screenTimeSeconds == nil ? "true" : "false",
-                    "screenTimeAppTotalSeconds": String(screenTimeSeconds ?? 0),
-                ]
-            )
-
             applyCompletedDisplay(
                 childId: childId,
                 startAt: startAt,
                 stopAt: stopAt,
-                snapshot: snapshot,
-                screenTimeSeconds: screenTimeSeconds
+                snapshot: snapshot
             )
             mutateChildDisplayState(for: childId, publish: refreshChildId == childId) { state in
                 if let today = try? sessionRepository.todayActivitySummary(for: childId, referenceDate: nil) {
@@ -608,7 +558,7 @@ final class SessionCoordinator {
                     state.currentDayTotalSeconds = elapsedSeconds
                 }
             }
-            loadSummaryActivity(for: childId, publishUI: refreshChildId == childId)
+            loadSummaryActivity(for: childId, publishUI: refreshChildId == childId, bumpReport: true)
         } catch {
             loadError = error.localizedDescription
         }
@@ -648,7 +598,6 @@ final class SessionCoordinator {
         guard isSessionActive, !isSessionPaused else { return }
         isSessionPaused = true
         pausedAt = Date()
-        Task { await refreshPartialUsage() }
     }
 
     func resumeSession() {
@@ -738,8 +687,7 @@ final class SessionCoordinator {
                 childId: active.childId,
                 startAt: active.startedAt,
                 stopAt: stopAt,
-                snapshot: snapshot,
-                screenTimeSeconds: nil
+                snapshot: snapshot
             )
         } catch {
             loadError = error.localizedDescription
@@ -779,27 +727,6 @@ final class SessionCoordinator {
 
         if startCoordinatorTimer {
             startTimer()
-        }
-    }
-
-    private func fetchScreenTimeTotalForSession(
-        childId: UUID,
-        startAt: Date,
-        stopAt: Date
-    ) async -> Int? {
-        do {
-            try await familyControlsAuth.ensureUsageAuthorization()
-            let result = try await screenTimeService.fetchHourlyUsageForSessions(
-                childId: childId,
-                sessions: [SessionWindow(startAt: startAt, stopAt: stopAt)]
-            )
-            let apps = MonitoredAppsFilter.appsForDisplay(
-                SessionUsageSanitizer.sanitizedApps(result.apps)
-            )
-            let total = apps.map(\.durationSeconds).reduce(0, +)
-            return total > 0 ? total : nil
-        } catch {
-            return nil
         }
     }
 
@@ -912,15 +839,12 @@ final class SessionCoordinator {
 
     private func applyLastSessionBanner(
         completed: CompletedSessionInfo,
-        screenTimeSeconds: Int? = nil,
         plannedLimitSeconds overridePlannedLimit: Int? = nil,
         into state: inout ChildDashboardDisplayState
     ) {
         state.latestSessionLimitSeconds = overridePlannedLimit ?? plannedLimitSeconds(for: completed)
         let wallClock = completed.snapshot?.totalSeconds
             ?? max(0, Int(completed.stoppedAt.timeIntervalSince(completed.startedAt)))
-        let screen = screenTimeSeconds ?? completed.snapshot?.resolvedScreenTimeSeconds ?? 0
-        state.latestScreenTimeAppTotalSeconds = screen
         state.latestTotalSeconds = wallClock
         state.latestBannerTotalSeconds = wallClock
     }
@@ -932,7 +856,12 @@ final class SessionCoordinator {
         applyLastSessionBanner(completed: completed, into: &state)
     }
 
-    private func loadSummaryActivity(for childId: UUID, epoch: UInt64 = 0, publishUI: Bool? = nil) {
+    private func loadSummaryActivity(
+        for childId: UUID,
+        epoch: UInt64 = 0,
+        publishUI: Bool? = nil,
+        bumpReport: Bool = false
+    ) {
         let publish = publishUI ?? isActiveRefresh(childId: childId, epoch: epoch)
         let epochStale = epoch > 0 && epoch != refreshEpoch
         if !publish {
@@ -969,8 +898,7 @@ final class SessionCoordinator {
                     ]
                 )
                 // #endregion
-                applyTimerSummaryFromDaySummary(summary, for: childId, publish: publish)
-                scheduleHourlySummaryLoad(for: childId, day: summary.day, publish: publish)
+                applyTimerSummaryFromDaySummary(summary, for: childId, publish: publish, bumpReport: bumpReport)
             } else {
                 // #region agent log
                 AgentDebugLog.log(
@@ -1006,165 +934,55 @@ final class SessionCoordinator {
         }
     }
 
-    private func scheduleHourlySummaryLoad(
-        for childId: UUID,
-        day: Date,
-        publish: Bool
-    ) {
-        hourlySummaryTask?.cancel()
-        hourlySummaryTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            await loadHourlySummaryUsage(for: childId, day: day, publish: publish)
+    private func activeSessionInfo(for childId: UUID) -> ActiveSessionInfo? {
+        guard isSessionActive,
+              activeChildId == childId,
+              let sessionStartAt,
+              let currentSessionId else {
+            return nil
         }
+        return ActiveSessionInfo(
+            childId: childId,
+            startedAt: sessionStartAt,
+            startMarkerId: currentSessionId
+        )
     }
 
     private func applyTimerSummaryFromDaySummary(
         _ summary: DayActivitySummary,
         for childId: UUID,
-        publish: Bool
+        publish: Bool,
+        bumpReport: Bool
     ) {
         if summary.totalSeconds > 0 || summary.sessionCount > 0 {
             mutateChildDisplayState(for: childId, publish: publish) { state in
                 state.summaryPeriodTitle = summary.periodTitle
                 state.summarySessionElapsedSeconds = summary.totalSeconds
-                state.hasSummaryData = summary.totalSeconds > 0
+                state.sessionReportFilter = SessionReportFilterProvider.todayReportFilter(
+                    childId: childId,
+                    day: summary.day,
+                    sessionRepository: sessionRepository,
+                    activeSession: activeSessionInfo(for: childId)
+                )
+                if bumpReport || state.reportRefreshToken.isEmpty {
+                    state.reportRefreshToken = UUID().uuidString
+                }
             }
             return
         }
         resetSummaryDisplay(for: childId, publish: publish)
     }
 
-    private func sessionWindowsForChart(
-        childId: UUID,
-        day: Date
-    ) throws -> [SessionWindow] {
-        let fromMarkers = try sessionRepository.completedSessionWindows(for: childId, day: day)
-        if !fromMarkers.isEmpty {
-            return fromMarkers
-        }
-
-        return try sessionRepository.snapshots(for: childId, on: day)
-            .map { SessionWindow(startAt: $0.startAt, stopAt: $0.stopAt) }
-    }
-
-    private func loadHourlySummaryUsage(
-        for childId: UUID,
-        day: Date,
-        publish: Bool
-    ) async {
-        let appliesToUI = publish && refreshChildId == childId
-
-        if appliesToUI {
-            isLoadingSummaryUsage = true
-        }
-        defer {
-            if appliesToUI {
-                isLoadingSummaryUsage = false
-            }
-        }
-
-        do {
-            let sessions = try sessionWindowsForChart(childId: childId, day: day)
-            guard !sessions.isEmpty else {
-                mutateChildDisplayState(for: childId, publish: publish) { state in
-                    state.summaryHourlyChartSegments = []
-                    state.summaryTopApps = []
-                }
-                return
-            }
-
-            try await familyControlsAuth.ensureUsageAuthorization()
-            let result = try await screenTimeService.fetchHourlyUsageForSessions(
-                childId: childId,
-                sessions: sessions
-            )
-
-            let segments = HourlyStackedChartBuilder.build(
-                fromHourlyRows: result.hourlyApps,
-                sessions: sessions
-            )
-            applySummaryDisplay(
-                apps: result.apps,
-                periodTitle: childDisplayState(for: childId).summaryPeriodTitle,
-                for: childId,
-                publish: publish
-            )
-            mutateChildDisplayState(for: childId, publish: publish) { state in
-                state.summaryHourlyChartSegments = segments
-            }
-            if appliesToUI {
-                loadError = nil
-            }
-        } catch {
-            if appliesToUI {
-                loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
-            }
-        }
-    }
-
-    private func applySummaryDisplay(
-        apps: [AppUsageRow],
-        periodTitle: String,
-        screenTimeAppTotal: Int? = nil,
-        for childId: UUID,
-        publish: Bool
-    ) {
-        let apps = MonitoredAppsFilter.appsForDisplay(
-            SessionUsageSanitizer.sanitizedApps(apps)
-        )
-        let appSum = apps.map(\.durationSeconds).reduce(0, +)
-        mutateChildDisplayState(for: childId, publish: publish) { state in
-            state.summaryPeriodTitle = periodTitle
-            state.summaryScreenTimeAppTotalSeconds = screenTimeAppTotal ?? appSum
-            if apps.isEmpty {
-                state.summaryHourlyChartSegments = []
-                state.summaryTopApps = []
-                state.hasSummaryData = false
-            } else {
-                state.summaryTopApps = apps
-                state.hasSummaryData = true
-            }
-        }
-    }
-
-    private func refreshPartialUsage() async {
-        guard let childId = activeChildId,
-              let startAt = sessionStartAt else { return }
-
-        isRefreshingPartialUsage = true
-        defer { isRefreshingPartialUsage = false }
-
-        let stopAt = Date()
-
-        do {
-            try await familyControlsAuth.ensureUsageAuthorization()
-            let result = try await screenTimeService.fetchHourlyUsageForSessions(
-                childId: childId,
-                sessions: [SessionWindow(startAt: startAt, stopAt: stopAt)]
-            )
-            applySummaryDisplay(
-                apps: result.apps,
-                periodTitle: "Current Session",
-                for: childId,
-                publish: true
-            )
-            mutateChildDisplayState(for: childId, publish: true) { state in
-                state.summaryHourlyChartSegments = HourlyStackedChartBuilder.build(
-                    fromHourlyRows: result.hourlyApps,
-                    sessions: [SessionWindow(startAt: startAt, stopAt: stopAt)]
-                )
-            }
-        } catch {
-            loadError = familyControlsAuth.recordingBlockedMessage() ?? error.localizedDescription
-        }
+    func bumpReportRefresh() {
+        guard let childId = refreshChildId else { return }
+        loadSummaryActivity(for: childId, bumpReport: true)
     }
 
     private func applyCompletedDisplay(
         childId: UUID,
         startAt: Date,
         stopAt: Date,
-        snapshot: SessionUsageSnapshot,
-        screenTimeSeconds: Int? = nil
+        snapshot: SessionUsageSnapshot
     ) {
         refreshChildId = childId
         let completed = CompletedSessionInfo(
@@ -1174,14 +992,10 @@ final class SessionCoordinator {
             snapshot: snapshot
         )
         mutateChildDisplayState(for: childId, publish: true) { state in
-            applyLastSessionBanner(
-                completed: completed,
-                screenTimeSeconds: screenTimeSeconds,
-                into: &state
-            )
+            applyLastSessionBanner(completed: completed, into: &state)
         }
         publishChildDisplayState(for: childId)
-        loadSummaryActivity(for: childId)
+        loadSummaryActivity(for: childId, bumpReport: true)
     }
 
     private func plannedDurationSecondsForActiveSession() -> Int {
@@ -1204,28 +1018,22 @@ final class SessionCoordinator {
 
     private func resetDisplayState() {
         summaryPeriodTitle = "Today"
-        summaryHourlyChartSegments = []
-        summaryTopApps = []
-        hasSummaryData = false
         summarySessionElapsedSeconds = 0
-        summaryScreenTimeAppTotalSeconds = 0
+        sessionReportFilter = nil
+        reportRefreshToken = ""
         hasTodayActivity = false
         currentDayTotalSeconds = 0
         latestBannerTotalSeconds = 0
         latestSessionLimitSeconds = 30 * 60
         latestTotalSeconds = 0
-        latestScreenTimeAppTotalSeconds = 0
         remainingSeconds = 0
     }
 
     private func resetSummaryDisplay(for childId: UUID, publish: Bool) {
         mutateChildDisplayState(for: childId, publish: publish) { state in
             state.summaryPeriodTitle = "Today"
-            state.summaryHourlyChartSegments = []
-            state.summaryTopApps = []
-            state.hasSummaryData = false
             state.summarySessionElapsedSeconds = 0
-            state.summaryScreenTimeAppTotalSeconds = 0
+            state.sessionReportFilter = nil
         }
     }
 

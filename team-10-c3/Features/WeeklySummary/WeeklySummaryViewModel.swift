@@ -23,15 +23,11 @@ final class WeeklySummaryViewModel {
 
     init(
         sessionRepository: SessionRepository,
-        sessionAnalysisStore: SessionAnalysisStore,
-        screenTimeService: ScreenTimeUsageProviding,
-        familyControlsAuth: FamilyControlsAuthProviding
+        sessionAnalysisStore: SessionAnalysisStore
     ) {
         insightService = UsageInsightService(
             sessionRepository: sessionRepository,
-            sessionAnalysisStore: sessionAnalysisStore,
-            screenTimeService: screenTimeService,
-            familyControlsAuth: familyControlsAuth
+            sessionAnalysisStore: sessionAnalysisStore
         )
     }
 

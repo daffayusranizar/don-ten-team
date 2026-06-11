@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct SplashScreenView: View {
-    
-    
+    var statusMessage: String = "Starting Kiddly…"
+
     var body: some View {
         ZStack(alignment: .center) {
             Rectangle()
@@ -21,12 +21,34 @@ struct SplashScreenView: View {
                     )
                 )
                 .ignoresSafeArea()
-            
-            Image("SplashLogo")
-            
+
+            VStack(spacing: 20) {
+                Image("SplashLogo")
+
+                Text("Smarter parenting starts here")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .tracking(0.3)
+
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.regular)
+                        .tint(.white)
+
+                    Text(statusMessage)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .frame(maxWidth: 280)
+                        .animation(.easeInOut(duration: 0.2), value: statusMessage)
+                }
+                .padding(.top, 8)
+            }
+
             VStack(alignment: .trailing) {
                 Spacer()
-                
+
                 HStack {
                     Spacer()
                     Image("SplashCorner")
@@ -39,5 +61,5 @@ struct SplashScreenView: View {
 }
 
 #Preview {
-    SplashScreenView()
+    SplashScreenView(statusMessage: "Preparing on-device audio analysis…")
 }
