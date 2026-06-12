@@ -1,4 +1,4 @@
-# Kiddly
+# Kiddly - Smarter Parenting
 
 Kiddly is a native iOS SwiftUI app that helps parents manage child screen time — starting sessions, monitoring usage, setting rules, and getting parenting guidance. The codebase follows MVVM with dependency injection via `AppContainer`, on-device persistence via SwiftData, and a typed local feature flag system for toggling work-in-progress features.
 
